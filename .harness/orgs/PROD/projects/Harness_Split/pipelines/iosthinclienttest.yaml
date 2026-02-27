@@ -30,6 +30,16 @@ pipeline:
             steps:
               - step:
                   type: Run
+                  name: Checkout submodules
+                  identifier: checkout_submodules
+                  spec:
+                    shell: Sh
+                    command: |
+                      set -euo pipefail
+                      git submodule sync --recursive
+                      git submodule update --init --recursive
+              - step:
+                  type: Run
                   name: Install Dependencies
                   identifier: install_dependencies
                   spec:
@@ -136,8 +146,9 @@ pipeline:
                         "-Dsonar.tests=."
                         "-Dsonar.inclusions=SplitThin/**/*.swift,Sources/Api/**/*.swift"
                         "-Dsonar.test.inclusions=SplitThinTests/**/*.swift,Sources/Api/Tests/**/*.swift"
-                        "-Dsonar.exclusions=**/.build/**,**/.reports/**,**/.harness/**"
-                        "-Dsonar.coverage.exclusions=SplitThinTests/**/*.swift,Sources/**/Tests/**/*.swift,Package.swift"
+                        # Ignore git submodules (notably ios-client/) even if sonar.sources/tests are set to '.'
+                        "-Dsonar.exclusions=ios-client/**,**/.build/**,**/.reports/**,**/.harness/**"
+                        "-Dsonar.coverage.exclusions=ios-client/**,SplitThinTests/**/*.swift,Sources/**/Tests/**/*.swift,Package.swift"
                         "-Dsonar.coverageReportPaths=$COVERAGE_REPORTS"
                         "-Dsonar.junit.reportPaths=$JUNIT_REPORTS"
                         "-Dsonar.verbose=true"

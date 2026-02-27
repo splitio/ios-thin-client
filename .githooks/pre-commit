@@ -43,44 +43,6 @@ root_dir = os.path.abspath(sys.argv[2])
 profdata = sys.argv[3]
 test_bins = sys.argv[4:]
 
-report = run(
-    ["xcrun", "llvm-cov", "report", *test_bins, "-instr-profile", profdata],
-    cwd=root_dir,
-)
-if report.returncode != 0 or not report.stdout.strip():
-    print("ERROR: Unable to generate llvm-cov report.")
-    if report.stderr.strip():
-        print(report.stderr.strip())
-    sys.exit(1)
-
-line_coverage = None
-region_coverage = None
-for line in report.stdout.splitlines():
-    if not line.startswith("TOTAL"):
-        continue
-    cols = line.split()
-    # TOTAL Regions MissedRegions RegionsCover Functions MissedFunctions FunctionsCover Lines MissedLines LinesCover ...
-    if len(cols) >= 10:
-        region_coverage = cols[3].rstrip("%")
-        line_coverage = cols[9].rstrip("%")
-
-if line_coverage is None:
-    print("ERROR: Could not parse TOTAL line coverage from llvm-cov output.")
-    print(report.stdout)
-    sys.exit(1)
-
-line_coverage_f = float(line_coverage)
-print(f"Line coverage: {line_coverage_f:.2f}% (threshold: {threshold:.2f}%)")
-if region_coverage:
-    try:
-        print(f"Region coverage: {float(region_coverage):.2f}%")
-    except ValueError:
-        pass
-
-if line_coverage_f < threshold:
-    print("Coverage gate failed. Commit blocked.")
-    sys.exit(1)
-
 export = run(
     ["xcrun", "llvm-cov", "export", "-summary-only", *test_bins, "-instr-profile", profdata],
     cwd=root_dir,
@@ -96,16 +58,6 @@ try:
 except json.JSONDecodeError:
     print("ERROR: Could not parse llvm-cov export JSON.")
     sys.exit(1)
-
-covered_files = set()
-for data_entry in export_json.get("data", []):
-    for file_entry in data_entry.get("files", []):
-        filename = file_entry.get("filename")
-        if not filename:
-            continue
-        abs_name = os.path.abspath(filename)
-        if abs_name.startswith(root_dir + os.sep):
-            covered_files.add(os.path.relpath(abs_name, root_dir))
 
 staged_files_res = run(
     ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],
@@ -131,10 +83,14 @@ if os.path.isfile(gitmodules_path):
             if len(parts) == 2:
                 submodule_paths.add(parts[1].rstrip("/"))
 
+# Always exclude this directory from coverage math and messaging (even if it's not registered as a submodule yet).
+submodule_paths.add("ios-client")
+
 def in_submodule(path):
-    normalized = path.strip("/")
+    normalized = path.strip("/").replace("\\", "/")
     for sm in submodule_paths:
-        if normalized == sm or normalized.startswith(sm + "/"):
+        sm_norm = sm.strip("/").replace("\\", "/")
+        if normalized == sm_norm or normalized.startswith(sm_norm + "/"):
             return True
     return False
 
@@ -144,11 +100,81 @@ def is_test_file(path):
     filename = parts[-1]
     if filename == "Package.swift":
         return True
-    if "Tests" in parts:
+    # Any directory segment containing "Tests" (e.g. "SplitThinTests", "Sources/Api/Tests")
+    if any("Tests" in seg for seg in parts):
         return True
     if filename.endswith("Tests.swift") or filename.endswith("Test.swift"):
         return True
     return False
+
+file_summaries = {}
+covered_files = set()
+for data_entry in export_json.get("data", []):
+    for file_entry in data_entry.get("files", []):
+        filename = file_entry.get("filename")
+        if not filename:
+            continue
+        abs_name = os.path.abspath(filename)
+        if abs_name.startswith(root_dir + os.sep):
+            rel = os.path.relpath(abs_name, root_dir)
+            covered_files.add(rel)
+            if "summary" in file_entry:
+                file_summaries[rel] = file_entry["summary"]
+
+def summarize_line_coverage(summary: dict):
+    """
+    Returns (total_lines, covered_lines, missed_lines, percent) or None if unavailable.
+    """
+    lines = (summary or {}).get("lines") or {}
+    try:
+        total = int(lines.get("count", 0))
+        covered = int(lines.get("covered", 0))
+    except (TypeError, ValueError):
+        return None
+    if total <= 0:
+        return None
+    missed = max(0, total - covered)
+    pct = (covered / total) * 100.0
+    return total, covered, missed, pct
+
+# Compute overall line coverage for first-party non-test Swift files, excluding submodules (notably ios-client/).
+included_files = []
+total_lines_all = 0
+covered_lines_all = 0
+
+for relpath, summary in file_summaries.items():
+    if not relpath.endswith(".swift"):
+        continue
+    if in_submodule(relpath):
+        continue
+    if is_test_file(relpath):
+        continue
+    cov = summarize_line_coverage(summary)
+    if cov is None:
+        continue
+    total, covered, missed, pct = cov
+    included_files.append((relpath, total, covered, missed, pct))
+    total_lines_all += total
+    covered_lines_all += covered
+
+overall_pct = 100.0 if total_lines_all == 0 else (covered_lines_all / total_lines_all) * 100.0
+print(f"Line coverage (excluding submodules + tests): {overall_pct:.2f}% (threshold: {threshold:.2f}%)")
+
+if overall_pct < threshold:
+    print("Coverage gate failed. Under-covered files (excluding submodules + tests):")
+    offenders = sorted(
+        (t for t in included_files if t[3] > 0),
+        key=lambda t: (t[4], -t[3], t[0]),
+    )
+    if not offenders:
+        print(" - (No per-file offenders found, but aggregate coverage is below threshold; check tooling output.)")
+    else:
+        for relpath, total, covered, missed, pct in offenders[:25]:
+            print(f" - {relpath}: {pct:.2f}% ({missed}/{total} lines missed)")
+        if len(offenders) > 25:
+            print(f" - ... and {len(offenders) - 25} more")
+    print("Commit blocked.")
+    sys.exit(1)
 
 expected_files = {path for path in staged_files if not in_submodule(path) and not is_test_file(path)}
 if not expected_files:

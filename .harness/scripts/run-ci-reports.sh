@@ -8,6 +8,11 @@ REPORTS_ROOT="${REPORTS_ROOT:-$ROOT_DIR/.reports}"
 CI_HOME="${CI_HOME:-$ROOT_DIR/.ci-home}"
 MODULE_CACHE_DIR="${MODULE_CACHE_DIR:-$ROOT_DIR/.build/ModuleCache.noindex}"
 
+# Ensure REPORTS_ROOT is absolute so report paths still resolve correctly after `cd` into each package.
+if [[ "$REPORTS_ROOT" != /* ]]; then
+  REPORTS_ROOT="$ROOT_DIR/$REPORTS_ROOT"
+fi
+
 log() {
   printf '[run-ci-reports] %s\n' "$*"
 }
@@ -27,9 +32,32 @@ swift_local() {
 }
 
 discover_packages() {
+  local submodules=()
+
+  # Best-effort: detect git submodules to avoid running their tests / coverage as part of the thin client pipeline.
+  # (We still need the submodule checked out for SwiftPM local dependencies.)
+  if [[ -f "$ROOT_DIR/.gitmodules" ]]; then
+    while IFS= read -r sm_path; do
+      [[ -n "$sm_path" ]] && submodules+=("$sm_path")
+    done < <(git -C "$ROOT_DIR" config --file .gitmodules --get-regexp '^submodule\..*\.path$' 2>/dev/null | awk '{print $2}' || true)
+  fi
+
+  # Always ignore ios-client (even if it isn't registered as a submodule yet).
+  submodules+=("ios-client")
+
   find "$ROOT_DIR" -type f -name "Package.swift" -not -path "*/.build/*" -print0 \
     | while IFS= read -r -d '' package_manifest; do
-        dirname "$package_manifest"
+        package_dir="$(dirname "$package_manifest")"
+
+        # Skip any package that lives under a submodule path.
+        for sm in "${submodules[@]}"; do
+          sm="${sm%/}"
+          if [[ -n "$sm" ]] && [[ "$package_dir" == "$ROOT_DIR/$sm"* ]]; then
+            continue 2
+          fi
+        done
+
+        printf '%s\n' "$package_dir"
       done | sort -u
 }
 

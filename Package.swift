@@ -8,7 +8,9 @@ let package = Package(
         .library(name: "SplitThin", targets: ["SplitThin"]),
         .library(name: "Api", targets: ["Api"]),
     ],
-    dependencies: [],
+    dependencies: [
+        .package(path: "ios-client"),
+    ],
     targets: [
         .target(
             name: "Api",
@@ -23,13 +25,17 @@ let package = Package(
         ),
         .target(
             name: "SplitThin",
-            dependencies: ["Api"],
+            dependencies: [
+                "Api",
+                .product(name: "SplitCommons", package: "ios-client"),
+            ],
             path: "SplitThin"
         ),
         .testTarget(
             name: "SplitThinTests",
             dependencies: [
                 "SplitThin",
+                .product(name: "SplitCommons", package: "ios-client"),
             ],
             path: "SplitThinTests"
         ),
