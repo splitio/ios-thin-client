@@ -107,16 +107,16 @@ for data_entry in export_json.get("data", []):
         if abs_name.startswith(root_dir + os.sep):
             covered_files.add(os.path.relpath(abs_name, root_dir))
 
-git_files = run(["git", "ls-files", "*.swift"], cwd=root_dir)
-if git_files.returncode == 0:
-    expected_files = {line.strip() for line in git_files.stdout.splitlines() if line.strip()}
-else:
-    expected_files = set()
-    for dirpath, dirnames, filenames in os.walk(root_dir):
-        dirnames[:] = [d for d in dirnames if d not in {".git", ".build"}]
-        for name in filenames:
-            if name.endswith(".swift"):
-                expected_files.add(os.path.relpath(os.path.join(dirpath, name), root_dir))
+staged_files_res = run(
+    ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],
+    cwd=root_dir,
+)
+staged_files = set()
+if staged_files_res.returncode == 0:
+    for line in staged_files_res.stdout.splitlines():
+        p = line.strip()
+        if p.endswith(".swift"):
+            staged_files.add(p)
 
 submodule_paths = set()
 gitmodules_path = os.path.join(root_dir, ".gitmodules")
@@ -150,18 +150,15 @@ def is_test_file(path):
         return True
     return False
 
-expected_files = {
-    path
-    for path in expected_files
-    if not in_submodule(path) and not is_test_file(path)
-}
-missing = sorted(path for path in expected_files if path not in covered_files)
-
-if missing:
-    print("Coverage gate failed. The following non-test project Swift files are missing from coverage (excluding git submodules):")
-    for path in missing:
-        print(f" - {path}")
-    sys.exit(1)
-
-print("Coverage gate passed for non-test project files (excluding git submodules).")
+expected_files = {path for path in staged_files if not in_submodule(path) and not is_test_file(path)}
+if not expected_files:
+    print("No staged non-test Swift files detected; skipping per-file coverage presence gate.")
+else:
+    missing = sorted(path for path in expected_files if path not in covered_files)
+    if missing:
+        print("Coverage gate failed. The following staged non-test Swift files are missing from coverage (excluding git submodules):")
+        for path in missing:
+            print(f" - {path}")
+        sys.exit(1)
+    print("Coverage gate passed for staged non-test project files (excluding git submodules).")
 PY

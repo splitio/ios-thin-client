@@ -1,4 +1,4 @@
-# SplitThin
+# ios-thin-client
 
 ## Requirements
 

@@ -80,9 +80,14 @@ pipeline:
                       if [ "<+codebase.prNumber>" != "" ] && [ "<+codebase.prNumber>" != "null" ]; then
                         git fetch origin "<+codebase.targetBranch>:refs/remotes/origin/<+codebase.targetBranch>" || true
                         git fetch origin "<+codebase.sourceBranch>:refs/remotes/origin/<+codebase.sourceBranch>" || true
-                        # Harness CI may checkout a merge commit where HEAD == merge-base,
-                        # causing Sonar to see 0 changed files. Switch to the actual PR branch.
-                        git checkout "<+codebase.sourceBranch>" || git checkout "origin/<+codebase.sourceBranch>" || true
+                        # Harness CI checks out a merge commit on the target branch, so
+                        # refs/heads/<target> points to that merge commit.  JGit resolves
+                        # branch names to refs/heads/ first, causing merge-base == HEAD
+                        # and 0 changed files.  Detach HEAD so we can force-update the
+                        # local target branch to the real remote tip.
+                        git checkout --detach HEAD 2>/dev/null || true
+                        git branch -f "<+codebase.targetBranch>" "origin/<+codebase.targetBranch>" || true
+                        git checkout -B "<+codebase.sourceBranch>" "origin/<+codebase.sourceBranch>" || true
                       fi
 
                       if ! command -v sonar-scanner >/dev/null 2>&1; then
