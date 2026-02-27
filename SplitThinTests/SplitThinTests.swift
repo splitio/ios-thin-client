@@ -3,6 +3,7 @@ import XCTest
 
 final class SplitThinTests: XCTestCase {
     func testMain() {
+        SplitThinMain.main()
         XCTAssertEqual(SplitThinMain.messages(), ["SplitThin main"])
     }
 }

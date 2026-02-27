@@ -6,12 +6,24 @@ let package = Package(
     platforms: [.iOS(.v12)],
     products: [
         .library(name: "SplitThin", targets: ["SplitThin"]),
+        .library(name: "Api", targets: ["Api"]),
     ],
     dependencies: [],
     targets: [
         .target(
-            name: "SplitThin",
+            name: "Api",
             dependencies: [],
+            path: "Sources/Api",
+            exclude: ["Tests", "README.md"]
+        ),
+        .testTarget(
+            name: "ApiTests",
+            dependencies: ["Api"],
+            path: "Sources/Api/Tests"
+        ),
+        .target(
+            name: "SplitThin",
+            dependencies: ["Api"],
             path: "SplitThin"
         ),
         .testTarget(

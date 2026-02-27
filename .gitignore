@@ -17,3 +17,6 @@ Package.resolved
 # CI/test generated artifacts
 .reports/
 .ci-home/
+
+# Local sandbox HOME used by tools/tests (do not commit)
+.home/

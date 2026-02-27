@@ -67,6 +67,24 @@ pipeline:
                     command: |
                       set -euo pipefail
 
+                      ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+                      cd "$ROOT_DIR"
+
+                      # Ensure Sonar can compute PR changed files (required by Swift sensor in PR mode).
+                      if git rev-parse --is-shallow-repository >/dev/null 2>&1; then
+                        if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+                          git fetch --unshallow origin || true
+                        fi
+                      fi
+
+                      if [ "<+codebase.prNumber>" != "" ] && [ "<+codebase.prNumber>" != "null" ]; then
+                        git fetch origin "<+codebase.targetBranch>:refs/remotes/origin/<+codebase.targetBranch>" || true
+                        git fetch origin "<+codebase.sourceBranch>:refs/remotes/origin/<+codebase.sourceBranch>" || true
+                        # Harness CI may checkout a merge commit where HEAD == merge-base,
+                        # causing Sonar to see 0 changed files. Switch to the actual PR branch.
+                        git checkout "<+codebase.sourceBranch>" || git checkout "origin/<+codebase.sourceBranch>" || true
+                      fi
+
                       if ! command -v sonar-scanner >/dev/null 2>&1; then
                         brew install sonar-scanner
                       fi
@@ -84,32 +102,53 @@ pipeline:
                         exit 1
                       fi
 
-                      COMMON_ARGS="
-                        -Dsonar.host.url=https://sonar.harness.io
-                        -Dsonar.projectKey=ios-thin-client
-                        -Dsonar.token=$SONAR_TOKEN
-                        -Dsonar.scanner.skipJreProvisioning=true
-                        -Dsonar.scanner.skipSystemTruststore=true
-                        -Dsonar.sources=SplitThin
-                        -Dsonar.tests=SplitThinTests
-                        -Dsonar.test.inclusions=SplitThinTests/**/*.swift
-                        -Dsonar.exclusions=**/.build/**,**/.reports/**,**/.harness/**
-                        -Dsonar.coverage.exclusions=SplitThinTests/**/*.swift
-                        -Dsonar.coverageReportPaths=$COVERAGE_REPORTS
-                        -Dsonar.junit.reportPaths=$JUNIT_REPORTS
-                      "
+                      for path in SplitThin Sources/Api SplitThinTests Sources/Api/Tests; do
+                        if [ ! -e "$path" ]; then
+                          echo "Expected path not found for Sonar analysis: $path"
+                          exit 1
+                        fi
+                      done
+
+                      echo "Main source files found:"
+                      find SplitThin Sources/Api -type f -name '*.swift' | sort
+                      echo "Test source files found:"
+                      find SplitThinTests Sources/Api/Tests -type f -name '*.swift' | sort
+
+                      # Capture actual HEAD after checkout for sonar.scm.revision
+                      CURRENT_SHA="$(git rev-parse HEAD)"
+                      echo "Current HEAD: $CURRENT_SHA"
+                      echo "Merge base with main: $(git merge-base HEAD origin/<+codebase.targetBranch> 2>/dev/null || echo 'N/A')"
+
+                      COMMON_ARGS=(
+                        "-Dsonar.host.url=https://sonar.harness.io"
+                        "-Dsonar.scm.revision=$CURRENT_SHA"
+                        "-Dsonar.projectKey=ios-thin-client"
+                        "-Dsonar.token=$SONAR_TOKEN"
+                        "-Dsonar.scanner.skipJreProvisioning=true"
+                        "-Dsonar.scanner.skipSystemTruststore=true"
+                        "-Dsonar.projectBaseDir=$ROOT_DIR"
+                        "-Dsonar.sources=."
+                        "-Dsonar.tests=."
+                        "-Dsonar.inclusions=SplitThin/**/*.swift,Sources/Api/**/*.swift"
+                        "-Dsonar.test.inclusions=SplitThinTests/**/*.swift,Sources/Api/Tests/**/*.swift"
+                        "-Dsonar.exclusions=**/.build/**,**/.reports/**,**/.harness/**"
+                        "-Dsonar.coverage.exclusions=SplitThinTests/**/*.swift,Sources/**/Tests/**/*.swift,Package.swift"
+                        "-Dsonar.coverageReportPaths=$COVERAGE_REPORTS"
+                        "-Dsonar.junit.reportPaths=$JUNIT_REPORTS"
+                        "-Dsonar.verbose=true"
+                      )
 
                       if [ "<+codebase.prNumber>" != "" ] && [ "<+codebase.prNumber>" != "null" ]; then
                         echo "Pull Request Analysis"
                         sonar-scanner \
-                          $COMMON_ARGS \
+                          "${COMMON_ARGS[@]}" \
                           -Dsonar.pullrequest.key=<+codebase.prNumber> \
                           -Dsonar.pullrequest.branch=<+codebase.sourceBranch> \
                           -Dsonar.pullrequest.base=<+codebase.targetBranch>
                       else
                         echo "Branch Analysis"
                         sonar-scanner \
-                          $COMMON_ARGS \
+                          "${COMMON_ARGS[@]}" \
                           -Dsonar.branch.name=<+codebase.branch>
                       fi
                     envVariables:

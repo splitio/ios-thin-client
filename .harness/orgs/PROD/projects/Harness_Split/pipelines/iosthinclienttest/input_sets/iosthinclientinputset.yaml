@@ -1,0 +1,14 @@
+inputSet:
+  name: ios-thin-client-inputset
+  identifier: iosthinclientinputset
+  orgIdentifier: PROD
+  projectIdentifier: Harness_Split
+  pipeline:
+    identifier: iosthinclienttest
+    properties:
+      ci:
+        codebase:
+          build:
+            type: PR
+            spec:
+              number: <+trigger.prNumber>

@@ -18,46 +18,150 @@ if [[ -z "${PROFDATA}" || ! -f "${PROFDATA}" ]]; then
   exit 1
 fi
 
-TEST_BIN="$(find .build -type f -name '*PackageTests' -perm -111 | head -n 1 || true)"
-if [[ -z "${TEST_BIN}" || ! -f "${TEST_BIN}" ]]; then
+TEST_BINS=()
+while IFS= read -r test_bin; do
+  [[ -n "$test_bin" ]] && TEST_BINS+=("$test_bin")
+done < <(find .build -type f -name '*PackageTests' -perm -111 2>/dev/null || true)
+if [[ "${#TEST_BINS[@]}" -eq 0 ]]; then
   echo "ERROR: Package test binary not found under .build."
   exit 1
 fi
 
-REPORT_OUTPUT="$(xcrun llvm-cov report "$TEST_BIN" -instr-profile "$PROFDATA" 2>/dev/null || true)"
-if [[ -z "${REPORT_OUTPUT}" ]]; then
-  echo "ERROR: Unable to generate llvm-cov report."
-  exit 1
-fi
-
-# TOTAL row format (llvm-cov report):
-# TOTAL Regions MissedRegions RegionsCover Functions MissedFunctions FunctionsCover Lines MissedLines LinesCover Branches MissedBranches BranchesCover
-# We want LinesCover (field 10).
-LINE_COVERAGE="$(printf '%s\n' "$REPORT_OUTPUT" | awk '$1 == "TOTAL" { gsub("%", "", $10); print $10 }' | tail -n 1)"
-REGION_COVERAGE="$(printf '%s\n' "$REPORT_OUTPUT" | awk '$1 == "TOTAL" { gsub("%", "", $4); print $4 }' | tail -n 1)"
-
-if [[ -z "${LINE_COVERAGE}" ]]; then
-  echo "ERROR: Could not parse TOTAL line coverage from llvm-cov output."
-  echo "$REPORT_OUTPUT"
-  exit 1
-fi
-
-python3 - "$LINE_COVERAGE" "$THRESHOLD" "${REGION_COVERAGE:-}" <<'PY'
+python3 - "$THRESHOLD" "$ROOT_DIR" "$PROFDATA" "${TEST_BINS[@]}" <<'PY'
+import json
+import os
+import subprocess
 import sys
 
-coverage = float(sys.argv[1])
-threshold = float(sys.argv[2])
-region_coverage = sys.argv[3] if len(sys.argv) > 3 else ""
 
-print(f"Line coverage: {coverage:.2f}% (threshold: {threshold:.2f}%)")
+def run(cmd, cwd=None):
+    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
+
+
+threshold = float(sys.argv[1])
+root_dir = os.path.abspath(sys.argv[2])
+profdata = sys.argv[3]
+test_bins = sys.argv[4:]
+
+report = run(
+    ["xcrun", "llvm-cov", "report", *test_bins, "-instr-profile", profdata],
+    cwd=root_dir,
+)
+if report.returncode != 0 or not report.stdout.strip():
+    print("ERROR: Unable to generate llvm-cov report.")
+    if report.stderr.strip():
+        print(report.stderr.strip())
+    sys.exit(1)
+
+line_coverage = None
+region_coverage = None
+for line in report.stdout.splitlines():
+    if not line.startswith("TOTAL"):
+        continue
+    cols = line.split()
+    # TOTAL Regions MissedRegions RegionsCover Functions MissedFunctions FunctionsCover Lines MissedLines LinesCover ...
+    if len(cols) >= 10:
+        region_coverage = cols[3].rstrip("%")
+        line_coverage = cols[9].rstrip("%")
+
+if line_coverage is None:
+    print("ERROR: Could not parse TOTAL line coverage from llvm-cov output.")
+    print(report.stdout)
+    sys.exit(1)
+
+line_coverage_f = float(line_coverage)
+print(f"Line coverage: {line_coverage_f:.2f}% (threshold: {threshold:.2f}%)")
 if region_coverage:
     try:
         print(f"Region coverage: {float(region_coverage):.2f}%")
     except ValueError:
         pass
-if coverage < threshold:
+
+if line_coverage_f < threshold:
     print("Coverage gate failed. Commit blocked.")
     sys.exit(1)
 
-print("Coverage gate passed.")
+export = run(
+    ["xcrun", "llvm-cov", "export", "-summary-only", *test_bins, "-instr-profile", profdata],
+    cwd=root_dir,
+)
+if export.returncode != 0 or not export.stdout.strip():
+    print("ERROR: Unable to generate llvm-cov export.")
+    if export.stderr.strip():
+        print(export.stderr.strip())
+    sys.exit(1)
+
+try:
+    export_json = json.loads(export.stdout)
+except json.JSONDecodeError:
+    print("ERROR: Could not parse llvm-cov export JSON.")
+    sys.exit(1)
+
+covered_files = set()
+for data_entry in export_json.get("data", []):
+    for file_entry in data_entry.get("files", []):
+        filename = file_entry.get("filename")
+        if not filename:
+            continue
+        abs_name = os.path.abspath(filename)
+        if abs_name.startswith(root_dir + os.sep):
+            covered_files.add(os.path.relpath(abs_name, root_dir))
+
+git_files = run(["git", "ls-files", "*.swift"], cwd=root_dir)
+if git_files.returncode == 0:
+    expected_files = {line.strip() for line in git_files.stdout.splitlines() if line.strip()}
+else:
+    expected_files = set()
+    for dirpath, dirnames, filenames in os.walk(root_dir):
+        dirnames[:] = [d for d in dirnames if d not in {".git", ".build"}]
+        for name in filenames:
+            if name.endswith(".swift"):
+                expected_files.add(os.path.relpath(os.path.join(dirpath, name), root_dir))
+
+submodule_paths = set()
+gitmodules_path = os.path.join(root_dir, ".gitmodules")
+if os.path.isfile(gitmodules_path):
+    submods = run(
+        ["git", "config", "--file", ".gitmodules", "--get-regexp", r"^submodule\..*\.path$"],
+        cwd=root_dir,
+    )
+    if submods.returncode == 0:
+        for line in submods.stdout.splitlines():
+            parts = line.strip().split(maxsplit=1)
+            if len(parts) == 2:
+                submodule_paths.add(parts[1].rstrip("/"))
+
+def in_submodule(path):
+    normalized = path.strip("/")
+    for sm in submodule_paths:
+        if normalized == sm or normalized.startswith(sm + "/"):
+            return True
+    return False
+
+def is_test_file(path):
+    normalized = path.replace("\\", "/")
+    parts = normalized.split("/")
+    filename = parts[-1]
+    if filename == "Package.swift":
+        return True
+    if "Tests" in parts:
+        return True
+    if filename.endswith("Tests.swift") or filename.endswith("Test.swift"):
+        return True
+    return False
+
+expected_files = {
+    path
+    for path in expected_files
+    if not in_submodule(path) and not is_test_file(path)
+}
+missing = sorted(path for path in expected_files if path not in covered_files)
+
+if missing:
+    print("Coverage gate failed. The following non-test project Swift files are missing from coverage (excluding git submodules):")
+    for path in missing:
+        print(f" - {path}")
+    sys.exit(1)
+
+print("Coverage gate passed for non-test project files (excluding git submodules).")
 PY
