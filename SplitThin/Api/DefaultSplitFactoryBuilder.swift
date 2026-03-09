@@ -3,15 +3,15 @@ import Logging
 
 public final class DefaultSplitFactoryBuilder: SplitFactoryBuilder {
 
-    private var apiKey: String = ""
+    private var sdkKey: SdkKey?
     private var target: Target?
     private var evaluationFilters: EvaluationFilters?
 
     public init() {}
 
     @discardableResult
-    public func setApiKey(_ apiKey: String) -> SplitFactoryBuilder {
-        self.apiKey = apiKey
+    public func setSdkKey(_ sdkKey: SdkKey) -> SplitFactoryBuilder {
+        self.sdkKey = sdkKey
         return self
     }
 
@@ -28,8 +28,8 @@ public final class DefaultSplitFactoryBuilder: SplitFactoryBuilder {
     }
 
     public func build() -> SplitFactory? {
-        guard !apiKey.isEmpty else {
-            Logger.e("API key must not be empty")
+        guard let sdkKey = sdkKey, !sdkKey.sdkKey.isEmpty else {
+            Logger.e("SDK key must not be empty")
             return nil
         }
 
@@ -44,7 +44,7 @@ public final class DefaultSplitFactoryBuilder: SplitFactoryBuilder {
         }
 
         return DefaultSplitFactory(
-            apiKey: apiKey,
+            sdkKey: sdkKey,
             target: target,
             evaluationFilters: evaluationFilters
         )

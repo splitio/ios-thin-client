@@ -3,9 +3,9 @@ import Foundation
 /// Builder protocol for constructing a SplitFactory.
 public protocol SplitFactoryBuilder {
 
-    /// Sets the client API key.
+    /// Sets the SDK key.
     @discardableResult
-    func setApiKey(_ apiKey: String) -> SplitFactoryBuilder
+    func setSdkKey(_ sdkKey: SdkKey) -> SplitFactoryBuilder
 
     /// Sets the default target (equivalent to Key in the full SDK).
     @discardableResult

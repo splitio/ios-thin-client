@@ -6,22 +6,24 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     private static let kInitErrorMessage =
         "Something happened on Split init and the client couldn't be created"
 
-    private let apiKey: String
+    private let sdkKey: SdkKey
     private let defaultTarget: Target
+    private let defaultKey: Key
     private let evaluationFilters: EvaluationFilters?
 
     private var splitManager: SplitManager?
-    private var clients = [Target: SplitClient]()
+    private var clients = [Key: SplitClient]()
     private var isDestroyed = false
 
-    init(apiKey: String, target: Target, evaluationFilters: EvaluationFilters?) {
-        self.apiKey = apiKey
+    init(sdkKey: SdkKey, target: Target, evaluationFilters: EvaluationFilters?) {
+        self.sdkKey = sdkKey
         self.defaultTarget = target
+        self.defaultKey = target.key
         self.evaluationFilters = evaluationFilters
 
         self.splitManager = DefaultSplitManager()
         let client = DefaultSplitClient(target: target)
-        self.clients[target] = client
+        self.clients[target.key] = client
     }
 
     public var client: SplitClient {
@@ -33,8 +35,8 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     }
 
     public func getClient(_ target: Target? = nil) -> SplitClient {
-        let resolvedTarget = target ?? defaultTarget
-        if let existing = clients[resolvedTarget] {
+        let resolvedKey = target?.key ?? defaultKey
+        if let existing = clients[resolvedKey] {
             return existing
         }
 
@@ -43,8 +45,9 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
             return FailedClient()
         }
 
+        let resolvedTarget = target ?? defaultTarget
         let newClient = DefaultSplitClient(target: resolvedTarget)
-        clients[resolvedTarget] = newClient
+        clients[resolvedKey] = newClient
         return newClient
     }
 

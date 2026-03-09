@@ -4,7 +4,7 @@ import XCTest
 final class DefaultSplitFactoryTest: XCTestCase {
 
     private func makeFactory(matchingKey: String = "user1") -> DefaultSplitFactory {
-        DefaultSplitFactory(apiKey: "api-key",
+        DefaultSplitFactory(sdkKey: SdkKey("api-key"),
                             target: Target(matchingKey: matchingKey),
                             evaluationFilters: nil)
     }
@@ -49,23 +49,32 @@ final class DefaultSplitFactoryTest: XCTestCase {
         XCTAssertEqual(client.target.matchingKey, "user2")
     }
 
-    func testGetClientReturnsSameInstanceForSameTarget() {
+    func testGetClientReturnsSameInstanceForSameKey() {
         let factory = makeFactory()
         let target = Target(matchingKey: "user2")
 
         let client1 = factory.getClient(target)
         let client2 = factory.getClient(target)
 
-        XCTAssertTrue(client1 === client2, "Should return the same instance for the same target")
+        XCTAssertTrue(client1 === client2, "Should return the same instance for the same key")
     }
 
-    func testGetClientReturnsDifferentInstancesForDifferentTargets() {
+    func testGetClientReturnsSameInstanceForSameKeyDifferentAttributes() {
+        let factory = makeFactory()
+
+        let client1 = factory.getClient(Target(matchingKey: "user2", attributes: ["env": "prod"]))
+        let client2 = factory.getClient(Target(matchingKey: "user2", attributes: ["env": "staging"]))
+
+        XCTAssertTrue(client1 === client2, "Should return the same instance when matchingKey and bucketingKey match")
+    }
+
+    func testGetClientReturnsDifferentInstancesForDifferentKeys() {
         let factory = makeFactory()
 
         let client1 = factory.getClient(Target(matchingKey: "user2"))
         let client2 = factory.getClient(Target(matchingKey: "user3"))
 
-        XCTAssertFalse(client1 === client2, "Should return different instances for different targets")
+        XCTAssertFalse(client1 === client2, "Should return different instances for different keys")
     }
 
     // MARK: - Version

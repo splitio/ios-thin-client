@@ -9,18 +9,18 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
         XCTAssertNil(factory, "Factory should be nil when no params are set")
     }
 
-    func testBuildWithEmptyApiKey() {
+    func testBuildWithEmptySdkKey() {
         let factory = DefaultSplitFactoryBuilder()
-            .setApiKey("")
+            .setSdkKey(SdkKey(""))
             .setTarget(Target(matchingKey: "user1"))
             .build()
 
-        XCTAssertNil(factory, "Factory should be nil with empty API key")
+        XCTAssertNil(factory, "Factory should be nil with empty SDK key")
     }
 
     func testBuildWithNoTarget() {
         let factory = DefaultSplitFactoryBuilder()
-            .setApiKey("api-key-123")
+            .setSdkKey(SdkKey("api-key-123"))
             .build()
 
         XCTAssertNil(factory, "Factory should be nil when target is missing")
@@ -28,7 +28,7 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
 
     func testBuildWithEmptyMatchingKey() {
         let factory = DefaultSplitFactoryBuilder()
-            .setApiKey("api-key-123")
+            .setSdkKey(SdkKey("api-key-123"))
             .setTarget(Target(matchingKey: ""))
             .build()
 
@@ -37,7 +37,7 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
 
     func testBuildSuccess() {
         let factory = DefaultSplitFactoryBuilder()
-            .setApiKey("api-key-123")
+            .setSdkKey(SdkKey("api-key-123"))
             .setTarget(Target(matchingKey: "user1"))
             .build()
 
@@ -50,7 +50,7 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
                             attributes: ["env": "prod"], trafficType: "user")
 
         let factory = DefaultSplitFactoryBuilder()
-            .setApiKey("api-key-123")
+            .setSdkKey(SdkKey("api-key-123"))
             .setTarget(target)
             .setEvaluationFilters(filters)
             .build()
@@ -61,7 +61,7 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
     func testFluentApiReturnsSelf() {
         let builder = DefaultSplitFactoryBuilder()
 
-        let b1 = builder.setApiKey("key")
+        let b1 = builder.setSdkKey(SdkKey("key"))
         let b2 = b1.setTarget(Target(matchingKey: "user1"))
         let b3 = b2.setEvaluationFilters(EvaluationFilters())
 
