@@ -11,19 +11,19 @@ final class TreatmentsManagerMock: TreatmentsManager, @unchecked Sendable {
     var getTreatmentsCallCount = 0
     var getTreatmentsByFlagSetsCallCount = 0
 
-    func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) async -> EvaluationResult {
+    func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) -> EvaluationResult {
         getTreatmentCallCount += 1
         return getTreatmentResult ?? EvaluationResult(flag: flag, treatment: "control", flagSets: [])
     }
 
-    func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) async -> [EvaluationResult] {
+    func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult] {
         getTreatmentsCallCount += 1
         return getTreatmentsResult.isEmpty
             ? flags.map { EvaluationResult(flag: $0, treatment: "control", flagSets: []) }
             : getTreatmentsResult
     }
 
-    func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) async -> [EvaluationResult] {
+    func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult] {
         getTreatmentsByFlagSetsCallCount += 1
         return getTreatmentsByFlagSetsResult
     }

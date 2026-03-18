@@ -87,7 +87,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         let secureHttpClient = DefaultSecureHttpClient(retryableHttpClient: retryableHttpClient, authProvider: resolvedAuthProvider, serviceEndpoints: serviceEndpoints)
 
         let splitManager = DefaultSplitManager()
-        let evaluationRepository = DefaultEvaluationRepository(target: target, secureHttpClient: secureHttpClient, splitManager: splitManager)
+        let evaluationRepository = DefaultEvaluationRepository(target: target, splitManager: splitManager)
         let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttpClient, evaluationRepository: evaluationRepository)
         let periodicScheduler = DefaultEvaluationPeriodicScheduler(evaluationProvider: evaluationProvider, target: target, filters: evaluationFilters, intervalSeconds: config.evaluationRefreshRate)
         let streaming = DefaultStreaming(evaluationProvider: evaluationProvider, secureHttpClient: secureHttpClient, target: target)

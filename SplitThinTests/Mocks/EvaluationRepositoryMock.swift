@@ -3,9 +3,9 @@ import Foundation
 
 final class EvaluationRepositoryMock: EvaluationRepository, @unchecked Sendable {
 
-    var getTreatmentCalls = [(flag: String, target: Target)]()
-    var getTreatmentsCalls = [(flags: [String], target: Target)]()
-    var getTreatmentsByFlagSetsCalls = [(flagSets: [String], target: Target)]()
+    var getTreatmentCalls = [String]()
+    var getTreatmentsCalls = [[String]]()
+    var getTreatmentsByFlagSetsCalls = [[String]]()
     var setTargetCalls = [Target]()
     var updateCalls = [[EvaluationResult]]()
     var clearCallCount = 0
@@ -13,26 +13,26 @@ final class EvaluationRepositoryMock: EvaluationRepository, @unchecked Sendable 
     var treatmentToReturn: EvaluationResult?
     var treatmentsToReturn = [EvaluationResult]()
 
-    func getTreatment(flag: String, target: Target) async -> EvaluationResult? {
-        getTreatmentCalls.append((flag, target))
+    func getTreatment(flag: String) -> EvaluationResult? {
+        getTreatmentCalls.append(flag)
         return treatmentToReturn
     }
 
-    func getTreatments(flags: [String], target: Target) async -> [EvaluationResult] {
-        getTreatmentsCalls.append((flags, target))
+    func getTreatments(flags: [String]) -> [EvaluationResult] {
+        getTreatmentsCalls.append(flags)
         return treatmentsToReturn
     }
 
-    func getTreatmentsByFlagSets(_ flagSets: [String], target: Target) async -> [EvaluationResult] {
-        getTreatmentsByFlagSetsCalls.append((flagSets, target))
+    func getTreatmentsByFlagSets(_ flagSets: [String]) -> [EvaluationResult] {
+        getTreatmentsByFlagSetsCalls.append(flagSets)
         return treatmentsToReturn
     }
 
-    func getFlagNames(target: Target) async -> [String] {
+    func getFlagNames() -> [String] {
         []
     }
 
-    func setTarget(_ target: Target) async {
+    func setTarget(_ target: Target) {
         setTargetCalls.append(target)
     }
 
