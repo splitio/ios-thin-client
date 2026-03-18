@@ -1,0 +1,86 @@
+---
+description: Swift coding conventions and style preferences for the iOS thin client
+globs: "**/*.swift"
+alwaysApply: false
+---
+
+# Swift Conventions
+
+## File Organization
+
+- Protocols live in the same file as their `Default*` implementation, placed between the imports and the class.
+- One protocol + one implementation per file, named after the implementation (e.g. `DefaultCredentialStorage.swift`).
+
+## Formatting
+
+- Write constructors on a single line when possible:
+
+```swift
+// Good
+let provider = DefaultAuthProvider(credentialStorage: storageMock, credentialFetcher: fetcherMock)
+
+// Bad
+let provider = DefaultAuthProvider(
+    credentialStorage: storageMock,
+    credentialFetcher: fetcherMock
+)
+```
+
+- Try to visually align the builder chains when possible:
+
+```swift
+// Good
+let provider = Builer().create()
+                       .addSomething(A)
+                       .addSomething(B)
+                       .addSomething(C) 
+                       .build()
+
+// Bad
+let provider = Builer().create()
+                .addSomething(A)
+                .addSomething(B)
+                .addSomething(C) 
+                .build()
+```
+
+- Omit `return` in single-expression functions and computed properties:
+
+```swift
+// Good
+func square(_ x: Int) -> Int {
+    x * x
+}
+
+func createClient() -> SplitClient {
+    DefaultSplitClient(target: target)
+}
+
+var isEmpty: Bool { count == 0 }
+
+// Bad
+func square(_ x: Int) -> Int {
+    return x * x
+}
+
+func createClient() -> SplitClient {
+    return DefaultSplitClient(target: target)
+}
+
+var isEmpty: Bool { return count == 0 }
+```
+
+## Discardable Results
+
+- Prefer `@discardableResult` on protocol methods and implementations over `_ = ` at call sites.
+- Exception: only add `@discardableResult` when it makes semantic sense for the protocol contract. If callers should generally use the return value, keep `_ = ` at the few call sites that discard it.
+
+## Concurrency
+
+- Use the `withLock` helper from `CommonHelpers.swift` instead of manual `lock.lock()` / `defer { lock.unlock() }`.
+
+## Testing
+
+- Centralize shared setup (mock creation, default instances) in the `setUp()` method.
+- Mock files go in `SplitThinTests/Mocks/`.
+- Test files go in `SplitThinTests/` mirroring the source structure.

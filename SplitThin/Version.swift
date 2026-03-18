@@ -1,14 +1,14 @@
 import Foundation
 
 enum Version {
-    private static let kSdkPlatform = "ios-thin"
-    private static let kVersion = "0.1.0"
+    private static let sdkPlatform = "ios-thin"
+    private static let version = "0.1.0"
 
     static var semantic: String {
-        kVersion
+        version
     }
 
     static var sdk: String {
-        "\(kSdkPlatform)-\(kVersion)"
+        "\(sdkPlatform)-\(version)"
     }
 }

@@ -1,0 +1,31 @@
+import Foundation
+
+protocol DynamicDecodable {
+    init(jsonObject: Any) throws
+}
+
+protocol DynamicEncodable {
+    func toJsonObject() -> Any
+}
+
+typealias DynamicCodable = DynamicDecodable & DynamicEncodable
+
+enum JsonError: Error {
+    case parsingFailed
+    case invalidData
+}
+
+enum Json {
+    static func decode<T: DynamicDecodable>(from data: Data, to type: T.Type) throws -> T {
+        let jsonObject = try JSONSerialization.jsonObject(with: data, options: [])
+        return try T.init(jsonObject: jsonObject)
+    }
+
+    static func decodeArray<T: DynamicDecodable>(from data: Data, to type: T.Type) throws -> [T] {
+        let jsonObject = try JSONSerialization.jsonObject(with: data, options: [])
+        guard let array = jsonObject as? [Any] else {
+            throw JsonError.invalidData
+        }
+        return try array.map { try T.init(jsonObject: $0) }
+    }
+}

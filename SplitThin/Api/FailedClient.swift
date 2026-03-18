@@ -7,5 +7,25 @@ final class FailedClient: SplitClient {
         Target(matchingKey: "")
     }
 
-    func destroy() {}
+    func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) async -> EvaluationResult {
+        EvaluationResult(flag: flag, treatment: "control")
+    }
+
+    func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) async -> [EvaluationResult] {
+        flags.map { EvaluationResult(flag: $0, treatment: "control") }
+    }
+
+    func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) async -> [EvaluationResult] {
+        []
+    }
+
+    func setTarget(target: Target) async {}
+
+    func addEventListener(listener: SplitEventListener) {}
+
+    func track(eventType: String, value: Double?, properties: EventProperties?) {}
+
+    func destroy() async {}
+
+    func flush() async {}
 }

@@ -6,9 +6,6 @@ public struct Target: Hashable, Sendable {
     public let attributes: [String: String]?
     public let trafficType: String?
 
-    public var matchingKey: String { key.matchingKey }
-    public var bucketingKey: String? { key.bucketingKey }
-
     public init(key: Key, attributes: [String: String]? = nil, trafficType: String? = nil) {
         self.key = key
         self.attributes = attributes
@@ -19,5 +16,11 @@ public struct Target: Hashable, Sendable {
         self.key = Key(matchingKey: matchingKey, bucketingKey: bucketingKey)
         self.attributes = attributes
         self.trafficType = trafficType
+    }
+
+    public static func == (lhs: Target, rhs: Target) -> Bool {
+        lhs.key == rhs.key
+            && lhs.attributes == rhs.attributes
+            && lhs.trafficType == rhs.trafficType
     }
 }

@@ -11,6 +11,10 @@ public protocol SplitFactoryBuilder {
     @discardableResult
     func setTarget(_ target: Target) -> SplitFactoryBuilder
 
+    /// Sets the SDK configuration.
+    @discardableResult
+    func setConfig(_ config: SplitClientConfig) -> SplitFactoryBuilder
+
     /// Sets evaluation filters to control which flags are fetched.
     @discardableResult
     func setEvaluationFilters(_ filters: EvaluationFilters) -> SplitFactoryBuilder

@@ -1,0 +1,23 @@
+---
+description: Swift XCTest assertion best practices
+globs: SplitThinTests/**/*.swift
+alwaysApply: false
+---
+
+# XCTest Assertions
+
+Use specific assertion methods instead of boolean comparisons:
+
+```swift
+// ❌ BAD
+XCTAssertTrue(a == b)
+XCTAssertFalse(a == b)
+XCTAssertTrue(a === b)
+
+// ✅ GOOD
+XCTAssertEqual(a, b)
+XCTAssertNotEqual(a, b)
+XCTAssertIdentical(a, b)
+```
+
+Specific assertions provide better failure messages showing actual vs expected values.

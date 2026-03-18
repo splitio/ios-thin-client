@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "SplitThin",
-    platforms: [.iOS(.v12)],
+    platforms: [.iOS(.v13), .macOS(.v10_15)],
     products: [
         .library(name: "SplitThin", targets: ["SplitThin"]),
         .library(name: "Api", targets: ["Api"]),
