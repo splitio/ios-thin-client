@@ -13,13 +13,13 @@ final class TreatmentsManagerMock: TreatmentsManager, @unchecked Sendable {
 
     func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) async -> EvaluationResult {
         getTreatmentCallCount += 1
-        return getTreatmentResult ?? EvaluationResult(flag: flag, treatment: "control")
+        return getTreatmentResult ?? EvaluationResult(flag: flag, treatment: "control", flagSets: [])
     }
 
     func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) async -> [EvaluationResult] {
         getTreatmentsCallCount += 1
         return getTreatmentsResult.isEmpty
-            ? flags.map { EvaluationResult(flag: $0, treatment: "control") }
+            ? flags.map { EvaluationResult(flag: $0, treatment: "control", flagSets: []) }
             : getTreatmentsResult
     }
 

@@ -6,9 +6,13 @@ final class AuthProviderMock: AuthProvider, @unchecked Sendable {
     var credentialToReturn: JwtCredential?
     var errorToThrow: Error?
     var getCredentialCallCount = 0
+    var invalidateCallCount = 0
+    var lastTargetRequested: String?
+    var lastTargetInvalidated: String?
 
-    func getCredential() async throws -> JwtCredential {
+    func getCredential(for target: String) async throws -> JwtCredential {
         getCredentialCallCount += 1
+        lastTargetRequested = target
         if let error = errorToThrow {
             throw error
         }
@@ -16,5 +20,10 @@ final class AuthProviderMock: AuthProvider, @unchecked Sendable {
             fatalError("AuthProviderMock: credentialToReturn not set")
         }
         return credential
+    }
+
+    func invalidate(for target: String) {
+        invalidateCallCount += 1
+        lastTargetInvalidated = target
     }
 }

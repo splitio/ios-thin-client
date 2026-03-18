@@ -1,89 +1,88 @@
 import Foundation
 import Http
 
+enum SecureHttpError: Error {
+    case invalidResponse
+    case httpError(code: Int, message: String)
+    case decodingError(Error)
+    case networkError(Error)
+}
+
+protocol SecureHttpClient: Sendable {
+    func fetchEvaluations(target: Target, filters: EvaluationFilters?) async throws -> HttpResponse
+    func postEvents(payload: Data) async throws -> HttpResponse
+    func postTelemetry(payload: Data) async throws -> HttpResponse
+    func openStreaming(token: String) async throws
+    func closeStreaming() async
+}
+
 final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
 
-    private let httpClient: HttpClient
+    private let retryableHttpClient: RetryableHttpClient
     private let authProvider: AuthProvider
-    private var cachedCredential: JwtCredential?
-    private let lock = NSLock()
+    private let serviceEndpoints: ServiceEndpoints
 
-    init(httpClient: HttpClient, authProvider: AuthProvider) {
-        self.httpClient = httpClient
+    init(retryableHttpClient: RetryableHttpClient, authProvider: AuthProvider, serviceEndpoints: ServiceEndpoints) {
+        self.retryableHttpClient = retryableHttpClient
         self.authProvider = authProvider
+        self.serviceEndpoints = serviceEndpoints
     }
 
-    func get<T: DynamicDecodable>(url: URL, path: String?) async throws -> T {
-        let data = try await request(url: url, path: path, method: .get, body: nil)
-        return try Json.decode(from: data, to: T.self)
+    func fetchEvaluations(target: Target, filters: EvaluationFilters?) async throws -> HttpResponse {
+        let credential = try await authProvider.getCredential(for: target.matchingKey)
+
+        let response = try await performEvaluationsRequest(target: target, filters: filters, token: credential.token)
+
+        if response.code == 401 {
+            authProvider.invalidate(for: target.matchingKey)
+            let refreshedCredential = try await authProvider.getCredential(for: target.matchingKey)
+            return try await performEvaluationsRequest(target: target, filters: filters, token: refreshedCredential.token)
+        }
+
+        return response
     }
 
-    func getArray<T: DynamicDecodable>(url: URL, path: String?) async throws -> [T] {
-        let data = try await request(url: url, path: path, method: .get, body: nil)
-        return try Json.decodeArray(from: data, to: T.self)
-    }
-
-    func post<T: DynamicDecodable>(url: URL, path: String?, body: Data?) async throws -> T {
-        let data = try await request(url: url, path: path, method: .post, body: body)
-        return try Json.decode(from: data, to: T.self)
-    }
-
-    private func request(url: URL, path: String?, method: HttpMethod, body: Data?) async throws -> Data {
-        let credential = try await getValidCredential()
-
-        let endpoint = Endpoint.builder(baseUrl: url, path: path)
-                               .set(method: method)
-                               .add(header: "Authorization", withValue: "Bearer \(credential.token)")
+    func postEvents(payload: Data) async throws -> HttpResponse {
+        let endpoint = Endpoint.builder(baseUrl: serviceEndpoints.eventsEndpoint, path: "events/bulk")
+                               .set(method: .post)
                                .add(header: "Content-Type", withValue: "application/json")
                                .build()
 
-        let response = try await performRequest(endpoint: endpoint, body: body)
-
-        guard response.isSuccess, let data = response.data else {
-            throw SecureHttpError.httpError(code: response.code, message: "HTTP error")
-        }
-
-        return data
+        return try await retryableHttpClient.execute(endpoint, category: .events, body: payload)
     }
 
-    private func performRequest(endpoint: Endpoint, body: Data?) async throws -> HttpResponse {
-        try await withCheckedThrowingContinuation { continuation in
-            do {
-                _ = try httpClient.sendRequest(endpoint: endpoint, parameters: nil, headers: nil, body: body)
-                                  .getResponse { response in
-                    continuation.resume(returning: response)
-                } errorHandler: { error in
-                    continuation.resume(throwing: SecureHttpError.networkError(error))
-                }
-            } catch {
-                continuation.resume(throwing: SecureHttpError.networkError(error))
-            }
-        }
+    func postTelemetry(payload: Data) async throws -> HttpResponse {
+        let endpoint = Endpoint.builder(baseUrl: serviceEndpoints.telemetryServiceEndpoint, path: "metrics/usage")
+                               .set(method: .post)
+                               .add(header: "Content-Type", withValue: "application/json")
+                               .build()
+
+        return try await retryableHttpClient.execute(endpoint, category: .telemetry, body: payload)
     }
 
-    private func getValidCredential() async throws -> JwtCredential {
-        if let cached = getCachedCredential() {
-            return cached
-        }
-
-        let newCredential = try await authProvider.getCredential()
-        setCachedCredential(newCredential)
-
-        return newCredential
+    func openStreaming(token: String) async throws {
+        // TODO: Implement streaming connection
     }
 
-    private func getCachedCredential() -> JwtCredential? {
-        lock.lock()
-        defer { lock.unlock() }
-        guard let cached = cachedCredential, cached.expiresAt > Date() else {
-            return nil
-        }
-        return cached
+    func closeStreaming() async {
+        // TODO: Implement streaming disconnection
     }
 
-    private func setCachedCredential(_ credential: JwtCredential) {
-        lock.lock()
-        defer { lock.unlock() }
-        cachedCredential = credential
+    private func performEvaluationsRequest(target: Target, filters: EvaluationFilters?, token: String) async throws -> HttpResponse {
+        var queryString = "&user=\(target.matchingKey)&since=-1"
+        if let flagNames = filters?.flagNames, !flagNames.isEmpty {
+            queryString += "&names=\(flagNames.joined(separator: ","))"
+        } else if let flagSets = filters?.flagSets, !flagSets.isEmpty {
+            queryString += "&sets=\(flagSets.joined(separator: ","))"
+        }
+
+        let endpoint = Endpoint.builder(baseUrl: serviceEndpoints.sdkEndpoint,path: "evaluations", defaultQueryString: queryString)
+                               .set(method: .post)
+                               .add(header: "Content-Type", withValue: "application/json")
+                               .add(header: "Authorization", withValue: "Bearer \(token)")
+                               .build()
+
+        let emptyBody = "{}".data(using: .utf8)
+        return try await retryableHttpClient.execute(endpoint, category: .evaluations, body: emptyBody)
     }
 }

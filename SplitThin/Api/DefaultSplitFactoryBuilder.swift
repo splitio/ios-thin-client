@@ -2,7 +2,19 @@ import Foundation
 import Logging
 import Http
 
-public final class DefaultSplitFactoryBuilder: SplitFactoryBuilder {
+public protocol SplitFactoryBuilder {
+    @discardableResult
+    func setSdkKey(_ sdkKey: SdkKey) -> SplitFactoryBuilder
+    @discardableResult
+    func setTarget(_ target: Target) -> SplitFactoryBuilder
+    @discardableResult
+    func setConfig(_ config: SplitClientConfig) -> SplitFactoryBuilder
+    @discardableResult
+    func setEvaluationFilters(_ filters: EvaluationFilters) -> SplitFactoryBuilder
+    func build() -> SplitFactory?
+}
+
+public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
 
     private var sdkKey: SdkKey?
     private var target: Target?
@@ -11,7 +23,9 @@ public final class DefaultSplitFactoryBuilder: SplitFactoryBuilder {
     private var httpClient: HttpClient?
     private var authProvider: AuthProvider?
 
-    public init() {}
+    public override init() {
+        super.init()
+    }
 
     @discardableResult
     public func setSdkKey(_ sdkKey: SdkKey) -> SplitFactoryBuilder {
@@ -64,19 +78,12 @@ public final class DefaultSplitFactoryBuilder: SplitFactoryBuilder {
         }
 
         let resolvedHttpClient = httpClient ?? DefaultHttpClient.shared
-        let resolvedAuthProvider = authProvider ?? DefaultAuthProvider()
+        let retryableHttpClient = DefaultRetryableHttpClient(httpClient: resolvedHttpClient)
+        let credentialStorage = DefaultCredentialStorage()
+        let credentialFetcher = DefaultCredentialFetcher(retryableHttpClient: retryableHttpClient, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey.sdkKey)
+        let resolvedAuthProvider = authProvider ?? DefaultAuthProvider(credentialStorage: credentialStorage, credentialFetcher: credentialFetcher)
+        let secureHttpClient = DefaultSecureHttpClient(retryableHttpClient: retryableHttpClient, authProvider: resolvedAuthProvider, serviceEndpoints: serviceEndpoints)
 
-        let secureHttpClient = DefaultSecureHttpClient(
-            httpClient: resolvedHttpClient,
-            authProvider: resolvedAuthProvider
-        )
-
-        return DefaultSplitFactory(
-            sdkKey: sdkKey,
-            target: target,
-            config: config,
-            evaluationFilters: evaluationFilters,
-            secureHttpClient: secureHttpClient
-        )
+        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttpClient)
     }
 }

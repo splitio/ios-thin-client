@@ -1,6 +1,13 @@
 import Foundation
 import Logging
 
+public protocol SplitFactory {
+    var client: SplitClient { get }
+    func getClient(_ target: Target?) -> SplitClient
+    func manager() -> SplitManager
+    func destroy() async
+}
+
 public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
 
     private static let initErrorMessage =
@@ -13,7 +20,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     private let evaluationFilters: EvaluationFilters?
     private let secureHttpClient: SecureHttpClient
 
-    private var splitManager: SplitManager?
+    private var splitManager: DefaultSplitManager?
     private var clients = [Key: SplitClient]()
     private var isDestroyed = false
 
@@ -25,13 +32,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         Version.sdk
     }
 
-    init(
-        sdkKey: SdkKey,
-        target: Target,
-        config: SplitClientConfig,
-        evaluationFilters: EvaluationFilters?,
-        secureHttpClient: SecureHttpClient
-    ) {
+    init(sdkKey: SdkKey, target: Target, config: SplitClientConfig, evaluationFilters: EvaluationFilters?, secureHttpClient: SecureHttpClient) {
         self.sdkKey = sdkKey
         self.defaultTarget = target
         self.defaultKey = target.key
@@ -39,16 +40,11 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         self.evaluationFilters = evaluationFilters
         self.secureHttpClient = secureHttpClient
 
-        self.splitManager = DefaultSplitManager()
-        let treatmentsManager = DefaultTreatmentsManager(
-            secureHttpClient: secureHttpClient,
-            config: config
-        )
-        let client = DefaultSplitClient(
-            target: target,
-            treatmentsManager: treatmentsManager
-        )
-        self.clients[target.key] = client
+        let manager = DefaultSplitManager()
+        splitManager = manager
+        let treatmentsManager = DefaultTreatmentsManager(target: target, secureHttpClient: secureHttpClient, splitManager: manager)
+        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager)
+        clients[target.key] = client
     }
 
     public func getClient(_ target: Target? = nil) -> SplitClient {
@@ -63,14 +59,8 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
             return FailedClient()
         }
 
-        let treatmentsManager = DefaultTreatmentsManager(
-            secureHttpClient: secureHttpClient,
-            config: config
-        )
-        let newClient = DefaultSplitClient(
-            target: resolvedTarget,
-            treatmentsManager: treatmentsManager
-        )
+        let treatmentsManager = DefaultTreatmentsManager(target: resolvedTarget, secureHttpClient: secureHttpClient, splitManager: splitManager)
+        let newClient = DefaultSplitClient(target: resolvedTarget, treatmentsManager: treatmentsManager)
         clients[resolvedTarget.key] = newClient
         return newClient
     }

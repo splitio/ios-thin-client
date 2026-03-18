@@ -1,44 +1,55 @@
 import XCTest
+import Http
 @testable import SplitThin
 
 final class SecureHttpClientTest: XCTestCase {
 
-    func testSecureHttpClientMockReturnsGetResult() async throws {
+    func testFetchEvaluationsReturnsResponse() async throws {
         let mock = SecureHttpClientMock()
-        let expectedResult = TestResponse(value: "test")
-        mock.getResult = expectedResult
+        let expectedData = "{\"flag\":\"test\"}".data(using: .utf8)!
+        mock.fetchEvaluationsResult = HttpResponse(code: 200, data: expectedData)
 
-        let result: TestResponse = try await mock.get(
-            url: URL(string: "https://example.com")!,
-            path: "/test"
-        )
+        let target = Target(matchingKey: "user1")
+        let filters = EvaluationFilters(flagNames: ["flag1"])
 
-        XCTAssertEqual(result.value, "test")
+        let response = try await mock.fetchEvaluations(target: target, filters: filters)
+
+        XCTAssertEqual(response.code, 200)
+        XCTAssertEqual(response.data, expectedData)
+        XCTAssertEqual(mock.fetchEvaluationsCalls.count, 1)
+        XCTAssertEqual(mock.fetchEvaluationsCalls.first?.target.matchingKey, "user1")
     }
 
-    func testSecureHttpClientMockReturnsPostResult() async throws {
+    func testPostEventsReturnsResponse() async throws {
         let mock = SecureHttpClientMock()
-        let expectedResult = TestResponse(value: "posted")
-        mock.postResult = expectedResult
+        mock.postEventsResult = HttpResponse(code: 202, data: nil)
 
-        let result: TestResponse = try await mock.post(
-            url: URL(string: "https://example.com")!,
-            path: "/test",
-            body: nil
-        )
+        let payload = "{}".data(using: .utf8)!
+        let response = try await mock.postEvents(payload: payload)
 
-        XCTAssertEqual(result.value, "posted")
+        XCTAssertEqual(response.code, 202)
+        XCTAssertEqual(mock.postEventsCalls.count, 1)
     }
 
-    func testSecureHttpClientMockThrowsError() async {
+    func testPostTelemetryReturnsResponse() async throws {
+        let mock = SecureHttpClientMock()
+        mock.postTelemetryResult = HttpResponse(code: 200, data: nil)
+
+        let payload = "{}".data(using: .utf8)!
+        let response = try await mock.postTelemetry(payload: payload)
+
+        XCTAssertEqual(response.code, 200)
+        XCTAssertEqual(mock.postTelemetryCalls.count, 1)
+    }
+
+    func testThrowsErrorWhenConfigured() async {
         let mock = SecureHttpClientMock()
         mock.errorToThrow = SecureHttpError.httpError(code: 500, message: "Server error")
 
+        let target = Target(matchingKey: "user1")
+
         do {
-            let _: TestResponse = try await mock.get(
-                url: URL(string: "https://example.com")!,
-                path: "/test"
-            )
+            _ = try await mock.fetchEvaluations(target: target, filters: nil)
             XCTFail("Expected error to be thrown")
         } catch let error as SecureHttpError {
             if case .httpError(let code, _) = error {
@@ -49,21 +60,5 @@ final class SecureHttpClientTest: XCTestCase {
         } catch {
             XCTFail("Unexpected error type")
         }
-    }
-}
-
-private struct TestResponse: DynamicDecodable, Equatable {
-    let value: String
-
-    init(value: String) {
-        self.value = value
-    }
-
-    init(jsonObject: Any) throws {
-        guard let dict = jsonObject as? [String: Any],
-              let value = dict["value"] as? String else {
-            throw JsonError.parsingFailed
-        }
-        self.value = value
     }
 }

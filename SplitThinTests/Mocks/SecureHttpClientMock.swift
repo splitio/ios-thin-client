@@ -1,40 +1,72 @@
 import Foundation
+import Http
 @testable import SplitThin
 
 final class SecureHttpClientMock: SecureHttpClient, @unchecked Sendable {
 
-    var getResult: Any?
-    var getArrayResult: [Any]?
-    var postResult: Any?
+    var fetchEvaluationsResult: HttpResponse?
+    var postEventsResult: HttpResponse?
+    var postTelemetryResult: HttpResponse?
     var errorToThrow: Error?
 
-    func get<T: DynamicDecodable>(url: URL, path: String?) async throws -> T {
+    var fetchEvaluationsCalls: [(target: Target, filters: EvaluationFilters?)] = []
+    var postEventsCalls: [Data] = []
+    var postTelemetryCalls: [Data] = []
+    var openStreamingCalls: [String] = []
+    var closeStreamingCallCount = 0
+
+    private let lock = NSLock()
+
+    func fetchEvaluations(target: Target, filters: EvaluationFilters?) async throws -> HttpResponse {
+        withLock(lock) { fetchEvaluationsCalls.append((target, filters)) }
+
         if let error = errorToThrow {
             throw error
         }
-        guard let result = getResult as? T else {
-            throw SecureHttpError.invalidResponse
-        }
-        return result
+        return fetchEvaluationsResult ?? HttpResponse(code: 200, data: nil)
     }
 
-    func getArray<T: DynamicDecodable>(url: URL, path: String?) async throws -> [T] {
+    func postEvents(payload: Data) async throws -> HttpResponse {
+        withLock(lock) { postEventsCalls.append(payload) }
+
         if let error = errorToThrow {
             throw error
         }
-        guard let result = getArrayResult as? [T] else {
-            throw SecureHttpError.invalidResponse
-        }
-        return result
+        return postEventsResult ?? HttpResponse(code: 200, data: nil)
     }
 
-    func post<T: DynamicDecodable>(url: URL, path: String?, body: Data?) async throws -> T {
+    func postTelemetry(payload: Data) async throws -> HttpResponse {
+        withLock(lock) { postTelemetryCalls.append(payload) }
+
         if let error = errorToThrow {
             throw error
         }
-        guard let result = postResult as? T else {
-            throw SecureHttpError.invalidResponse
+        return postTelemetryResult ?? HttpResponse(code: 200, data: nil)
+    }
+
+    func openStreaming(token: String) async throws {
+        withLock(lock) { openStreamingCalls.append(token) }
+
+        if let error = errorToThrow {
+            throw error
         }
-        return result
+    }
+
+    func closeStreaming() async {
+        withLock(lock) { closeStreamingCallCount += 1 }
+    }
+
+    func reset() {
+        withLock(lock) {
+            fetchEvaluationsResult = nil
+            postEventsResult = nil
+            postTelemetryResult = nil
+            errorToThrow = nil
+            fetchEvaluationsCalls = []
+            postEventsCalls = []
+            postTelemetryCalls = []
+            openStreamingCalls = []
+            closeStreamingCallCount = 0
+        }
     }
 }

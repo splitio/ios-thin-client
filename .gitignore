@@ -11,6 +11,9 @@ xcuserdata/
 # SwiftPM / Xcode generated
 Package.resolved
 
+# Cursor
+.cursor/
+
 # macOS
 .DS_Store
 

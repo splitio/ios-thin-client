@@ -8,7 +8,7 @@ final class ServiceEndpointsTest: XCTestCase {
 
         XCTAssertEqual(endpoints.sdkEndpoint.absoluteString, "https://sdk.split.io/api")
         XCTAssertEqual(endpoints.eventsEndpoint.absoluteString, "https://events.split.io/api")
-        XCTAssertEqual(endpoints.authServiceEndpoint.absoluteString, "https://auth.split.io/api/v2")
+        XCTAssertEqual(endpoints.authServiceEndpoint.absoluteString, "https://auth.split.io/api/v3")
         XCTAssertEqual(endpoints.streamingServiceEndpoint.absoluteString, "https://streaming.split.io/sse")
         XCTAssertEqual(endpoints.telemetryServiceEndpoint.absoluteString, "https://telemetry.split.io/api/v1")
     }

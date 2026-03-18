@@ -2,9 +2,12 @@ import Foundation
 
 public struct Target: Hashable, Sendable {
 
-    public let key: Key
-    public let attributes: [String: String]?
-    public let trafficType: String?
+    let key: Key
+    let attributes: [String: String]?
+    let trafficType: String?
+
+    var matchingKey: String { key.matchingKey }
+    var bucketingKey: String? { key.bucketingKey }
 
     public init(key: Key, attributes: [String: String]? = nil, trafficType: String? = nil) {
         self.key = key

@@ -1,5 +1,17 @@
 import Foundation
 
+public protocol SplitClient: AnyObject {
+    var target: Target { get }
+    func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) async -> EvaluationResult
+    func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) async -> [EvaluationResult]
+    func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) async -> [EvaluationResult]
+    func setTarget(target: Target) async
+    func addEventListener(listener: SplitEventListener)
+    func track(eventType: String, value: Double?, properties: EventProperties?)
+    func destroy() async
+    func flush() async
+}
+
 final class DefaultSplitClient: SplitClient {
 
     private(set) var target: Target

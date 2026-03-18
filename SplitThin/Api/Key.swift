@@ -2,8 +2,8 @@ import Foundation
 
 public final class Key: Hashable, @unchecked Sendable {
 
-    public let matchingKey: String
-    public let bucketingKey: String?
+    let matchingKey: String
+    let bucketingKey: String?
 
     public init(matchingKey: String, bucketingKey: String? = nil) {
         self.matchingKey = matchingKey

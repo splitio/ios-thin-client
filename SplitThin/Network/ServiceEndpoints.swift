@@ -5,7 +5,7 @@ public final class ServiceEndpoints: Sendable {
 
     private static let defaultSdkEndpoint = "https://sdk.split.io/api"
     private static let defaultEventsEndpoint = "https://events.split.io/api"
-    private static let defaultAuthServiceEndpoint = "https://auth.split.io/api/v2"
+    private static let defaultAuthServiceEndpoint = "https://auth.split.io/api/v3"
     private static let defaultStreamingEndpoint = "https://streaming.split.io/sse"
     private static let defaultTelemetryEndpoint = "https://telemetry.split.io/api/v1"
 

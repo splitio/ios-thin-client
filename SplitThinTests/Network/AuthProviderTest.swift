@@ -12,11 +12,12 @@ final class AuthProviderTest: XCTestCase {
         )
         mock.credentialToReturn = expectedCredential
 
-        let credential = try await mock.getCredential()
+        let credential = try await mock.getCredential(for: "user1")
 
         XCTAssertEqual(credential.token, "test-token")
         XCTAssertTrue(credential.pushEnabled)
         XCTAssertEqual(mock.getCredentialCallCount, 1)
+        XCTAssertEqual(mock.lastTargetRequested, "user1")
     }
 
     func testAuthProviderMockThrowsError() async {
@@ -24,10 +25,19 @@ final class AuthProviderTest: XCTestCase {
         mock.errorToThrow = SecureHttpError.invalidResponse
 
         do {
-            _ = try await mock.getCredential()
+            _ = try await mock.getCredential(for: "user1")
             XCTFail("Expected error to be thrown")
         } catch {
             XCTAssertEqual(mock.getCredentialCallCount, 1)
         }
+    }
+
+    func testInvalidateCallsThrough() {
+        let mock = AuthProviderMock()
+
+        mock.invalidate(for: "user1")
+
+        XCTAssertEqual(mock.invalidateCallCount, 1)
+        XCTAssertEqual(mock.lastTargetInvalidated, "user1")
     }
 }

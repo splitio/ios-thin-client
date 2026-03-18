@@ -15,7 +15,7 @@ final class DefaultSplitFactoryTest: XCTestCase {
             config: SplitClientConfig.builder().build(),
             evaluationFilters: nil,
             secureHttpClient: secureHttpClientMock
-        ) 
+        )
     }
 
     override func tearDown() async throws {
@@ -42,7 +42,7 @@ final class DefaultSplitFactoryTest: XCTestCase {
         let client = factory.getClient(nil)
 
         XCTAssertEqual(client.target.key.matchingKey, "user1")
-        XCTAssertTrue(client === factory.client)
+        XCTAssertIdentical(client, factory.client)
     }
 
     func testGetClientDifferentTarget() {
@@ -57,21 +57,21 @@ final class DefaultSplitFactoryTest: XCTestCase {
         let client1 = factory.getClient(target)
         let client2 = factory.getClient(target)
 
-        XCTAssertTrue(client1 === client2, "Should return the same instance for the same key")
+        XCTAssertIdentical(client1, client2, "Should return the same instance for the same key")
     }
 
     func testGetClientReturnsSameInstanceForSameKeyDifferentAttributes() {
         let client1 = factory.getClient(Target(matchingKey: "user2", attributes: ["env": "prod"]))
         let client2 = factory.getClient(Target(matchingKey: "user2", attributes: ["env": "staging"]))
 
-        XCTAssertTrue(client1 === client2, "Should return the same instance when matchingKey and bucketingKey match")
+        XCTAssertIdentical(client1, client2, "Should return the same instance when matchingKey and bucketingKey match")
     }
 
     func testGetClientReturnsDifferentInstancesForDifferentKeys() {
         let client1 = factory.getClient(Target(matchingKey: "user2"))
         let client2 = factory.getClient(Target(matchingKey: "user3"))
 
-        XCTAssertFalse(client1 === client2, "Should return different instances for different keys")
+        XCTAssertNotIdentical(client1, client2, "Should return different instances for different keys")
     }
 
     // MARK: - Version
@@ -91,7 +91,7 @@ final class DefaultSplitFactoryTest: XCTestCase {
         let mgr1 = factory.manager()
         let mgr2 = factory.manager()
 
-        XCTAssertTrue(mgr1 === mgr2, "Should return the same manager instance")
+        XCTAssertIdentical(mgr1, mgr2, "Should return the same manager instance")
     }
 
     // MARK: - Destroy
