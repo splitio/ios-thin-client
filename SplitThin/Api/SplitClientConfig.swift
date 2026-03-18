@@ -4,7 +4,7 @@ import Logging
 /// Configuration options for the Split SDK client.
 public struct SplitClientConfig: Sendable {
 
-    fileprivate static let minEvaluationRefreshRate = 60
+    fileprivate static let minEvaluationRefreshRate = 1
     fileprivate static let minTimeout = -1
     fileprivate static let minPushRate = 30
     fileprivate static let prefixPattern = "^[a-zA-Z0-9_]{1,80}$"

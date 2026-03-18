@@ -52,6 +52,8 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
     }
 
     public func build() -> SplitFactory? {
+        configureLogger()
+
         guard let sdkKey = sdkKey, !sdkKey.sdkKey.isEmpty else {
             Logger.e("SDK key must not be empty")
             return nil
@@ -84,6 +86,19 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         let resolvedAuthProvider = authProvider ?? DefaultAuthProvider(credentialStorage: credentialStorage, credentialFetcher: credentialFetcher)
         let secureHttpClient = DefaultSecureHttpClient(retryableHttpClient: retryableHttpClient, authProvider: resolvedAuthProvider, serviceEndpoints: serviceEndpoints)
 
-        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttpClient)
+        let splitManager = DefaultSplitManager()
+        let evaluationRepository = DefaultEvaluationRepository(target: target, secureHttpClient: secureHttpClient, splitManager: splitManager)
+        let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttpClient, evaluationRepository: evaluationRepository)
+        let periodicScheduler = DefaultEvaluationPeriodicScheduler(evaluationProvider: evaluationProvider, target: target, filters: evaluationFilters, intervalSeconds: config.evaluationRefreshRate)
+        let streaming = DefaultStreaming(evaluationProvider: evaluationProvider, secureHttpClient: secureHttpClient, target: target)
+        let syncManager = DefaultSyncManager(syncMode: config.syncMode, evaluationProvider: evaluationProvider, periodicScheduler: periodicScheduler, streaming: streaming, target: target, filters: evaluationFilters)
+
+        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttpClient, evaluationRepository: evaluationRepository, syncManager: syncManager, splitManager: splitManager)
+    }
+
+    private func configureLogger() {
+        if let loggerLevel = Logging.LogLevel(rawValue: config.logLevel.rawValue) {
+            Logger.shared.level = loggerLevel
+        }
     }
 }
