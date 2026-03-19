@@ -9,7 +9,6 @@ final class PollingE2ETest: XCTestCase {
     override func setUp() {
         super.setUp()
         httpMock = SecureHttpClientMock()
-        SplitClientConfig.setMinEvaluationRefreshRate(1)
     }
 
     override func tearDown() {
@@ -39,7 +38,7 @@ final class PollingE2ETest: XCTestCase {
 
         try await Task.sleep(nanoseconds: 500_000_000)
 
-        let result = factory.client.getTreatment(flag: "my-flag", evaluationOptions: nil)
+        let result = factory.client.getTreatment(flag: "my-flag")
         XCTAssertEqual(result.treatment, "on")
 
         await factory.destroy()
@@ -78,6 +77,7 @@ final class PollingE2ETest: XCTestCase {
 
     private func buildFactory(syncMode: SyncMode, refreshRate: Int) throws -> SplitFactory {
         let config = SplitClientConfig.builder()
+                                      .setMinEvaluationRefreshRate(1)
                                       .set(syncMode: syncMode)
                                       .set(evaluationRefreshRate: refreshRate)
                                       .build()

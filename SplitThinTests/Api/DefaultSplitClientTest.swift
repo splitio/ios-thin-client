@@ -28,13 +28,13 @@ final class DefaultSplitClientTest: XCTestCase {
     }
 
     func testGetTreatmentReturnsControl() {
-        let result = client.getTreatment(flag: "flag_a", evaluationOptions: nil)
+        let result = client.getTreatment(flag: "flag_a")
 
         XCTAssertEqual(result.treatment, "control")
     }
 
     func testGetTreatmentsReturnsControlForAll() {
-        let results = client.getTreatments(flags: ["flag_a", "flag_b"], evaluationOptions: nil)
+        let results = client.getTreatments(flags: ["flag_a", "flag_b"])
 
         XCTAssertEqual(results.count, 2)
         XCTAssertTrue(results.allSatisfy { $0.treatment == "control" })
