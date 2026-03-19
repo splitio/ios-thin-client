@@ -2,8 +2,8 @@ import Foundation
 @testable import SplitThin
 
 // This file centralizes all internal methods used to inject components in the 
-// factory creation process, for testing purposes.
-// Here you will find extensions of all SDK creation components. Break down when file gets too big.
+// SDK creation process, for testing purposes.
+// Here you will find extensions of many creational components. Break down when file gets too big.
 
 extension DefaultSplitFactoryBuilder {
     @discardableResult
