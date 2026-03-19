@@ -9,7 +9,6 @@ final class PollingE2ETest: XCTestCase {
     override func setUp() {
         super.setUp()
         httpMock = SecureHttpClientMock()
-        SplitClientConfig.setMinEvaluationRefreshRate(1)
     }
 
     override func tearDown() {
@@ -78,6 +77,7 @@ final class PollingE2ETest: XCTestCase {
 
     private func buildFactory(syncMode: SyncMode, refreshRate: Int) throws -> SplitFactory {
         let config = SplitClientConfig.builder()
+                                      .setMinEvaluationRefreshRate(1)
                                       .set(syncMode: syncMode)
                                       .set(evaluationRefreshRate: refreshRate)
                                       .build()

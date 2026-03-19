@@ -7,10 +7,18 @@ extension DefaultSplitFactoryBuilder {
         self.secureHttpClient = client
         return self
     }
+    
+    @discardableResult
+    func setRetryableHttpClient(_ client: RetryableHttpClient) -> DefaultSplitFactoryBuilder {
+        self.retryableHttpClient = client
+        return self
+    }
 }
 
-extension SplitClientConfig {
-    static func setMinEvaluationRefreshRate(_ value: Int) {
-        minEvaluationRefreshRate = value
+extension SplitConfigBuilder {
+    @discardableResult
+    func setMinEvaluationRefreshRate(_ value: Int) -> SplitConfigBuilder {
+        self.minEvaluationRefreshRateOverride = value
+        return self
     }
 }

@@ -4,7 +4,7 @@ import Logging
 /// Configuration options for the Split SDK client.
 public struct SplitClientConfig: Sendable {
 
-    static var minEvaluationRefreshRate = 60
+    static let minEvaluationRefreshRate = 60
     fileprivate static let minTimeout = -1
     fileprivate static let minPushRate = 30
     fileprivate static let prefixPattern = "^[a-zA-Z0-9_]{1,80}$"
@@ -55,6 +55,9 @@ public final class SplitConfigBuilder {
     private var prefix: String?
     private var pushRate: Int = 1800
 
+    // Internal for testing
+    var minEvaluationRefreshRateOverride: Int?
+
     /// Sets the synchronization mode for fetching feature flag updates.
     /// - `.streaming`: Real-time updates via SSE (default)
     /// - `.polling`: Periodic polling at `evaluationRefreshRate` intervals
@@ -99,10 +102,10 @@ public final class SplitConfigBuilder {
     /// Minimum: 60 seconds. Default: 3600 seconds (1 hour).
     @discardableResult
     public func set(evaluationRefreshRate: Int) -> Self {
-        if evaluationRefreshRate < SplitClientConfig.minEvaluationRefreshRate {
-            Logger.w("evaluationRefreshRate must be at least \(SplitClientConfig.minEvaluationRefreshRate) seconds. " +
-                     "Using minimum allowed value.")
-            self.evaluationRefreshRate = SplitClientConfig.minEvaluationRefreshRate
+        let minRate = minEvaluationRefreshRateOverride ?? SplitClientConfig.minEvaluationRefreshRate
+        if evaluationRefreshRate < minRate {
+            Logger.w("evaluationRefreshRate must be at least \(minRate) seconds. Using minimum allowed value.")
+            self.evaluationRefreshRate = minRate
         } else {
             self.evaluationRefreshRate = evaluationRefreshRate
         }

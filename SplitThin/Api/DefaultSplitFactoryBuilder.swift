@@ -25,6 +25,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
 
     // Internals for testing
     var secureHttpClient: SecureHttpClient?
+    var retryableHttpClient: RetryableHttpClient?
 
     public override init() {
         super.init()
@@ -101,7 +102,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
 
     private func buildSecureHttpClient(serviceEndpoints: ServiceEndpoints, sdkKey: String) -> SecureHttpClient {
         let http = httpClient ?? DefaultHttpClient.shared
-        let retryable = DefaultRetryableHttpClient(httpClient: http)
+        let retryable = retryableHttpClient ?? DefaultRetryableHttpClient(httpClient: http)
         let storage = DefaultCredentialStorage()
         let fetcher = DefaultCredentialFetcher(retryableHttpClient: retryable, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey)
         let auth = authProvider ?? DefaultAuthProvider(credentialStorage: storage, credentialFetcher: fetcher)
