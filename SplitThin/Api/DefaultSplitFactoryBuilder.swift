@@ -23,6 +23,10 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
     private var httpClient: HttpClient?
     private var authProvider: AuthProvider?
 
+    // Internals for testing
+    var secureHttpClient: SecureHttpClient?
+    var retryableHttpClient: RetryableHttpClient?
+
     public override init() {
         super.init()
     }
@@ -79,26 +83,29 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
             return nil
         }
 
-        let resolvedHttpClient = httpClient ?? DefaultHttpClient.shared
-        let retryableHttpClient = DefaultRetryableHttpClient(httpClient: resolvedHttpClient)
-        let credentialStorage = DefaultCredentialStorage()
-        let credentialFetcher = DefaultCredentialFetcher(retryableHttpClient: retryableHttpClient, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey.sdkKey)
-        let resolvedAuthProvider = authProvider ?? DefaultAuthProvider(credentialStorage: credentialStorage, credentialFetcher: credentialFetcher)
-        let secureHttpClient = DefaultSecureHttpClient(retryableHttpClient: retryableHttpClient, authProvider: resolvedAuthProvider, serviceEndpoints: serviceEndpoints)
-
+        let secureHttp = secureHttpClient ?? buildSecureHttpClient(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey)
         let splitManager = DefaultSplitManager()
         let evaluationRepository = DefaultEvaluationRepository(target: target, splitManager: splitManager)
-        let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttpClient, evaluationRepository: evaluationRepository)
+        let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttp, evaluationRepository: evaluationRepository)
         let periodicScheduler = DefaultEvaluationPeriodicScheduler(evaluationProvider: evaluationProvider, target: target, filters: evaluationFilters, intervalSeconds: config.evaluationRefreshRate)
-        let streaming = DefaultStreaming(evaluationProvider: evaluationProvider, secureHttpClient: secureHttpClient, target: target)
+        let streaming = DefaultStreaming(evaluationProvider: evaluationProvider, secureHttpClient: secureHttp, target: target)
         let syncManager = DefaultSyncManager(syncMode: config.syncMode, evaluationProvider: evaluationProvider, periodicScheduler: periodicScheduler, streaming: streaming, target: target, filters: evaluationFilters)
 
-        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttpClient, evaluationRepository: evaluationRepository, syncManager: syncManager, splitManager: splitManager)
+        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, evaluationRepository: evaluationRepository, syncManager: syncManager, splitManager: splitManager)
     }
 
     private func configureLogger() {
         if let loggerLevel = Logging.LogLevel(rawValue: config.logLevel.rawValue) {
             Logger.shared.level = loggerLevel
         }
+    }
+
+    private func buildSecureHttpClient(serviceEndpoints: ServiceEndpoints, sdkKey: String) -> SecureHttpClient {
+        let http = httpClient ?? DefaultHttpClient.shared
+        let retryable = retryableHttpClient ?? DefaultRetryableHttpClient(httpClient: http)
+        let storage = DefaultCredentialStorage()
+        let fetcher = DefaultCredentialFetcher(retryableHttpClient: retryable, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey)
+        let auth = authProvider ?? DefaultAuthProvider(credentialStorage: storage, credentialFetcher: fetcher)
+        return DefaultSecureHttpClient(retryableHttpClient: retryable, authProvider: auth, serviceEndpoints: serviceEndpoints)
     }
 }
