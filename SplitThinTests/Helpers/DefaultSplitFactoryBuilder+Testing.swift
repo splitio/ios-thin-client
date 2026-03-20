@@ -1,6 +1,10 @@
 import Foundation
 @testable import SplitThin
 
+// This file centralizes all internal methods used to inject components in the 
+// SDK creation process, for testing purposes.
+// Here you will find extensions of many creational components. Break down when file gets too big.
+
 extension DefaultSplitFactoryBuilder {
     @discardableResult
     func setSecureHttpClient(_ client: SecureHttpClient) -> DefaultSplitFactoryBuilder {

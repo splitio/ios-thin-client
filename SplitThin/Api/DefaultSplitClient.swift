@@ -61,3 +61,18 @@ final class DefaultSplitClient: SplitClient {
 
     func flush() async {}
 }
+
+// MARK - Evaluations API variations
+public extension SplitClient {
+    func getTreatment(flag: String) -> EvaluationResult {
+        getTreatment(flag: flag, evaluationOptions: nil)
+    }
+
+    func getTreatments(flags: [String]) -> [EvaluationResult] {
+        getTreatments(flags: flags, evaluationOptions: nil)
+    }
+
+    func getTreatmentsByFlagSets(flagSets: [String]) -> [EvaluationResult] {
+        getTreatmentsByFlagSets(flagSets: flagSets, evaluationOptions: nil)
+    }
+}
