@@ -45,7 +45,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         self.syncManager = syncManager
         self.splitManager = splitManager
 
-        let treatmentsManager = DefaultTreatmentsManager(target: target, evaluationRepository: evaluationRepository)
+        let treatmentsManager = DefaultTreatmentsManager(evaluationRepository: evaluationRepository)
         let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, evaluationRepository: evaluationRepository)
         clients[target.key] = client
 
@@ -66,7 +66,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
             return FailedClient()
         }
 
-        let treatmentsManager = DefaultTreatmentsManager(target: resolvedTarget, evaluationRepository: evaluationRepository)
+        let treatmentsManager = DefaultTreatmentsManager(evaluationRepository: evaluationRepository)
         let newClient = DefaultSplitClient(target: resolvedTarget, treatmentsManager: treatmentsManager, evaluationRepository: evaluationRepository)
         clients[resolvedTarget.key] = newClient
         return newClient

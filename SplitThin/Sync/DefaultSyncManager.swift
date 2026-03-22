@@ -11,28 +11,26 @@ protocol SyncManager: Sendable {
 final class DefaultSyncManager: SyncManager, @unchecked Sendable {
 
     private let syncMode: SyncMode
-    private let fetchCoordinator: EvaluationFetchCoordinator
+    private let evaluationRepository: EvaluationRepository
     private let polling: EvaluationPeriodicScheduler
     private let streaming: Streaming
     private let target: Target
-    private let filters: EvaluationFilters?
 
     private var isPaused = false
     private let lock = NSLock()
 
-    init(syncMode: SyncMode, fetchCoordinator: EvaluationFetchCoordinator, periodicScheduler: EvaluationPeriodicScheduler, streaming: Streaming, target: Target, filters: EvaluationFilters?) {
+    init(syncMode: SyncMode, evaluationRepository: EvaluationRepository, periodicScheduler: EvaluationPeriodicScheduler, streaming: Streaming, target: Target) {
         self.syncMode = syncMode
-        self.fetchCoordinator = fetchCoordinator
+        self.evaluationRepository = evaluationRepository
         self.polling = periodicScheduler
         self.streaming = streaming
         self.target = target
-        self.filters = filters
     }
 
     func start() async {
         Logger.d("SyncManager: Starting with mode \(syncMode)")
 
-        await fetchCoordinator.fetchIfNeeded(target: target, filters: filters, reason: .initialization)
+        await evaluationRepository.initialize(target: target)
 
         switch syncMode {
             case .streaming:

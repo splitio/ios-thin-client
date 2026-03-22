@@ -6,6 +6,7 @@ public protocol EvaluationRepository: Sendable {
     func getTreatmentsByFlagSets(_ flagSets: [String], target: Target) async -> [EvaluationResult]
     func getFlagNames(target: Target) async -> [String]
     func setTarget(_ target: Target) async
+    func initialize(target: Target) async
 }
 
 final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendable {
@@ -62,6 +63,11 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
         cacheEvaluations(evaluations, for: target)
     }
 
+    func initialize(target: Target) async {
+        let evaluations = await fetchCoordinator.fetchIfNeeded(target: target, filters: evaluationFilters, reason: .initialization)
+        cacheEvaluations(evaluations, for: target)
+    }
+
     func clear() {
         withLock(lock) { cache.removeAll() }
     }
@@ -76,7 +82,7 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
 
     private func cacheEvaluations(_ evaluations: [EvaluationResult], for target: Target) {
         guard !evaluations.isEmpty else { return }
-        
+
         withLock(lock) {
             var targetCache = cache[target] ?? [:]
             for evaluation in evaluations {

@@ -28,15 +28,15 @@ final class DefaultSplitClient: SplitClient {
 
     // MARK: - Evaluation
     func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) async -> EvaluationResult {
-        await treatmentsManager.getTreatment(flag: flag, evaluationOptions: evaluationOptions)
+        await treatmentsManager.getTreatment(flag: flag, target: target, evaluationOptions: evaluationOptions)
     }
 
     func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) async -> [EvaluationResult] {
-        await treatmentsManager.getTreatments(flags: flags, evaluationOptions: evaluationOptions)
+        await treatmentsManager.getTreatments(flags: flags, target: target, evaluationOptions: evaluationOptions)
     }
 
     func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) async -> [EvaluationResult] {
-        await treatmentsManager.getTreatmentsByFlagSets(flagSets: flagSets, evaluationOptions: evaluationOptions)
+        await treatmentsManager.getTreatmentsByFlagSets(flagSets: flagSets, target: target, evaluationOptions: evaluationOptions)
     }
 
     // MARK: - Target switching

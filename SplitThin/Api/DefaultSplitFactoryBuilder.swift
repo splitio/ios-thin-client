@@ -90,7 +90,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         let evaluationRepository = DefaultEvaluationRepository(fetchCoordinator: fetchCoordinator, evaluationFilters: evaluationFilters, splitManager: splitManager)
         let periodicScheduler = DefaultEvaluationPeriodicScheduler(fetchCoordinator: fetchCoordinator, target: target, filters: evaluationFilters, intervalSeconds: config.evaluationRefreshRate)
         let streaming = DefaultStreaming(fetchCoordinator: fetchCoordinator, secureHttpClient: secureHttp, target: target)
-        let syncManager = DefaultSyncManager(syncMode: config.syncMode, fetchCoordinator: fetchCoordinator, periodicScheduler: periodicScheduler, streaming: streaming, target: target, filters: evaluationFilters)
+        let syncManager = DefaultSyncManager(syncMode: config.syncMode, evaluationRepository: evaluationRepository, periodicScheduler: periodicScheduler, streaming: streaming, target: target)
 
         return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, evaluationRepository: evaluationRepository, syncManager: syncManager, splitManager: splitManager)
     }
