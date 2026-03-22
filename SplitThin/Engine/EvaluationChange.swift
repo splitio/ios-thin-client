@@ -1,6 +1,6 @@
 import Foundation
 
-struct EvaluationChange: Sendable {
+public struct EvaluationChange: Sendable {
     let target: Target
     let changeNumber: Int64
     let evaluations: [EvaluationResult]

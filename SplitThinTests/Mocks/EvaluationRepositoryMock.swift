@@ -7,40 +7,30 @@ final class EvaluationRepositoryMock: EvaluationRepository, @unchecked Sendable 
     var getTreatmentsCalls = [[String]]()
     var getTreatmentsByFlagSetsCalls = [[String]]()
     var setTargetCalls = [Target]()
-    var updateCalls = [[EvaluationResult]]()
-    var clearCallCount = 0
 
     var treatmentToReturn: EvaluationResult?
     var treatmentsToReturn = [EvaluationResult]()
 
-    func getTreatment(flag: String) -> EvaluationResult? {
+    func getTreatment(flag: String, target: Target) async -> EvaluationResult? {
         getTreatmentCalls.append(flag)
         return treatmentToReturn
     }
 
-    func getTreatments(flags: [String]) -> [EvaluationResult] {
+    func getTreatments(flags: [String], target: Target) async -> [EvaluationResult] {
         getTreatmentsCalls.append(flags)
         return treatmentsToReturn
     }
 
-    func getTreatmentsByFlagSets(_ flagSets: [String]) -> [EvaluationResult] {
+    func getTreatmentsByFlagSets(_ flagSets: [String], target: Target) async -> [EvaluationResult] {
         getTreatmentsByFlagSetsCalls.append(flagSets)
         return treatmentsToReturn
     }
 
-    func getFlagNames() -> [String] {
+    func getFlagNames(target: Target) async -> [String] {
         []
     }
 
-    func setTarget(_ target: Target) {
+    func setTarget(_ target: Target) async {
         setTargetCalls.append(target)
-    }
-
-    func update(_ evaluations: [EvaluationResult]) {
-        updateCalls.append(evaluations)
-    }
-
-    func clear() {
-        clearCallCount += 1
     }
 }

@@ -1,67 +1,89 @@
 import Foundation
 
 public protocol EvaluationRepository: Sendable {
-    func getTreatment(flag: String) -> EvaluationResult?
-    func getTreatments(flags: [String]) -> [EvaluationResult]
-    func getTreatmentsByFlagSets(_ flagSets: [String]) -> [EvaluationResult]
-    func getFlagNames() -> [String]
-    func setTarget(_ target: Target)
-    func update(_ evaluations: [EvaluationResult])
-    func clear()
+    func getTreatment(flag: String, target: Target) async -> EvaluationResult?
+    func getTreatments(flags: [String], target: Target) async -> [EvaluationResult]
+    func getTreatmentsByFlagSets(_ flagSets: [String], target: Target) async -> [EvaluationResult]
+    func getFlagNames(target: Target) async -> [String]
+    func setTarget(_ target: Target) async
 }
 
 final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendable {
 
     private let splitManager: DefaultSplitManager?
+    private let fetchCoordinator: EvaluationFetchCoordinator
+    private let evaluationFilters: EvaluationFilters?
 
-    private var currentTarget: Target
-    private var cachedEvaluations = [String: EvaluationResult]()
+    private var cache = [Target: [String: EvaluationResult]]()
     private let lock = NSLock()
 
-    init(target: Target, splitManager: DefaultSplitManager? = nil) {
-        self.currentTarget = target
+    init(fetchCoordinator: EvaluationFetchCoordinator, evaluationFilters: EvaluationFilters?, splitManager: DefaultSplitManager? = nil) {
+        self.fetchCoordinator = fetchCoordinator
+        self.evaluationFilters = evaluationFilters
         self.splitManager = splitManager
     }
 
-    func getTreatment(flag: String) -> EvaluationResult? {
-        withLock(lock) { cachedEvaluations[flag] }
+    func getTreatment(flag: String, target: Target) async -> EvaluationResult? {
+        await checkIfFetchOngoing(for: target)
+        return withLock(lock) { cache[target]?[flag] }
     }
 
-    func getTreatments(flags: [String]) -> [EvaluationResult] {
-        withLock(lock) {
-            flags.compactMap { cachedEvaluations[$0] }
+    func getTreatments(flags: [String], target: Target) async -> [EvaluationResult] {
+        await checkIfFetchOngoing(for: target)
+        return withLock(lock) {
+            let targetCache = cache[target] ?? [:]
+            return flags.compactMap { targetCache[$0] }
         }
     }
 
-    func getTreatmentsByFlagSets(_ flagSets: [String]) -> [EvaluationResult] {
-        withLock(lock) {
-            cachedEvaluations.values.filter { evaluation in
+    func getTreatmentsByFlagSets(_ flagSets: [String], target: Target) async -> [EvaluationResult] {
+        await checkIfFetchOngoing(for: target)
+        return withLock(lock) {
+            let targetCache = cache[target] ?? [:]
+            return targetCache.values.filter { evaluation in
                 !Set(evaluation.flagSets).isDisjoint(with: flagSets)
             }
         }
     }
 
-    func getFlagNames() -> [String] {
-        withLock(lock) { Array(cachedEvaluations.keys) }
+    func getFlagNames(target: Target) async -> [String] {
+        await checkIfFetchOngoing(for: target)
+        return withLock(lock) { Array(cache[target]?.keys ?? [String: EvaluationResult]().keys) }
     }
 
-    func setTarget(_ target: Target) {
+    func setTarget(_ target: Target) async {
+        await checkIfFetchOngoing(for: target)
+        
         withLock(lock) {
-            currentTarget = target
-            cachedEvaluations.removeAll()
+            cache[target] = nil
         }
-    }
-
-    func update(_ evaluations: [EvaluationResult]) {
-        withLock(lock) {
-            for evaluation in evaluations {
-                cachedEvaluations[evaluation.flag] = evaluation
-            }
-            splitManager?.updateFlags(evaluations.map { $0.flag })
-        }
+        
+        let evaluations = await fetchCoordinator.fetchIfNeeded(target: target, filters: evaluationFilters, reason: .targetSwitch)
+        cacheEvaluations(evaluations, for: target)
     }
 
     func clear() {
-        withLock(lock) { cachedEvaluations.removeAll() }
+        withLock(lock) { cache.removeAll() }
+    }
+
+    // MARK: - Private
+    private func checkIfFetchOngoing(for target: Target) async {
+        if fetchCoordinator.hasInFlightFetch(for: target) {
+            let evaluations = await fetchCoordinator.awaitInFlightFetch(for: target)
+            cacheEvaluations(evaluations, for: target)
+        }
+    }
+
+    private func cacheEvaluations(_ evaluations: [EvaluationResult], for target: Target) {
+        guard !evaluations.isEmpty else { return }
+        
+        withLock(lock) {
+            var targetCache = cache[target] ?? [:]
+            for evaluation in evaluations {
+                targetCache[evaluation.flag] = evaluation
+            }
+            cache[target] = targetCache
+            splitManager?.updateFlags(evaluations.map { $0.flag })
+        }
     }
 }

@@ -1,6 +1,6 @@
 import Foundation
 
-public struct EvaluationFilters: Sendable {
+public struct EvaluationFilters: Sendable, Hashable {
     public let flagNames: [String]?
     public let flagSets: [String]?
     public let withDynamicConfig: Bool

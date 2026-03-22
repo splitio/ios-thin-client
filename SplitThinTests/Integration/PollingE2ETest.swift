@@ -38,7 +38,7 @@ final class PollingE2ETest: XCTestCase {
 
         try await Task.sleep(nanoseconds: 500_000_000)
 
-        let result = factory.client.getTreatment(flag: "my-flag")
+        let result = await factory.client.getTreatment(flag: "my-flag")
         XCTAssertEqual(result.treatment, "on")
 
         await factory.destroy()

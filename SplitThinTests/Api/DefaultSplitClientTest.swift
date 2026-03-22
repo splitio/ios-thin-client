@@ -5,36 +5,40 @@ final class DefaultSplitClientTest: XCTestCase {
 
     private var client: DefaultSplitClient!
     private var treatmentsManagerMock: TreatmentsManagerMock!
+    private var evaluationRepositoryMock: EvaluationRepositoryMock!
 
     override func setUp() {
         super.setUp()
         treatmentsManagerMock = TreatmentsManagerMock()
+        evaluationRepositoryMock = EvaluationRepositoryMock()
         client = DefaultSplitClient(
             target: Target(matchingKey: "user1"),
-            treatmentsManager: treatmentsManagerMock
+            treatmentsManager: treatmentsManagerMock,
+            evaluationRepository: evaluationRepositoryMock
         )
     }
 
     override func tearDown() {
         client = nil
         treatmentsManagerMock = nil
+        evaluationRepositoryMock = nil
         super.tearDown()
     }
 
-    func testSetTargetUpdatesTarget() {
-        client.setTarget(target: Target(matchingKey: "user2"))
+    func testSetTargetUpdatesTarget() async {
+        await client.setTarget(target: Target(matchingKey: "user2"))
 
         XCTAssertEqual(client.target.key.matchingKey, "user2")
     }
 
-    func testGetTreatmentReturnsControl() {
-        let result = client.getTreatment(flag: "flag_a")
+    func testGetTreatmentReturnsControl() async {
+        let result = await client.getTreatment(flag: "flag_a")
 
         XCTAssertEqual(result.treatment, "control")
     }
 
-    func testGetTreatmentsReturnsControlForAll() {
-        let results = client.getTreatments(flags: ["flag_a", "flag_b"])
+    func testGetTreatmentsReturnsControlForAll() async {
+        let results = await client.getTreatments(flags: ["flag_a", "flag_b"])
 
         XCTAssertEqual(results.count, 2)
         XCTAssertTrue(results.allSatisfy { $0.treatment == "control" })

@@ -1,9 +1,9 @@
 import Foundation
 
 protocol TreatmentsManager: Sendable {
-    func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) -> EvaluationResult
-    func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult]
-    func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult]
+    func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) async -> EvaluationResult
+    func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) async -> [EvaluationResult]
+    func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) async -> [EvaluationResult]
 }
 
 final class DefaultTreatmentsManager: TreatmentsManager, @unchecked Sendable {
@@ -16,17 +16,17 @@ final class DefaultTreatmentsManager: TreatmentsManager, @unchecked Sendable {
         self.evaluationRepository = evaluationRepository
     }
 
-    func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) -> EvaluationResult {
-        evaluationRepository.getTreatment(flag: flag) ?? EvaluationResult(flag: flag, treatment: "control", flagSets: [])
+    func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) async -> EvaluationResult {
+        await evaluationRepository.getTreatment(flag: flag, target: target) ?? EvaluationResult(flag: flag, treatment: "control", flagSets: [])
     }
 
-    func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult] {
-        let results = evaluationRepository.getTreatments(flags: flags)
+    func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) async -> [EvaluationResult] {
+        let results = await evaluationRepository.getTreatments(flags: flags, target: target)
         let resultsByFlag = Dictionary(uniqueKeysWithValues: results.map { ($0.flag, $0) })
         return flags.map { resultsByFlag[$0] ?? EvaluationResult(flag: $0, treatment: "control", flagSets: []) }
     }
 
-    func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult] {
-        evaluationRepository.getTreatmentsByFlagSets(flagSets)
+    func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) async -> [EvaluationResult] {
+        await evaluationRepository.getTreatmentsByFlagSets(flagSets, target: target)
     }
 }

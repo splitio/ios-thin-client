@@ -8,7 +8,7 @@ protocol EvaluationPeriodicScheduler: Sendable {
 
 final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @unchecked Sendable {
 
-    private let evaluationProvider: EvaluationProvider
+    private let fetchCoordinator: EvaluationFetchCoordinator
     private let target: Target
     private let filters: EvaluationFilters?
     private let intervalSeconds: Int
@@ -17,8 +17,8 @@ final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @un
     private var isRunning = false
     private let lock = NSLock()
 
-    init(evaluationProvider: EvaluationProvider, target: Target, filters: EvaluationFilters?, intervalSeconds: Int) {
-        self.evaluationProvider = evaluationProvider
+    init(fetchCoordinator: EvaluationFetchCoordinator, target: Target, filters: EvaluationFilters?, intervalSeconds: Int) {
+        self.fetchCoordinator = fetchCoordinator
         self.target = target
         self.filters = filters
         self.intervalSeconds = intervalSeconds
@@ -51,7 +51,7 @@ final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @un
                     break
                 }
 
-                await self.evaluationProvider.fetchAndUpdate(target: self.target, filters: self.filters)
+                _ = await self.fetchCoordinator.fetchIfNeeded(target: self.target, filters: self.filters, reason: .periodic)
             }
         }
 
