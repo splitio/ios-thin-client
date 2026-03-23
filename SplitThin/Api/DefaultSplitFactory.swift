@@ -46,7 +46,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         self.splitManager = splitManager
 
         let treatmentsManager = DefaultTreatmentsManager(target: target, evaluationRepository: evaluationRepository)
-        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, evaluationRepository: evaluationRepository)
+        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager)
         clients[target.key] = client
 
         Task {
@@ -67,7 +67,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         }
 
         let treatmentsManager = DefaultTreatmentsManager(target: resolvedTarget, evaluationRepository: evaluationRepository)
-        let newClient = DefaultSplitClient(target: resolvedTarget, treatmentsManager: treatmentsManager, evaluationRepository: evaluationRepository)
+        let newClient = DefaultSplitClient(target: resolvedTarget, treatmentsManager: treatmentsManager)
         clients[resolvedTarget.key] = newClient
         return newClient
     }

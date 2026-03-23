@@ -5,23 +5,19 @@ final class DefaultSplitClientTest: XCTestCase {
 
     private var client: DefaultSplitClient!
     private var treatmentsManagerMock: TreatmentsManagerMock!
-    private var evaluationRepositoryMock: EvaluationRepositoryMock!
 
     override func setUp() {
         super.setUp()
         treatmentsManagerMock = TreatmentsManagerMock()
-        evaluationRepositoryMock = EvaluationRepositoryMock()
         client = DefaultSplitClient(
             target: Target(matchingKey: "user1"),
-            treatmentsManager: treatmentsManagerMock,
-            evaluationRepository: evaluationRepositoryMock
+            treatmentsManager: treatmentsManagerMock
         )
     }
 
     override func tearDown() {
         client = nil
         treatmentsManagerMock = nil
-        evaluationRepositoryMock = nil
         super.tearDown()
     }
 

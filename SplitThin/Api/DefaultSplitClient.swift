@@ -16,14 +16,12 @@ final class DefaultSplitClient: SplitClient {
 
     private(set) var target: Target
     private let treatmentsManager: TreatmentsManager
-    private let evaluationRepository: EvaluationRepository
     private var isDestroyed = false
     private var listeners = [SplitEventListener]()
 
-    init(target: Target, treatmentsManager: TreatmentsManager, evaluationRepository: EvaluationRepository) {
+    init(target: Target, treatmentsManager: TreatmentsManager) {
         self.target = target
         self.treatmentsManager = treatmentsManager
-        self.evaluationRepository = evaluationRepository
     }
 
     // MARK: - Evaluation
@@ -42,7 +40,7 @@ final class DefaultSplitClient: SplitClient {
     // MARK: - Target switching
     func setTarget(target: Target) async {
         self.target = target
-        await evaluationRepository.setTarget(target)
+        await treatmentsManager.setTarget(target)
     }
 
     // MARK: - Events
