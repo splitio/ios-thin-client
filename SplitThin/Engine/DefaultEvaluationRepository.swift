@@ -11,17 +11,15 @@ public protocol EvaluationRepository: Sendable {
 
 final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendable {
 
-    private let splitManager: DefaultSplitManager?
     private let fetchCoordinator: EvaluationFetchCoordinator
     private let evaluationFilters: EvaluationFilters?
 
     private var cache = [Target: [String: EvaluationResult]]()
     private let lock = NSLock()
 
-    init(fetchCoordinator: EvaluationFetchCoordinator, evaluationFilters: EvaluationFilters?, splitManager: DefaultSplitManager? = nil) {
+    init(fetchCoordinator: EvaluationFetchCoordinator, evaluationFilters: EvaluationFilters?) {
         self.fetchCoordinator = fetchCoordinator
         self.evaluationFilters = evaluationFilters
-        self.splitManager = splitManager
     }
 
     func getTreatment(flag: String, target: Target) async -> EvaluationResult? {
@@ -89,7 +87,6 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
                 targetCache[evaluation.flag] = evaluation
             }
             cache[target] = targetCache
-            splitManager?.updateFlags(evaluations.map { $0.flag })
         }
     }
 }
