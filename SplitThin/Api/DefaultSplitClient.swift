@@ -2,10 +2,10 @@ import Foundation
 
 public protocol SplitClient: AnyObject {
     var target: Target { get }
-    func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) async -> EvaluationResult
-    func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) async -> [EvaluationResult]
-    func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) async -> [EvaluationResult]
-    func setTarget(target: Target) async
+    func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) -> EvaluationResult
+    func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult]
+    func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult]
+    func setTarget(target: Target)
     func addEventListener(listener: SplitEventListener)
     func track(eventType: String, value: Double?, properties: EventProperties?)
     func destroy() async
@@ -16,33 +16,31 @@ final class DefaultSplitClient: SplitClient {
 
     private(set) var target: Target
     private let treatmentsManager: TreatmentsManager
-    private let evaluationRepository: EvaluationRepository
     private var isDestroyed = false
     private var listeners = [SplitEventListener]()
 
-    init(target: Target, treatmentsManager: TreatmentsManager, evaluationRepository: EvaluationRepository) {
+    init(target: Target, treatmentsManager: TreatmentsManager) {
         self.target = target
         self.treatmentsManager = treatmentsManager
-        self.evaluationRepository = evaluationRepository
     }
 
     // MARK: - Evaluation
-    func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) async -> EvaluationResult {
-        await treatmentsManager.getTreatment(flag: flag, target: target, evaluationOptions: evaluationOptions)
+    func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) -> EvaluationResult {
+        treatmentsManager.getTreatment(flag: flag, evaluationOptions: evaluationOptions)
     }
 
-    func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) async -> [EvaluationResult] {
-        await treatmentsManager.getTreatments(flags: flags, target: target, evaluationOptions: evaluationOptions)
+    func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult] {
+        treatmentsManager.getTreatments(flags: flags, evaluationOptions: evaluationOptions)
     }
 
-    func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) async -> [EvaluationResult] {
-        await treatmentsManager.getTreatmentsByFlagSets(flagSets: flagSets, target: target, evaluationOptions: evaluationOptions)
+    func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult] {
+        treatmentsManager.getTreatmentsByFlagSets(flagSets: flagSets, evaluationOptions: evaluationOptions)
     }
 
     // MARK: - Target switching
-    func setTarget(target: Target) async {
+    func setTarget(target: Target) {
         self.target = target
-        await evaluationRepository.setTarget(target)
+        treatmentsManager.setTarget(target)
     }
 
     // MARK: - Events
@@ -67,15 +65,15 @@ final class DefaultSplitClient: SplitClient {
 
 // MARK - Evaluations API variations
 public extension SplitClient {
-    func getTreatment(flag: String) async -> EvaluationResult {
-        await getTreatment(flag: flag, evaluationOptions: nil)
+    func getTreatment(flag: String) -> EvaluationResult {
+        getTreatment(flag: flag, evaluationOptions: nil)
     }
 
-    func getTreatments(flags: [String]) async -> [EvaluationResult] {
-        await getTreatments(flags: flags, evaluationOptions: nil)
+    func getTreatments(flags: [String]) -> [EvaluationResult] {
+        getTreatments(flags: flags, evaluationOptions: nil)
     }
 
-    func getTreatmentsByFlagSets(flagSets: [String]) async -> [EvaluationResult] {
-        await getTreatmentsByFlagSets(flagSets: flagSets, evaluationOptions: nil)
+    func getTreatmentsByFlagSets(flagSets: [String]) -> [EvaluationResult] {
+        getTreatmentsByFlagSets(flagSets: flagSets, evaluationOptions: nil)
     }
 }

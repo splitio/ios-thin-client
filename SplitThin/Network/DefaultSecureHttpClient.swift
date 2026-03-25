@@ -82,7 +82,7 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
                                .add(header: "Authorization", withValue: "Bearer \(token)")
                                .build()
 
-        let emptyBody = "{\"attributes\":{\"platform\":\"ios\"}}".data(using: .utf8) // TODO: Remove hardcoding
+        let emptyBody = "{}".data(using: .utf8) // TODO: Remove hardcoding
         return try await retryableHttpClient.execute(endpoint, category: .evaluations, body: emptyBody)
     }
 }

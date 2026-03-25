@@ -41,8 +41,6 @@ final class DefaultCredentialFetcher: CredentialFetcher, @unchecked Sendable {
         let authResponse = try Json.decode(from: data, to: AuthResponse.self)
         let expiresAt = try extractExpiration(from: authResponse.token)
 
-        Logger.v("Auth token successfully retrieved: \(authResponse.token)")
-
         return JwtCredential(token: authResponse.token, expiresAt: expiresAt, pushEnabled: authResponse.pushEnabled)
     }
 
