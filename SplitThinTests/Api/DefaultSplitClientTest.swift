@@ -21,8 +21,8 @@ final class DefaultSplitClientTest: XCTestCase {
         super.tearDown()
     }
 
-    func testSetTargetUpdatesTarget() async {
-        await client.setTarget(target: Target(matchingKey: "user2"))
+    func testSetTargetUpdatesTarget() {
+        client.setTarget(target: Target(matchingKey: "user2"))
 
         XCTAssertEqual(client.target.key.matchingKey, "user2")
     }

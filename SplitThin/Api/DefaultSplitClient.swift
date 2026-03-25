@@ -5,7 +5,7 @@ public protocol SplitClient: AnyObject {
     func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) -> EvaluationResult
     func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult]
     func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult]
-    func setTarget(target: Target) async
+    func setTarget(target: Target)
     func addEventListener(listener: SplitEventListener)
     func track(eventType: String, value: Double?, properties: EventProperties?)
     func destroy() async
@@ -38,9 +38,9 @@ final class DefaultSplitClient: SplitClient {
     }
 
     // MARK: - Target switching
-    func setTarget(target: Target) async {
+    func setTarget(target: Target) {
         self.target = target
-        await treatmentsManager.setTarget(target)
+        treatmentsManager.setTarget(target)
     }
 
     // MARK: - Events

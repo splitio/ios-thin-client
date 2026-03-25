@@ -29,7 +29,7 @@ final class TreatmentsManagerMock: TreatmentsManager, @unchecked Sendable {
         return getTreatmentsByFlagSetsResult
     }
 
-    func setTarget(_ target: Target) async {
+    func setTarget(_ target: Target) {
         setTargetCalls.append(target)
     }
 }

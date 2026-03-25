@@ -30,7 +30,7 @@ final class EvaluationRepositoryMock: EvaluationRepository, @unchecked Sendable 
         []
     }
 
-    func setTarget(_ target: Target) async {
+    func setTarget(_ target: Target) {
         setTargetCalls.append(target)
     }
 

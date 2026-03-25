@@ -19,7 +19,7 @@ final class FailedClient: SplitClient {
         []
     }
 
-    func setTarget(target: Target) async {}
+    func setTarget(target: Target) {}
 
     func addEventListener(listener: SplitEventListener) {}
 

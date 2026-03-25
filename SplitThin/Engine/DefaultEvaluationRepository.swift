@@ -5,7 +5,7 @@ public protocol EvaluationRepository: Sendable {
     func getTreatments(flags: [String], target: Target) -> [EvaluationResult]
     func getTreatmentsByFlagSets(_ flagSets: [String], target: Target) -> [EvaluationResult]
     func getFlagNames(target: Target) -> [String]
-    func setTarget(_ target: Target) async
+    func setTarget(_ target: Target)
     func initialize(target: Target) async
 }
 
@@ -46,13 +46,16 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
         withLock(lock) { Array(cache[target]?.keys ?? [String: EvaluationResult]().keys) }
     }
 
-    func setTarget(_ target: Target) async {
+    func setTarget(_ target: Target) {
         withLock(lock) {
             cache[target] = nil
         }
         
-        let evaluations = await fetchCoordinator.fetchIfNeeded(target: target, filters: evaluationFilters, reason: .targetSwitch)
-        cacheEvaluations(evaluations, for: target)
+        Task { [weak self] in
+            guard let self else { return }
+            let evaluations = await self.fetchCoordinator.fetchIfNeeded(target: target, filters: self.evaluationFilters, reason: .targetSwitch)
+            self.cacheEvaluations(evaluations, for: target)
+        }
     }
 
     func initialize(target: Target) async {

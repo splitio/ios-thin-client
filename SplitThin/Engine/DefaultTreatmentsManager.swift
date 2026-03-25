@@ -4,7 +4,7 @@ protocol TreatmentsManager: Sendable {
     func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) -> EvaluationResult
     func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult]
     func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult]
-    func setTarget(_ target: Target) async
+    func setTarget(_ target: Target)
 }
 
 final class DefaultTreatmentsManager: TreatmentsManager, @unchecked Sendable {
@@ -35,8 +35,8 @@ final class DefaultTreatmentsManager: TreatmentsManager, @unchecked Sendable {
         return evaluationRepository.getTreatmentsByFlagSets(flagSets, target: currentTarget)
     }
 
-    func setTarget(_ target: Target) async {
+    func setTarget(_ target: Target) {
         withLock(lock) { self.target = target }
-        await evaluationRepository.setTarget(target)
+        evaluationRepository.setTarget(target)
     }
 }
