@@ -13,7 +13,8 @@ final class DefaultTreatmentsManager: TreatmentsManager, @unchecked Sendable {
     private let evaluationRepository: EvaluationRepository
     private let lock = NSLock()
 
-    init(evaluationRepository: EvaluationRepository) {
+    init(target: Target, evaluationRepository: EvaluationRepository) {
+        self.target = target
         self.evaluationRepository = evaluationRepository
     }
 
