@@ -17,12 +17,6 @@ public protocol EvaluationFetchCoordinator: Sendable {
     /// Coordinates fetch requests so only one relevant fetch runs at a time.
     /// Returns the fetched evaluations, or empty array if deduplicated/failed.
     func fetchIfNeeded(target: Target, filters: EvaluationFilters?, reason: FetchReason) async -> [EvaluationResult]
-    
-    /// Returns `true` if there's an in-flight fetch for the given target (regardless of filters).
-    func hasInFlightFetch(for target: Target) -> Bool
-    
-    /// Awaits any in-flight fetch for the given target and returns the evaluations.
-    func awaitInFlightFetch(for target: Target) async -> [EvaluationResult]
 }
 
 final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unchecked Sendable {
@@ -61,25 +55,6 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
         withLock(lock) { inFlightTasks.removeValue(forKey: key) }
 
         return result
-    }
-
-    func hasInFlightFetch(for target: Target) -> Bool {
-        withLock(lock) {
-            inFlightTasks.keys.contains { $0.target == target }
-        }
-    }
-
-    func awaitInFlightFetch(for target: Target) async -> [EvaluationResult] {
-        let tasks: [Task<[EvaluationResult], Never>] = withLock(lock) {
-            inFlightTasks.compactMap { key, task in
-                key.target == target ? task : nil
-            }
-        }
-        var allResults = [EvaluationResult]()
-        for task in tasks {
-            allResults.append(contentsOf: await task.value)
-        }
-        return allResults
     }
 
     private func performFetch(target: Target, filters: EvaluationFilters?, reason: FetchReason) async -> [EvaluationResult] {

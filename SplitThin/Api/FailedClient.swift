@@ -7,15 +7,15 @@ final class FailedClient: SplitClient {
         Target(matchingKey: "")
     }
 
-    func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) async -> EvaluationResult {
+    func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) -> EvaluationResult {
         EvaluationResult(flag: flag, treatment: "control", flagSets: [])
     }
 
-    func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) async -> [EvaluationResult] {
+    func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult] {
         flags.map { EvaluationResult(flag: $0, treatment: "control", flagSets: []) }
     }
 
-    func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) async -> [EvaluationResult] {
+    func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult] {
         []
     }
 

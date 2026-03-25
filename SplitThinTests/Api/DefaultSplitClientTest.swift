@@ -27,14 +27,14 @@ final class DefaultSplitClientTest: XCTestCase {
         XCTAssertEqual(client.target.key.matchingKey, "user2")
     }
 
-    func testGetTreatmentReturnsControl() async {
-        let result = await client.getTreatment(flag: "flag_a")
+    func testGetTreatmentReturnsControl() {
+        let result = client.getTreatment(flag: "flag_a")
 
         XCTAssertEqual(result.treatment, "control")
     }
 
-    func testGetTreatmentsReturnsControlForAll() async {
-        let results = await client.getTreatments(flags: ["flag_a", "flag_b"])
+    func testGetTreatmentsReturnsControlForAll() {
+        let results = client.getTreatments(flags: ["flag_a", "flag_b"])
 
         XCTAssertEqual(results.count, 2)
         XCTAssertTrue(results.allSatisfy { $0.treatment == "control" })

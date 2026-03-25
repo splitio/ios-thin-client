@@ -11,22 +11,22 @@ final class EvaluationRepositoryMock: EvaluationRepository, @unchecked Sendable 
     var treatmentToReturn: EvaluationResult?
     var treatmentsToReturn = [EvaluationResult]()
 
-    func getTreatment(flag: String, target: Target) async -> EvaluationResult? {
+    func getTreatment(flag: String, target: Target) -> EvaluationResult? {
         getTreatmentCalls.append(flag)
         return treatmentToReturn
     }
 
-    func getTreatments(flags: [String], target: Target) async -> [EvaluationResult] {
+    func getTreatments(flags: [String], target: Target) -> [EvaluationResult] {
         getTreatmentsCalls.append(flags)
         return treatmentsToReturn
     }
 
-    func getTreatmentsByFlagSets(_ flagSets: [String], target: Target) async -> [EvaluationResult] {
+    func getTreatmentsByFlagSets(_ flagSets: [String], target: Target) -> [EvaluationResult] {
         getTreatmentsByFlagSetsCalls.append(flagSets)
         return treatmentsToReturn
     }
 
-    func getFlagNames(target: Target) async -> [String] {
+    func getFlagNames(target: Target) -> [String] {
         []
     }
 

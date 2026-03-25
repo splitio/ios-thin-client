@@ -1,10 +1,10 @@
 import Foundation
 
 public protocol EvaluationRepository: Sendable {
-    func getTreatment(flag: String, target: Target) async -> EvaluationResult?
-    func getTreatments(flags: [String], target: Target) async -> [EvaluationResult]
-    func getTreatmentsByFlagSets(_ flagSets: [String], target: Target) async -> [EvaluationResult]
-    func getFlagNames(target: Target) async -> [String]
+    func getTreatment(flag: String, target: Target) -> EvaluationResult?
+    func getTreatments(flags: [String], target: Target) -> [EvaluationResult]
+    func getTreatmentsByFlagSets(_ flagSets: [String], target: Target) -> [EvaluationResult]
+    func getFlagNames(target: Target) -> [String]
     func setTarget(_ target: Target) async
     func initialize(target: Target) async
 }
@@ -22,22 +22,19 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
         self.evaluationFilters = evaluationFilters
     }
 
-    func getTreatment(flag: String, target: Target) async -> EvaluationResult? {
-        await checkIfFetchOngoing(for: target)
-        return withLock(lock) { cache[target]?[flag] }
+    func getTreatment(flag: String, target: Target) -> EvaluationResult? {
+        withLock(lock) { cache[target]?[flag] }
     }
 
-    func getTreatments(flags: [String], target: Target) async -> [EvaluationResult] {
-        await checkIfFetchOngoing(for: target)
-        return withLock(lock) {
+    func getTreatments(flags: [String], target: Target) -> [EvaluationResult] {
+        withLock(lock) {
             let targetCache = cache[target] ?? [:]
             return flags.compactMap { targetCache[$0] }
         }
     }
 
-    func getTreatmentsByFlagSets(_ flagSets: [String], target: Target) async -> [EvaluationResult] {
-        await checkIfFetchOngoing(for: target)
-        return withLock(lock) {
+    func getTreatmentsByFlagSets(_ flagSets: [String], target: Target) -> [EvaluationResult] {
+        withLock(lock) {
             let targetCache = cache[target] ?? [:]
             return targetCache.values.filter { evaluation in
                 !Set(evaluation.flagSets).isDisjoint(with: flagSets)
@@ -45,14 +42,11 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
         }
     }
 
-    func getFlagNames(target: Target) async -> [String] {
-        await checkIfFetchOngoing(for: target)
-        return withLock(lock) { Array(cache[target]?.keys ?? [String: EvaluationResult]().keys) }
+    func getFlagNames(target: Target) -> [String] {
+        withLock(lock) { Array(cache[target]?.keys ?? [String: EvaluationResult]().keys) }
     }
 
     func setTarget(_ target: Target) async {
-        await checkIfFetchOngoing(for: target)
-        
         withLock(lock) {
             cache[target] = nil
         }
@@ -71,13 +65,6 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
     }
 
     // MARK: - Private
-    private func checkIfFetchOngoing(for target: Target) async {
-        if fetchCoordinator.hasInFlightFetch(for: target) {
-            let evaluations = await fetchCoordinator.awaitInFlightFetch(for: target)
-            cacheEvaluations(evaluations, for: target)
-        }
-    }
-
     private func cacheEvaluations(_ evaluations: [EvaluationResult], for target: Target) {
         guard !evaluations.isEmpty else { return }
         
