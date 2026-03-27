@@ -85,7 +85,7 @@ final class FetchCoordinatorE2ETest: XCTestCase {
         
         try await Task.sleep(nanoseconds: 50_000_000) // 50ms - wait for initial fetch
 
-        let result = await factory.client.getTreatment(flag: "my-flag")
+        let result = factory.client.getTreatment(flag: "my-flag")
         XCTAssertEqual(result.treatment, "fetched-value", "getTreatment should return fetched value after initial fetch completes")
 
         await factory.destroy()
