@@ -58,6 +58,11 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
         }
     }
 
+    func initialize(target: Target) async {
+        let evaluations = await fetchCoordinator.fetchIfNeeded(target: target, filters: evaluationFilters, reason: .initialization)
+        cacheEvaluations(evaluations, for: target)
+    }
+
     func clear() {
         withLock(lock) { cache.removeAll() }
     }

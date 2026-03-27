@@ -37,8 +37,4 @@ final class EvaluationRepositoryMock: EvaluationRepository, @unchecked Sendable 
     func initialize(target: Target) async {
         setTargetCalls.append(target)
     }
-
-    func initialize(target: Target) async {
-        setTargetCalls.append(target)
-    }
 }

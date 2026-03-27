@@ -24,11 +24,11 @@ final class FetchCoordinatorE2ETest: XCTestCase {
 
         let factory = try buildFactory()
 
-        async let targetA: Void = factory.client.setTarget(target: Target(matchingKey: "user-A"))
-        async let targetB: Void = factory.client.setTarget(target: Target(matchingKey: "user-B"))
+        factory.client.setTarget(target: Target(matchingKey: "user-A"))
+        factory.client.setTarget(target: Target(matchingKey: "user-B"))
 
-        await targetA
-        await targetB
+        // Wait for async fetches to complete
+        try await Task.sleep(nanoseconds: 50_000_000) // 50ms
 
         let uniqueTargets = Set(httpMock.fetchEvaluationsCalls.map { $0.target.matchingKey })
         XCTAssertTrue(uniqueTargets.contains("user-A"), "Should have fetched for user-A")
@@ -39,17 +39,16 @@ final class FetchCoordinatorE2ETest: XCTestCase {
 
     // MARK: - setTarget Tests
 
-    func testSetTargetCompletesAfterFetch() async throws {
+    func testSetTargetTriggersFetch() async throws {
         httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(treatment: "variant-X"))
         httpMock.fetchDelay = 20_000_000 // 20ms
 
         let factory = try buildFactory()
 
-        let startTime = Date()
-        await factory.client.setTarget(target: Target(matchingKey: "new-user"))
-        let elapsed = Date().timeIntervalSince(startTime)
+        factory.client.setTarget(target: Target(matchingKey: "new-user"))
 
-        XCTAssertGreaterThan(elapsed, 0.01, "setTarget should wait for fetch to complete")
+        // Wait for async fetch to complete
+        try await Task.sleep(nanoseconds: 50_000_000) // 50ms
 
         let fetchesForNewUser = httpMock.fetchEvaluationsCalls.filter { $0.target.matchingKey == "new-user" }.count
         XCTAssertEqual(fetchesForNewUser, 1, "Should have fetched for new-user")
@@ -63,8 +62,12 @@ final class FetchCoordinatorE2ETest: XCTestCase {
 
         let factory = try buildFactory()
 
-        await factory.client.setTarget(target: Target(matchingKey: "user-A"))
-        await factory.client.setTarget(target: Target(matchingKey: "user-A"))
+        factory.client.setTarget(target: Target(matchingKey: "user-A"))
+        // Wait for first fetch to complete before triggering second
+        try await Task.sleep(nanoseconds: 30_000_000) // 30ms
+        factory.client.setTarget(target: Target(matchingKey: "user-A"))
+        // Wait for second fetch
+        try await Task.sleep(nanoseconds: 30_000_000) // 30ms
 
         let fetchesForUserA = httpMock.fetchEvaluationsCalls.filter { $0.target.matchingKey == "user-A" }.count
         XCTAssertEqual(fetchesForUserA, 2, "Sequential setTarget calls should each trigger a fetch")
