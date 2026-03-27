@@ -29,7 +29,7 @@ final class AuthE2ETest: XCTestCase {
         try await Task.sleep(nanoseconds: 500_000_000)
 
         let client = factory.client
-        let treatment = await client.getTreatment(flag: "my_feature").treatment
+        let treatment = client.getTreatment(flag: "my_feature").treatment
 
         XCTAssertEqual(treatment, "on")
         XCTAssertEqual(httpMock.executeCalls.count, 2)
@@ -49,7 +49,7 @@ final class AuthE2ETest: XCTestCase {
         try await Task.sleep(nanoseconds: 500_000_000)
 
         let client = factory.client
-        let treatment = await client.getTreatment(flag: "my_feature").treatment
+        let treatment = client.getTreatment(flag: "my_feature").treatment
 
         XCTAssertEqual(treatment, "control", "Should return control when auth fails")
 
@@ -67,7 +67,7 @@ final class AuthE2ETest: XCTestCase {
         try await Task.sleep(nanoseconds: 500_000_000)
 
         let client = factory.client
-        let treatment = await client.getTreatment(flag: "my_feature").treatment
+        let treatment = client.getTreatment(flag: "my_feature").treatment
 
         XCTAssertEqual(treatment, "control", "Should return control when auth response is invalid JSON")
 
@@ -87,7 +87,7 @@ final class AuthE2ETest: XCTestCase {
         try await Task.sleep(nanoseconds: 500_000_000)
 
         let client = factory.client
-        let treatment = await client.getTreatment(flag: "my_feature").treatment
+        let treatment = client.getTreatment(flag: "my_feature").treatment
 
         XCTAssertEqual(treatment, "control", "Should return control when auth response is missing token")
 
@@ -157,7 +157,7 @@ final class AuthE2ETest: XCTestCase {
         let factory = try buildFactory(syncMode: .singleSync)
 
         let client = factory.client
-        let treatment = await client.getTreatment(flag: "my_feature").treatment
+        let treatment = client.getTreatment(flag: "my_feature").treatment
 
         let elapsed = Date().timeIntervalSince(startTime)
 
