@@ -12,6 +12,7 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
 
     private let syncMode: SyncMode
     private let evaluationProvider: EvaluationProvider
+    private let evaluationRepository: EvaluationRepository
     private let polling: EvaluationPeriodicScheduler
     private let streaming: Streaming
     private let target: Target
@@ -20,9 +21,10 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
     private var isPaused = false
     private let lock = NSLock()
 
-    init(syncMode: SyncMode, evaluationProvider: EvaluationProvider, periodicScheduler: EvaluationPeriodicScheduler, streaming: Streaming, target: Target, filters: EvaluationFilters?) {
+    init(syncMode: SyncMode, evaluationProvider: EvaluationProvider, evaluationRepository: EvaluationRepository, periodicScheduler: EvaluationPeriodicScheduler, streaming: Streaming, target: Target, filters: EvaluationFilters?) {
         self.syncMode = syncMode
         self.evaluationProvider = evaluationProvider
+        self.evaluationRepository = evaluationRepository
         self.polling = periodicScheduler
         self.streaming = streaming
         self.target = target
@@ -32,7 +34,9 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
     func start() async {
         Logger.d("SyncManager: Starting with mode \(syncMode)")
 
-        await evaluationProvider.fetchAndUpdate(target: target, filters: filters)
+        if let change = await evaluationProvider.fetch(target: target, filters: filters) {
+            evaluationRepository.update(change.evaluations)
+        }
 
         switch syncMode {
             case .streaming:

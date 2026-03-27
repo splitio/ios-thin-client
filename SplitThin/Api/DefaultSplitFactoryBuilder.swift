@@ -84,12 +84,12 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         }
 
         let secureHttp = secureHttpClient ?? buildSecureHttpClient(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey)
-        let splitManager = DefaultSplitManager()
-        let evaluationRepository = DefaultEvaluationRepository(target: target, splitManager: splitManager)
-        let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttp, evaluationRepository: evaluationRepository)
-        let periodicScheduler = DefaultEvaluationPeriodicScheduler(evaluationProvider: evaluationProvider, target: target, filters: evaluationFilters, intervalSeconds: config.evaluationRefreshRate)
+        let evaluationRepository = DefaultEvaluationRepository(target: target)
+        let splitManager = DefaultSplitManager(evaluationRepository: evaluationRepository)
+        let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttp)
+        let periodicScheduler = DefaultEvaluationPeriodicScheduler(evaluationProvider: evaluationProvider, evaluationRepository: evaluationRepository, target: target, filters: evaluationFilters, intervalSeconds: config.evaluationRefreshRate)
         let streaming = DefaultStreaming(evaluationProvider: evaluationProvider, secureHttpClient: secureHttp, target: target)
-        let syncManager = DefaultSyncManager(syncMode: config.syncMode, evaluationProvider: evaluationProvider, periodicScheduler: periodicScheduler, streaming: streaming, target: target, filters: evaluationFilters)
+        let syncManager = DefaultSyncManager(syncMode: config.syncMode, evaluationProvider: evaluationProvider, evaluationRepository: evaluationRepository, periodicScheduler: periodicScheduler, streaming: streaming, target: target, filters: evaluationFilters)
 
         return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, evaluationRepository: evaluationRepository, syncManager: syncManager, splitManager: splitManager)
     }

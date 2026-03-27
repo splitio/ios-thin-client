@@ -1,9 +1,9 @@
 import Foundation
 
-public protocol EvaluationRepository: Sendable {
-    func getTreatment(flag: String) -> EvaluationResult?
-    func getTreatments(flags: [String]) -> [EvaluationResult]
-    func getTreatmentsByFlagSets(_ flagSets: [String]) -> [EvaluationResult]
+protocol EvaluationRepository: Sendable {
+    func getEvaluation(flag: String) -> StoredEvaluation?
+    func getEvaluations(flags: [String]) -> [StoredEvaluation]
+    func getEvaluationsByFlagSets(_ flagSets: [String]) -> [StoredEvaluation]
     func getFlagNames() -> [String]
     func setTarget(_ target: Target)
     func update(_ evaluations: [EvaluationResult])
@@ -12,31 +12,28 @@ public protocol EvaluationRepository: Sendable {
 
 final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendable {
 
-    private let splitManager: DefaultSplitManager?
-
     private var currentTarget: Target
-    private var cachedEvaluations = [String: EvaluationResult]()
+    private var cachedEvaluations = [String: StoredEvaluation]()
     private let lock = NSLock()
 
-    init(target: Target, splitManager: DefaultSplitManager? = nil) {
+    init(target: Target) {
         self.currentTarget = target
-        self.splitManager = splitManager
     }
 
-    func getTreatment(flag: String) -> EvaluationResult? {
+    func getEvaluation(flag: String) -> StoredEvaluation? {
         withLock(lock) { cachedEvaluations[flag] }
     }
 
-    func getTreatments(flags: [String]) -> [EvaluationResult] {
+    func getEvaluations(flags: [String]) -> [StoredEvaluation] {
         withLock(lock) {
             flags.compactMap { cachedEvaluations[$0] }
         }
     }
 
-    func getTreatmentsByFlagSets(_ flagSets: [String]) -> [EvaluationResult] {
+    func getEvaluationsByFlagSets(_ flagSets: [String]) -> [StoredEvaluation] {
         withLock(lock) {
-            cachedEvaluations.values.filter { evaluation in
-                !Set(evaluation.flagSets).isDisjoint(with: flagSets)
+            cachedEvaluations.values.filter { stored in
+                !Set(stored.flagSets).isDisjoint(with: flagSets)
             }
         }
     }
@@ -55,9 +52,9 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
     func update(_ evaluations: [EvaluationResult]) {
         withLock(lock) {
             for evaluation in evaluations {
-                cachedEvaluations[evaluation.flag] = evaluation
+                let stored = StoredEvaluation(evaluationResult: evaluation, flagSets: evaluation.flagSets)
+                cachedEvaluations[evaluation.flag] = stored
             }
-            splitManager?.updateFlags(evaluations.map { $0.flag })
         }
     }
 
