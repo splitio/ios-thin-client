@@ -14,7 +14,7 @@ final class DefaultSplitFactoryTest: XCTestCase {
         secureHttpClientMock = SecureHttpClientMock()
         evaluationRepositoryMock = EvaluationRepositoryMock()
         syncManagerMock = SyncManagerMock()
-        splitManager = DefaultSplitManager()
+        splitManager = DefaultSplitManager(evaluationRepository: evaluationRepositoryMock)
         factory = DefaultSplitFactory(sdkKey: SdkKey("api-key"), target: Target(matchingKey: "user1"), config: SplitClientConfig.builder().build(), evaluationFilters: nil, secureHttpClient: secureHttpClientMock, evaluationRepository: evaluationRepositoryMock, syncManager: syncManagerMock, splitManager: splitManager)
     }
 
