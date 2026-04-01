@@ -55,7 +55,6 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
         
         Task { [weak self] in
             guard let self else { return }
-            await self.loadFromStorageIfNeeded(target: target)
             let evaluations = await self.fetchCoordinator.fetchIfNeeded(target: target, filters: self.evaluationFilters, reason: .targetSwitch)
             self.cacheEvaluations(evaluations, for: target)
         }

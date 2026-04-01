@@ -89,7 +89,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
 
         let databaseName = config.prefix.map { "split_\($0)" } ?? "split"
         let keyValueStorage = CoreDataKeyValueStorage(databaseName: databaseName)
-        let evaluationStorage = PersistentEvaluationStorage(keyValueStorage: keyValueStorage)
+        let evaluationStorage = PersistentStorage(keyValueStorage: keyValueStorage)
 
         let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider, storage: evaluationStorage, splitManager: splitManager)
         let evaluationRepository = DefaultEvaluationRepository(fetchCoordinator: fetchCoordinator, evaluationFilters: evaluationFilters, storage: evaluationStorage)
