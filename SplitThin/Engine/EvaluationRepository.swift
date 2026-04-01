@@ -13,13 +13,15 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
 
     private let fetchCoordinator: EvaluationFetchCoordinator
     private let evaluationFilters: EvaluationFilters?
+    private let storage: EvaluationReadStorage?
 
     private var cache = [Target: [String: EvaluationResult]]()
     private let lock = NSLock()
 
-    init(fetchCoordinator: EvaluationFetchCoordinator, evaluationFilters: EvaluationFilters?) {
+    init(fetchCoordinator: EvaluationFetchCoordinator, evaluationFilters: EvaluationFilters?, storage: EvaluationReadStorage? = nil) {
         self.fetchCoordinator = fetchCoordinator
         self.evaluationFilters = evaluationFilters
+        self.storage = storage
     }
 
     func getTreatment(flag: String, target: Target) -> EvaluationResult? {
@@ -53,12 +55,14 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
         
         Task { [weak self] in
             guard let self else { return }
+            await self.loadFromStorageIfNeeded(target: target)
             let evaluations = await self.fetchCoordinator.fetchIfNeeded(target: target, filters: self.evaluationFilters, reason: .targetSwitch)
             self.cacheEvaluations(evaluations, for: target)
         }
     }
 
     func initialize(target: Target) async {
+        await loadFromStorageIfNeeded(target: target)
         let evaluations = await fetchCoordinator.fetchIfNeeded(target: target, filters: evaluationFilters, reason: .initialization)
         cacheEvaluations(evaluations, for: target)
     }
@@ -68,6 +72,14 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
     }
 
     // MARK: - Private
+    private func loadFromStorageIfNeeded(target: Target) async {
+        guard let storage else { return }
+        let flagNames = await storage.getFlagNames(target: target)
+        guard !flagNames.isEmpty else { return }
+        let cached = await storage.get(flags: flagNames, target: target)
+        cacheEvaluations(cached, for: target)
+    }
+
     private func cacheEvaluations(_ evaluations: [EvaluationResult], for target: Target) {
         guard !evaluations.isEmpty else { return }
 

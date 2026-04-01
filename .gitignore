@@ -14,6 +14,9 @@ Package.resolved
 # Cursor
 .cursor/
 
+# VS Code / Cursor workspace settings
+.vscode/
+
 # macOS
 .DS_Store
 
