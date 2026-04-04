@@ -84,10 +84,10 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         }
 
         let secureHttp = secureHttpClient ?? buildSecureHttpClient(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey)
-        let splitManager = DefaultSplitManager()
         let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttp)
-        let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider, splitManager: splitManager)
+        let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider)
         let evaluationRepository = DefaultEvaluationRepository(fetchCoordinator: fetchCoordinator, evaluationFilters: evaluationFilters)
+        let splitManager = DefaultSplitManager(evaluationRepository: evaluationRepository, target: target)
         let periodicScheduler = DefaultEvaluationPeriodicScheduler(fetchCoordinator: fetchCoordinator, target: target, filters: evaluationFilters, intervalSeconds: config.evaluationRefreshRate)
         let streaming = DefaultStreaming(fetchCoordinator: fetchCoordinator, secureHttpClient: secureHttp, target: target)
         let syncManager = DefaultSyncManager(syncMode: config.syncMode, evaluationRepository: evaluationRepository, periodicScheduler: periodicScheduler, streaming: streaming, target: target)

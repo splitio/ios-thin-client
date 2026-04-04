@@ -3,27 +3,27 @@ import Foundation
 
 final class EvaluationRepositoryMock: EvaluationRepository, @unchecked Sendable {
 
-    var getTreatmentCalls = [String]()
-    var getTreatmentsCalls = [[String]]()
-    var getTreatmentsByFlagSetsCalls = [[String]]()
+    var getEvaluationCalls = [String]()
+    var getEvaluationsCalls = [[String]]()
+    var getEvaluationsByFlagSetsCalls = [[String]]()
     var setTargetCalls = [Target]()
 
-    var treatmentToReturn: EvaluationResult?
-    var treatmentsToReturn = [EvaluationResult]()
+    var storedEvaluationToReturn: StoredEvaluation?
+    var storedEvaluationsToReturn = [StoredEvaluation]()
 
-    func getTreatment(flag: String, target: Target) -> EvaluationResult? {
-        getTreatmentCalls.append(flag)
-        return treatmentToReturn
+    func getEvaluation(flag: String, target: Target) -> StoredEvaluation? {
+        getEvaluationCalls.append(flag)
+        return storedEvaluationToReturn
     }
 
-    func getTreatments(flags: [String], target: Target) -> [EvaluationResult] {
-        getTreatmentsCalls.append(flags)
-        return treatmentsToReturn
+    func getEvaluations(flags: [String], target: Target) -> [StoredEvaluation] {
+        getEvaluationsCalls.append(flags)
+        return storedEvaluationsToReturn
     }
 
-    func getTreatmentsByFlagSets(_ flagSets: [String], target: Target) -> [EvaluationResult] {
-        getTreatmentsByFlagSetsCalls.append(flagSets)
-        return treatmentsToReturn
+    func getEvaluationsByFlagSets(_ flagSets: [String], target: Target) -> [StoredEvaluation] {
+        getEvaluationsByFlagSetsCalls.append(flagSets)
+        return storedEvaluationsToReturn
     }
 
     func getFlagNames(target: Target) -> [String] {

@@ -33,12 +33,13 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
         await evaluationRepository.initialize(target: target)
 
         switch syncMode {
+            case .singleSync:
+                // Already fetched
+                break
             case .streaming:
                 await streaming.start()
             case .polling:
                 polling.start()
-            case .singleSync:
-                // Already fetched on all cases
                 break 
         }
     }

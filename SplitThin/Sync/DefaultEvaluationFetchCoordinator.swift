@@ -23,15 +23,13 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
 
     private let provider: EvaluationProvider
     private let storage: EvaluationWriteStorage?
-    private let splitManager: DefaultSplitManager?
 
     private var inFlightTasks = [FetchKey: Task<[EvaluationResult], Never>]()
     private let lock = NSLock()
 
-    init(provider: EvaluationProvider, storage: EvaluationWriteStorage? = nil, splitManager: DefaultSplitManager? = nil) {
+    init(provider: EvaluationProvider, storage: EvaluationWriteStorage? = nil) {
         self.provider = provider
         self.storage = storage
-        self.splitManager = splitManager
     }
 
     @discardableResult
@@ -67,7 +65,6 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
                 )
                 try? await storage.upsert(change: change)
             }
-            splitManager?.updateFlags(result.evaluations.map { $0.flag })
             Logger.d("EvaluationFetchCoordinator: Fetched \(result.evaluations.count) evaluations for \(target.matchingKey) (reason: \(reason))")
             return result.evaluations
         }
