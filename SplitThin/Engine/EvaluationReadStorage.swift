@@ -1,6 +1,6 @@
 import Foundation
 
-public protocol EvaluationReadStorage: Sendable {
+protocol EvaluationReadStorage: Sendable {
     func get(flag: String, target: Target) async -> EvaluationResult?
     func get(flags: [String], target: Target) async -> [EvaluationResult]
     func get(byFlagSets flagSets: [String], target: Target) async -> [EvaluationResult]
