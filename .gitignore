@@ -26,6 +26,3 @@ Package.resolved
 
 # Local sandbox HOME used by tools/tests (do not commit)
 .home/
-
-# Cursor
-.cursor/rules/
