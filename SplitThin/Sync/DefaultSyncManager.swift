@@ -40,7 +40,6 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
                 await streaming.start()
             case .polling:
                 polling.start()
-                break 
         }
     }
 
