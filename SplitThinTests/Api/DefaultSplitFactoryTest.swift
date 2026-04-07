@@ -5,23 +5,26 @@ final class DefaultSplitFactoryTest: XCTestCase {
 
     private var factory: DefaultSplitFactory!
     private var secureHttpClientMock: SecureHttpClientMock!
+    private var evaluationRepositoryMock: EvaluationRepositoryMock!
+    private var syncManagerMock: SyncManagerMock!
+    private var splitManager: DefaultSplitManager!
 
     override func setUp() {
         super.setUp()
         secureHttpClientMock = SecureHttpClientMock()
-        factory = DefaultSplitFactory(
-            sdkKey: SdkKey("api-key"),
-            target: Target(matchingKey: "user1"),
-            config: SplitClientConfig.builder().build(),
-            evaluationFilters: nil,
-            secureHttpClient: secureHttpClientMock
-        )
+        evaluationRepositoryMock = EvaluationRepositoryMock()
+        syncManagerMock = SyncManagerMock()
+        splitManager = DefaultSplitManager(evaluationRepository: evaluationRepositoryMock)
+        factory = DefaultSplitFactory(sdkKey: SdkKey("api-key"), target: Target(matchingKey: "user1"), config: SplitClientConfig.builder().build(), evaluationFilters: nil, secureHttpClient: secureHttpClientMock, evaluationRepository: evaluationRepositoryMock, syncManager: syncManagerMock, splitManager: splitManager)
     }
 
     override func tearDown() async throws {
         await factory.destroy()
         factory = nil
         secureHttpClientMock = nil
+        evaluationRepositoryMock = nil
+        syncManagerMock = nil
+        splitManager = nil
     }
 
     // MARK: - client property
