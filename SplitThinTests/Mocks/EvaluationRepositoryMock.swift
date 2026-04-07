@@ -8,22 +8,22 @@ final class EvaluationRepositoryMock: EvaluationRepository, @unchecked Sendable 
     var getEvaluationsByFlagSetsCalls = [[String]]()
     var setTargetCalls = [Target]()
 
-    var storedEvaluationToReturn: StoredEvaluation?
-    var storedEvaluationsToReturn = [StoredEvaluation]()
+    var evaluationToReturn: StoredEvaluation?
+    var evaluationsToReturn = [StoredEvaluation]()
 
     func getEvaluation(flag: String, target: Target) -> StoredEvaluation? {
         getEvaluationCalls.append(flag)
-        return storedEvaluationToReturn
+        return evaluationToReturn
     }
 
     func getEvaluations(flags: [String], target: Target) -> [StoredEvaluation] {
         getEvaluationsCalls.append(flags)
-        return storedEvaluationsToReturn
+        return evaluationsToReturn
     }
 
     func getEvaluationsByFlagSets(_ flagSets: [String], target: Target) -> [StoredEvaluation] {
         getEvaluationsByFlagSetsCalls.append(flagSets)
-        return storedEvaluationsToReturn
+        return evaluationsToReturn
     }
 
     func getFlagNames(target: Target) -> [String] {
