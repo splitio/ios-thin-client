@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 
 protocol EvaluationRepository: Sendable {
     func getEvaluation(flag: String, target: Target) -> StoredEvaluation?
@@ -6,7 +7,7 @@ protocol EvaluationRepository: Sendable {
     func getEvaluationsByFlagSets(_ flagSets: [String], target: Target) -> [StoredEvaluation]
     func getFlagNames(target: Target) -> [String]
     func setTarget(_ target: Target)
-    func initialize(target: Target) async
+    func initialize(target: Target) async throws
 }
 
 final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendable {
@@ -14,7 +15,7 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
     private let fetchCoordinator: EvaluationFetchCoordinator
     private let evaluationFilters: EvaluationFilters?
 
-    /// In-memory evaluations by user key (`matchingKey` + `bucketingKey`), not full `Target` (attributes / traffic type can differ).
+    // In-memory evaluations by user key (`matchingKey` + `bucketingKey`), not full `Target` (attributes / traffic type can differ).
     private var cache = [Key: [String: StoredEvaluation]]()
     private let lock = NSLock()
 
@@ -54,13 +55,17 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
 
         Task { [weak self] in
             guard let self else { return }
-            let evaluations = await self.fetchCoordinator.fetchIfNeeded(target: target, filters: self.evaluationFilters, reason: .targetSwitch)
-            self.cacheEvaluations(evaluations, for: target)
+            do {
+                let evaluations = try await self.fetchCoordinator.fetchIfNeeded(target: target, filters: self.evaluationFilters, reason: .targetSwitch)
+                self.cacheEvaluations(evaluations, for: target)
+            } catch {
+                Logger.e("EvaluationRepository: Failed to fetch evaluations for target \(target.matchingKey): \(error)")
+            }
         }
     }
 
-    func initialize(target: Target) async {
-        let evaluations = await fetchCoordinator.fetchIfNeeded(target: target, filters: evaluationFilters, reason: .initialization)
+    func initialize(target: Target) async throws {
+        let evaluations = try await fetchCoordinator.fetchIfNeeded(target: target, filters: evaluationFilters, reason: .initialization)
         cacheEvaluations(evaluations, for: target)
     }
 

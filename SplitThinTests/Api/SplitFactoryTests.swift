@@ -6,6 +6,7 @@ final class DefaultSplitFactoryTest: XCTestCase {
     private var factory: DefaultSplitFactory!
     private var secureHttpClientMock: SecureHttpClientMock!
     private var evaluationRepositoryMock: EvaluationRepositoryMock!
+    private var eventsManagerMock: SplitEventsManagerMock!
     private var syncManagerMock: SyncManagerMock!
     private var splitManager: DefaultSplitManager!
 
@@ -13,9 +14,10 @@ final class DefaultSplitFactoryTest: XCTestCase {
         super.setUp()
         secureHttpClientMock = SecureHttpClientMock()
         evaluationRepositoryMock = EvaluationRepositoryMock()
+        eventsManagerMock = SplitEventsManagerMock()
         syncManagerMock = SyncManagerMock()
-splitManager = DefaultSplitManager(evaluationRepository: evaluationRepositoryMock, target: Target(matchingKey: "user1"))
-        factory = DefaultSplitFactory(sdkKey: SdkKey("api-key"), target: Target(matchingKey: "user1"), config: SplitClientConfig.builder().build(), evaluationFilters: nil, secureHttpClient: secureHttpClientMock, evaluationRepository: evaluationRepositoryMock, syncManager: syncManagerMock, splitManager: splitManager)
+        splitManager = DefaultSplitManager(evaluationRepository: evaluationRepositoryMock, target: Target(matchingKey: "user1"))
+        factory = DefaultSplitFactory(sdkKey: SdkKey("api-key"), target: Target(matchingKey: "user1"), config: SplitClientConfig.builder().build(), evaluationFilters: nil, secureHttpClient: secureHttpClientMock, evaluationRepository: evaluationRepositoryMock, eventsManager: eventsManagerMock, syncManager: syncManagerMock, splitManager: splitManager)
     }
 
     override func tearDown() async throws {
@@ -23,6 +25,7 @@ splitManager = DefaultSplitManager(evaluationRepository: evaluationRepositoryMoc
         factory = nil
         secureHttpClientMock = nil
         evaluationRepositoryMock = nil
+        eventsManagerMock = nil
         syncManagerMock = nil
         splitManager = nil
     }

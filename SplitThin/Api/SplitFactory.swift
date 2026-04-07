@@ -20,6 +20,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     private let evaluationFilters: EvaluationFilters?
     private let secureHttpClient: SecureHttpClient
     private let evaluationRepository: EvaluationRepository
+    private let eventsManager: SplitEventsManager
     private let syncManager: SyncManager
 
     private var splitManager: DefaultSplitManager?
@@ -34,7 +35,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         Version.sdk
     }
 
-    init(sdkKey: SdkKey, target: Target, config: SplitClientConfig, evaluationFilters: EvaluationFilters?, secureHttpClient: SecureHttpClient, evaluationRepository: EvaluationRepository, syncManager: SyncManager, splitManager: DefaultSplitManager) {
+    init(sdkKey: SdkKey, target: Target, config: SplitClientConfig, evaluationFilters: EvaluationFilters?, secureHttpClient: SecureHttpClient, evaluationRepository: EvaluationRepository, eventsManager: SplitEventsManager, syncManager: SyncManager, splitManager: DefaultSplitManager) {
         self.sdkKey = sdkKey
         self.defaultTarget = target
         self.defaultKey = target.key
@@ -42,11 +43,12 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         self.evaluationFilters = evaluationFilters
         self.secureHttpClient = secureHttpClient
         self.evaluationRepository = evaluationRepository
+        self.eventsManager = eventsManager
         self.syncManager = syncManager
         self.splitManager = splitManager
 
         let treatmentsManager = DefaultTreatmentsManager(target: target, evaluationRepository: evaluationRepository)
-        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager)
+        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager)
         clients[target.key] = client
 
         Task {
@@ -67,7 +69,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         }
 
         let treatmentsManager = DefaultTreatmentsManager(target: resolvedTarget, evaluationRepository: evaluationRepository)
-        let newClient = DefaultSplitClient(target: resolvedTarget, treatmentsManager: treatmentsManager)
+        let newClient = DefaultSplitClient(target: resolvedTarget, treatmentsManager: treatmentsManager, eventsManager: eventsManager)
         clients[resolvedTarget.key] = newClient
         return newClient
     }

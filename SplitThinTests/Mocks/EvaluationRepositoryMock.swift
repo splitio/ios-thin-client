@@ -7,6 +7,7 @@ final class EvaluationRepositoryMock: EvaluationRepository, @unchecked Sendable 
     var getEvaluationsCalls = [[String]]()
     var getEvaluationsByFlagSetsCalls = [[String]]()
     var setTargetCalls = [Target]()
+    var initializeErrorToThrow: Error?
 
     var evaluationToReturn: StoredEvaluation?
     var evaluationsToReturn = [StoredEvaluation]()
@@ -34,7 +35,11 @@ final class EvaluationRepositoryMock: EvaluationRepository, @unchecked Sendable 
         setTargetCalls.append(target)
     }
 
-    func initialize(target: Target) async {
+    func initialize(target: Target) async throws {
         setTargetCalls.append(target)
+        if let error = initializeErrorToThrow {
+            throw error
+        }
     }
+
 }

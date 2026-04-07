@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 
 public protocol SplitClient: AnyObject {
     var target: Target { get }
@@ -6,7 +7,8 @@ public protocol SplitClient: AnyObject {
     func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult]
     func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult]
     func setTarget(target: Target)
-    func addEventListener(listener: SplitEventListener)
+    func addEventListener(_ listener: SplitEventListener)
+    func removeEventListener(_ listener: SplitEventListener)
     func track(eventType: String, value: Double?, properties: EventProperties?)
     func destroy() async
     func flush() async
@@ -16,12 +18,14 @@ final class DefaultSplitClient: SplitClient {
 
     private(set) var target: Target
     private let treatmentsManager: TreatmentsManager
+    private let eventsManager: SplitEventsManager
+    private var clientListeners = [SplitEventListener]()
     private var isDestroyed = false
-    private var listeners = [SplitEventListener]()
 
-    init(target: Target, treatmentsManager: TreatmentsManager) {
+    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager) {
         self.target = target
         self.treatmentsManager = treatmentsManager
+        self.eventsManager = eventsManager
     }
 
     // MARK: - Evaluation
@@ -44,8 +48,16 @@ final class DefaultSplitClient: SplitClient {
     }
 
     // MARK: - Events
-    func addEventListener(listener: SplitEventListener) {
-        listeners.append(listener)
+    func addEventListener(_ listener: SplitEventListener) {
+        clientListeners.append(listener) // We are saving them here to know which ones to remove from the EventsManager when the client is
+                                         // destroyed, since EventsManager does not keep a registry of listeners by client.
+        eventsManager.addListener(listener)
+    }
+
+    func removeEventListener(_ listener: SplitEventListener) {
+        // Comparing memory addresses to find the exact EventListener on local array (not just one that has the same content)
+        clientListeners.removeElementByMemoryAddress(listener)
+        eventsManager.removeListener(listener)
     }
 
     // MARK: - Track
@@ -57,13 +69,17 @@ final class DefaultSplitClient: SplitClient {
     func destroy() async {
         guard !isDestroyed else { return }
         isDestroyed = true
-        listeners.removeAll()
+
+        for listener in clientListeners {
+            eventsManager.removeListener(listener)
+        }
+        clientListeners.removeAll()
     }
 
     func flush() async {}
 }
 
-// MARK - Evaluations API variations
+// MARK: - Evaluations API variations
 public extension SplitClient {
     func getTreatment(flag: String) -> EvaluationResult {
         getTreatment(flag: flag, evaluationOptions: nil)

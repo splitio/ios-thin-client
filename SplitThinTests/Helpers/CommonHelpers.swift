@@ -5,3 +5,7 @@ func withLock<T>(_ lock: NSLock, _ block: () -> T) -> T {
     defer { lock.unlock() }
     return block()
 }
+
+func sleep(seconds: Double) {
+    Thread.sleep(forTimeInterval: seconds)
+}
