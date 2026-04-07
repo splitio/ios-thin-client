@@ -2,7 +2,7 @@ import Foundation
 import Logging
 
 protocol EvaluationProvider: Sendable {
-    func fetch(target: Target, filters: EvaluationFilters?) async -> EvaluationChange?
+    func fetch(target: Target, filters: EvaluationFilters?) async -> EvaluationsResult?
 }
 
 final class DefaultEvaluationProvider: EvaluationProvider, @unchecked Sendable {
@@ -13,7 +13,7 @@ final class DefaultEvaluationProvider: EvaluationProvider, @unchecked Sendable {
         self.secureHttpClient = secureHttpClient
     }
 
-    func fetch(target: Target, filters: EvaluationFilters?) async -> EvaluationChange? {
+    func fetch(target: Target, filters: EvaluationFilters?) async -> EvaluationsResult? {
         do {
             let response = try await secureHttpClient.fetchEvaluations(target: target, filters: filters)
 
@@ -23,11 +23,8 @@ final class DefaultEvaluationProvider: EvaluationProvider, @unchecked Sendable {
             }
 
             let result = try Json.decode(from: data, to: EvaluationsResult.self)
-            let changeNumber = result.till ?? -1
-
             Logger.d("EvaluationProvider: Fetched \(result.evaluations.count) evaluations")
-
-            return EvaluationChange(target: target, changeNumber: changeNumber, evaluations: result.evaluations)
+            return result
         } catch {
             Logger.e("EvaluationProvider: Failed to fetch evaluations: \(error)")
             return nil

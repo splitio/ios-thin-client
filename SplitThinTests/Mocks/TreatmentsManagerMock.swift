@@ -10,6 +10,7 @@ final class TreatmentsManagerMock: TreatmentsManager, @unchecked Sendable {
     var getTreatmentCallCount = 0
     var getTreatmentsCallCount = 0
     var getTreatmentsByFlagSetsCallCount = 0
+    var setTargetCalls = [Target]()
 
     func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) -> EvaluationResult {
         getTreatmentCallCount += 1
@@ -26,5 +27,9 @@ final class TreatmentsManagerMock: TreatmentsManager, @unchecked Sendable {
     func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult] {
         getTreatmentsByFlagSetsCallCount += 1
         return getTreatmentsByFlagSetsResult
+    }
+
+    func setTarget(_ target: Target) {
+        setTargetCalls.append(target)
     }
 }

@@ -7,12 +7,12 @@ protocol Streaming: Sendable {
 
 final class DefaultStreaming: Streaming, @unchecked Sendable {
 
-    private let evaluationProvider: EvaluationProvider
+    private let fetchCoordinator: EvaluationFetchCoordinator
     private let secureHttpClient: SecureHttpClient
     private let target: Target
 
-    init(evaluationProvider: EvaluationProvider, secureHttpClient: SecureHttpClient, target: Target) {
-        self.evaluationProvider = evaluationProvider
+    init(fetchCoordinator: EvaluationFetchCoordinator, secureHttpClient: SecureHttpClient, target: Target) {
+        self.fetchCoordinator = fetchCoordinator
         self.secureHttpClient = secureHttpClient
         self.target = target
     }

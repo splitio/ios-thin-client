@@ -8,6 +8,7 @@ final class SecureHttpClientMock: SecureHttpClient, @unchecked Sendable {
     var postEventsResult: HttpResponse?
     var postTelemetryResult: HttpResponse?
     var errorToThrow: Error?
+    var fetchDelay: UInt64 = 0
 
     var fetchEvaluationsCalls: [(target: Target, filters: EvaluationFilters?)] = []
     var postEventsCalls: [Data] = []
@@ -19,6 +20,10 @@ final class SecureHttpClientMock: SecureHttpClient, @unchecked Sendable {
 
     func fetchEvaluations(target: Target, filters: EvaluationFilters?) async throws -> HttpResponse {
         withLock(lock) { fetchEvaluationsCalls.append((target, filters)) }
+
+        if fetchDelay > 0 {
+            try? await Task.sleep(nanoseconds: fetchDelay)
+        }
 
         if let error = errorToThrow {
             throw error
@@ -62,6 +67,7 @@ final class SecureHttpClientMock: SecureHttpClient, @unchecked Sendable {
             postEventsResult = nil
             postTelemetryResult = nil
             errorToThrow = nil
+            fetchDelay = 0
             fetchEvaluationsCalls = []
             postEventsCalls = []
             postTelemetryCalls = []

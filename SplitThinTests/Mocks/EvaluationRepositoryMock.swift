@@ -7,28 +7,26 @@ final class EvaluationRepositoryMock: EvaluationRepository, @unchecked Sendable 
     var getEvaluationsCalls = [[String]]()
     var getEvaluationsByFlagSetsCalls = [[String]]()
     var setTargetCalls = [Target]()
-    var updateCalls = [[EvaluationResult]]()
-    var clearCallCount = 0
 
     var evaluationToReturn: StoredEvaluation?
     var evaluationsToReturn = [StoredEvaluation]()
 
-    func getEvaluation(flag: String) -> StoredEvaluation? {
+    func getEvaluation(flag: String, target: Target) -> StoredEvaluation? {
         getEvaluationCalls.append(flag)
         return evaluationToReturn
     }
 
-    func getEvaluations(flags: [String]) -> [StoredEvaluation] {
+    func getEvaluations(flags: [String], target: Target) -> [StoredEvaluation] {
         getEvaluationsCalls.append(flags)
         return evaluationsToReturn
     }
 
-    func getEvaluationsByFlagSets(_ flagSets: [String]) -> [StoredEvaluation] {
+    func getEvaluationsByFlagSets(_ flagSets: [String], target: Target) -> [StoredEvaluation] {
         getEvaluationsByFlagSetsCalls.append(flagSets)
         return evaluationsToReturn
     }
 
-    func getFlagNames() -> [String] {
+    func getFlagNames(target: Target) -> [String] {
         []
     }
 
@@ -36,11 +34,7 @@ final class EvaluationRepositoryMock: EvaluationRepository, @unchecked Sendable 
         setTargetCalls.append(target)
     }
 
-    func update(_ evaluations: [EvaluationResult]) {
-        updateCalls.append(evaluations)
-    }
-
-    func clear() {
-        clearCallCount += 1
+    func initialize(target: Target) async {
+        setTargetCalls.append(target)
     }
 }

@@ -14,6 +14,9 @@ Package.resolved
 # Cursor
 .cursor/
 
+# VS Code / Cursor workspace settings
+.vscode/
+
 # macOS
 .DS_Store
 
@@ -23,6 +26,3 @@ Package.resolved
 
 # Local sandbox HOME used by tools/tests (do not commit)
 .home/
-
-# Cursor
-.cursor/rules/

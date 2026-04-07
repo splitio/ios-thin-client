@@ -40,6 +40,7 @@ final class DefaultSplitClient: SplitClient {
     // MARK: - Target switching
     func setTarget(target: Target) {
         self.target = target
+        treatmentsManager.setTarget(target)
     }
 
     // MARK: - Events
