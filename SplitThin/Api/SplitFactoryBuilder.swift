@@ -88,12 +88,8 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider)
         let evaluationRepository = DefaultEvaluationRepository(fetchCoordinator: fetchCoordinator, evaluationFilters: evaluationFilters)
         let splitManager = DefaultSplitManager(evaluationRepository: evaluationRepository, target: target)
-        let eventsManager = DefaultSplitEventsManager(config: config)
-        let periodicScheduler = DefaultEvaluationPeriodicScheduler(fetchCoordinator: fetchCoordinator, eventsManager: eventsManager, target: target, filters: evaluationFilters, intervalSeconds: config.evaluationRefreshRate)
-        let streaming = DefaultStreaming(fetchCoordinator: fetchCoordinator, eventsManager: eventsManager, secureHttpClient: secureHttp, target: target)
-        let syncManager = DefaultSyncManager(syncMode: config.syncMode, evaluationRepository: evaluationRepository, eventsManager: eventsManager, periodicScheduler: periodicScheduler, streaming: streaming, target: target)
 
-        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, evaluationRepository: evaluationRepository, eventsManager: eventsManager, syncManager: syncManager, splitManager: splitManager)
+        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, splitManager: splitManager)
     }
 
     private func configureLogger() {

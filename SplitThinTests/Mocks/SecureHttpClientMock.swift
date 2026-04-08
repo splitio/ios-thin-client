@@ -5,6 +5,7 @@ import Http
 final class SecureHttpClientMock: SecureHttpClient, @unchecked Sendable {
 
     var fetchEvaluationsResult: HttpResponse?
+    var fetchEvaluationsResultByKey = [String: Result<HttpResponse, Error>]()
     var postEventsResult: HttpResponse?
     var postTelemetryResult: HttpResponse?
     var errorToThrow: Error?
@@ -23,6 +24,13 @@ final class SecureHttpClientMock: SecureHttpClient, @unchecked Sendable {
 
         if fetchDelay > 0 {
             try? await Task.sleep(nanoseconds: fetchDelay)
+        }
+
+        if let perKeyResult = fetchEvaluationsResultByKey[target.matchingKey] {
+            switch perKeyResult {
+                case .success(let response): return response
+                case .failure(let error): throw error
+            }
         }
 
         if let error = errorToThrow {

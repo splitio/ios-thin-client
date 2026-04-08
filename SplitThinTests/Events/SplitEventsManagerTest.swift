@@ -418,35 +418,3 @@ final class SplitEventsManagerTest: XCTestCase {
         wait(for: [expectation], timeout: 1.0)
     }
 }
-
-// MARK: - Test Listener
-
-private final class TestEventListener: SplitEventListener, @unchecked Sendable {
-    var onReadyCallCount = 0
-    var onReadyFromCacheCallCount = 0
-    var onReadyTimedOutCallCount = 0
-    var onUpdateCallCount = 0
-
-    var lastReadyMetadata: SdkReadyMetadata?
-    var lastReadyFromCacheMetadata: SdkReadyFromCacheMetadata?
-    var lastUpdateMetadata: SdkUpdateMetadata?
-
-    func onReady(_ metadata: SdkReadyMetadata) {
-        onReadyCallCount += 1
-        lastReadyMetadata = metadata
-    }
-
-    func onReadyFromCache(_ metadata: SdkReadyFromCacheMetadata) {
-        onReadyFromCacheCallCount += 1
-        lastReadyFromCacheMetadata = metadata
-    }
-
-    func onReadyTimedOut() {
-        onReadyTimedOutCallCount += 1
-    }
-
-    func onUpdate(_ metadata: SdkUpdateMetadata) {
-        onUpdateCallCount += 1
-        lastUpdateMetadata = metadata
-    }
-}

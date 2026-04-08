@@ -88,12 +88,3 @@ final class DefaultSplitClientTest: XCTestCase {
         XCTAssertEqual(eventsManagerMock.removedListeners.count, 1)
     }
 }
-
-// MARK: - Test Listener
-
-private final class TestEventListener: SplitEventListener, @unchecked Sendable {
-    func onReady(_ metadata: SdkReadyMetadata) {}
-    func onReadyFromCache(_ metadata: SdkReadyFromCacheMetadata) {}
-    func onReadyTimedOut() {}
-    func onUpdate(_ metadata: SdkUpdateMetadata) {}
-}
