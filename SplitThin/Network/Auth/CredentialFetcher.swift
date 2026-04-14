@@ -1,6 +1,5 @@
 import Foundation
 import Http
-import Logging
 
 enum CredentialFetcherError: Error {
     case invalidAuthResponse

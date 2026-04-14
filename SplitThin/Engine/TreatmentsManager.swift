@@ -20,19 +20,20 @@ final class DefaultTreatmentsManager: TreatmentsManager, @unchecked Sendable {
 
     func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) -> EvaluationResult {
         let currentTarget = withLock(lock) { target }
-        return evaluationRepository.getTreatment(flag: flag, target: currentTarget) ?? EvaluationResult(flag: flag, treatment: "control", flagSets: [])
+        return evaluationRepository.getEvaluation(flag: flag, target: currentTarget)?.evaluationResult
+            ?? EvaluationResult(flag: flag, treatment: "control", flagSets: [])
     }
 
     func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult] {
         let currentTarget = withLock(lock) { target }
-        let results = evaluationRepository.getTreatments(flags: flags, target: currentTarget)
-        let resultsByFlag = Dictionary(uniqueKeysWithValues: results.map { ($0.flag, $0) })
+        let storedEvaluations = evaluationRepository.getEvaluations(flags: flags, target: currentTarget)
+        let resultsByFlag = Dictionary(uniqueKeysWithValues: storedEvaluations.map { ($0.evaluationResult.flag, $0.evaluationResult) })
         return flags.map { resultsByFlag[$0] ?? EvaluationResult(flag: $0, treatment: "control", flagSets: []) }
     }
 
     func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult] {
         let currentTarget = withLock(lock) { target }
-        return evaluationRepository.getTreatmentsByFlagSets(flagSets, target: currentTarget)
+        return evaluationRepository.getEvaluationsByFlagSets(flagSets, target: currentTarget).map { $0.evaluationResult }
     }
 
     func setTarget(_ target: Target) {

@@ -19,11 +19,15 @@ final class PollingE2ETest: XCTestCase {
     // MARK: - Tests
 
     func testPollingFetchesPeriodically() async throws {
-        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData())
+        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["my-flag"]))
 
-        let factory = try buildFactory(syncMode: .polling, refreshRate: 1)
+        let sdkReady = expectation(description: "SDK ready")
+        let sdkUpdate = expectation(description: "SDK update")
+        let listener = TestEventListener(onReadyExpectation: sdkReady, onUpdateExpectation: sdkUpdate)
+        let factory = try buildFactory(httpClient: httpMock, syncMode: .polling, refreshRate: 1)
+        factory.client.addEventListener(listener)
 
-        try await Task.sleep(nanoseconds: 2_500_000_000)
+        waitFor(sdkReady, sdkUpdate)
 
         let callCount = httpMock.fetchEvaluationsCalls.count
         XCTAssertGreaterThanOrEqual(callCount, 2, "Expected at least 2 fetches, got \(callCount)")
@@ -32,11 +36,14 @@ final class PollingE2ETest: XCTestCase {
     }
 
     func testPollingUpdatesClientTreatments() async throws {
-        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData())
+        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["my-flag"]))
 
-        let factory = try buildFactory(syncMode: .polling, refreshRate: 1)
+        let sdkReady = expectation(description: "SDK ready")
+        let listener = TestEventListener(onReadyExpectation: sdkReady)
+        let factory = try buildFactory(httpClient: httpMock, syncMode: .polling, refreshRate: 1)
+        factory.client.addEventListener(listener)
 
-        try await Task.sleep(nanoseconds: 500_000_000)
+        waitFor(sdkReady)
 
         let result = factory.client.getTreatment(flag: "my-flag")
         XCTAssertEqual(result.treatment, "on")
@@ -45,72 +52,37 @@ final class PollingE2ETest: XCTestCase {
     }
 
     func testPollingStopsOnDestroy() async throws {
-        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData())
+        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["my-flag"]))
 
-        let factory = try buildFactory(syncMode: .polling, refreshRate: 1)
+        let sdkReady = expectation(description: "SDK ready")
+        let listener = TestEventListener(onReadyExpectation: sdkReady)
+        let factory = try buildFactory(httpClient: httpMock, syncMode: .polling, refreshRate: 1)
+        factory.client.addEventListener(listener)
 
-        try await Task.sleep(nanoseconds: 500_000_000)
+        waitFor(sdkReady)
         await factory.destroy()
 
         let callCountAfterDestroy = httpMock.fetchEvaluationsCalls.count
 
-        try await Task.sleep(nanoseconds: 500_000_000)
+        sleep(seconds: 1.5) // Give time to verify no more fetches
 
         let callCountLater = httpMock.fetchEvaluationsCalls.count
         XCTAssertEqual(callCountAfterDestroy, callCountLater, "No more fetches should occur after destroy")
     }
 
     func testSingleSyncOnlyFetchesOnce() async throws {
-        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData())
+        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["my-flag"]))
 
-        let factory = try buildFactory(syncMode: .singleSync, refreshRate: 1)
+        let sdkReady = expectation(description: "SDK ready")
+        let listener = TestEventListener(onReadyExpectation: sdkReady)
+        let factory = try buildFactory(httpClient: httpMock)
+        factory.client.addEventListener(listener)
 
-        try await Task.sleep(nanoseconds: 500_000_000)
+        waitFor(sdkReady)
 
         let callCount = httpMock.fetchEvaluationsCalls.count
         XCTAssertEqual(callCount, 1, "SingleSync should fetch exactly once, got \(callCount)")
 
         await factory.destroy()
-    }
-
-    // MARK: - Helpers
-
-    private func buildFactory(syncMode: SyncMode, refreshRate: Int) throws -> SplitFactory {
-        let config = SplitClientConfig.builder()
-                                      .setMinEvaluationRefreshRate(1)
-                                      .set(syncMode: syncMode)
-                                      .set(evaluationRefreshRate: refreshRate)
-                                      .build()
-
-        let builder = DefaultSplitFactoryBuilder()
-        builder.setSecureHttpClient(httpMock)
-        
-        guard let factory = builder.setSdkKey(SdkKey("test-sdk-key"))
-                                   .setTarget(Target(matchingKey: "user-123"))
-                                   .setConfig(config)
-                                   .build() else {
-            throw NSError(domain: "PollingE2ETest", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to build factory"])
-        }
-
-        return factory
-    }
-
-    private func mockEvaluationsData() -> Data {
-        let json = """
-        {
-            "evaluations": [
-                {
-                    "featureName": "my-flag",
-                    "treatment": "on",
-                    "label": "default rule",
-                    "changeNumber": 12345,
-                    "sets": ["set-a"]
-                }
-            ],
-            "since": -1,
-            "till": 12345
-        }
-        """
-        return json.data(using: .utf8)!
     }
 }

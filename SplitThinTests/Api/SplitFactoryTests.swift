@@ -6,16 +6,18 @@ final class DefaultSplitFactoryTest: XCTestCase {
     private var factory: DefaultSplitFactory!
     private var secureHttpClientMock: SecureHttpClientMock!
     private var evaluationRepositoryMock: EvaluationRepositoryMock!
-    private var syncManagerMock: SyncManagerMock!
+    private var fetchCoordinatorMock: EvaluationFetchCoordinatorMock!
+    private var evaluationStorageMock: EvaluationStorageMock!
     private var splitManager: DefaultSplitManager!
 
     override func setUp() {
         super.setUp()
         secureHttpClientMock = SecureHttpClientMock()
         evaluationRepositoryMock = EvaluationRepositoryMock()
-        syncManagerMock = SyncManagerMock()
-        splitManager = DefaultSplitManager()
-        factory = DefaultSplitFactory(sdkKey: SdkKey("api-key"), target: Target(matchingKey: "user1"), config: SplitClientConfig.builder().build(), evaluationFilters: nil, secureHttpClient: secureHttpClientMock, evaluationRepository: evaluationRepositoryMock, syncManager: syncManagerMock, splitManager: splitManager)
+        fetchCoordinatorMock = EvaluationFetchCoordinatorMock()
+        evaluationStorageMock = EvaluationStorageMock()
+        splitManager = DefaultSplitManager(evaluationRepository: evaluationRepositoryMock, target: Target(matchingKey: "user1"))
+        factory = DefaultSplitFactory(sdkKey: SdkKey("api-key"), target: Target(matchingKey: "user1"), config: SplitClientConfig.builder().build(), evaluationFilters: nil, secureHttpClient: secureHttpClientMock, evaluationRepository: evaluationRepositoryMock, fetchCoordinator: fetchCoordinatorMock, evaluationStorage: evaluationStorageMock, splitManager: splitManager)
     }
 
     override func tearDown() async throws {
@@ -23,7 +25,8 @@ final class DefaultSplitFactoryTest: XCTestCase {
         factory = nil
         secureHttpClientMock = nil
         evaluationRepositoryMock = nil
-        syncManagerMock = nil
+        fetchCoordinatorMock = nil
+        evaluationStorageMock = nil
         splitManager = nil
     }
 

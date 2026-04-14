@@ -1,97 +1,91 @@
 import Foundation
+import Logging
 
-public protocol EvaluationReadStorage: Sendable {
-    func get(flag: String, target: Target) async -> EvaluationResult?
-    func get(flags: [String], target: Target) async -> [EvaluationResult]
-    func get(byFlagSets flagSets: [String], target: Target) async -> [EvaluationResult]
+protocol EvaluationReadStorage: Sendable {
+    func get(target: Target, flag: String) async -> EvaluationResult?
+    func get(target: Target, flags: [String]) async -> [EvaluationResult]
+    func get(target: Target, byFlagSets flagSets: [String]) async -> [EvaluationResult]
+    func getAll(target: Target) async -> [EvaluationResult]
     func getFlagNames(target: Target) async -> [String]
     func lastChangeNumber(target: Target) async -> Int64?
 }
 
-public protocol EvaluationWriteStorage: Sendable {
+protocol EvaluationWriteStorage: Sendable {
     func upsert(change: EvaluationChange) async throws
     func clear(target: Target) async
 }
 
 final class PersistentStorage: EvaluationReadStorage, EvaluationWriteStorage, Sendable {
 
-    private let keyValueStorage: PersistentKeyValueStorage
+    private let storage: CoreDataStorage
 
-    init(keyValueStorage: PersistentKeyValueStorage) {
-        self.keyValueStorage = keyValueStorage
+    init(storage: CoreDataStorage) {
+        self.storage = storage
     }
 
     // MARK: - EvaluationWriteStorage
 
     func upsert(change: EvaluationChange) async throws {
-        var evaluationsMap = await readDTO(for: change.target)?.evaluations ?? [:]
+        let matchingKey = change.target.matchingKey
 
-        for evaluation in change.evaluations {
-            evaluationsMap[evaluation.flag] = EvaluationResultDTO(treatment: evaluation.treatment, changeNumber: evaluation.changeNumber, config: evaluation.config, sets: evaluation.flagSets)
+        try await storage.upsertClientSession(
+            matchingKey: matchingKey,
+            attributes: change.target.attributes,
+            changeNumber: change.changeNumber
+        )
+
+        let evaluations = change.evaluations.map { eval in
+            (flagName: eval.flag, treatment: eval.treatment, config: eval.config, sets: eval.flagSets)
         }
-
-        let dto = EvaluationChangeDTO(changeNumber: change.changeNumber, evaluations: evaluationsMap)
-
-        let data = try Json.encode(dto)
-        try await keyValueStorage.write(key: storageKey(for: change.target), value: data)
+        try await storage.upsertEvaluations(matchingKey: matchingKey, evaluations: evaluations)
     }
 
     func clear(target: Target) async {
-        try? await keyValueStorage.remove(key: storageKey(for: target))
+        try? await storage.deleteClientSession(matchingKey: target.matchingKey)
     }
 
     // MARK: - EvaluationReadStorage
 
-    func get(flag: String, target: Target) async -> EvaluationResult? {
-        guard let resultDTO = await readDTO(for: target)?.evaluations?[flag] else {
+    func get(target: Target, flag: String) async -> EvaluationResult? {
+        guard let eval = await storage.getEvaluation(matchingKey: target.matchingKey, flagName: flag) else {
             return nil
         }
-        return resultDTO.toEvaluationResult(flag: flag)
+        return EvaluationResult(flag: flag, treatment: eval.treatment, flagSets: eval.sets ?? [], config: eval.config)
     }
 
-    func get(flags: [String], target: Target) async -> [EvaluationResult] {
-        guard let evaluations = await readDTO(for: target)?.evaluations else {
-            return []
-        }
-        return flags.compactMap { flag in
-            evaluations[flag]?.toEvaluationResult(flag: flag)
+    func get(target: Target, flags: [String]) async -> [EvaluationResult] {
+        let evaluations = await storage.getEvaluations(matchingKey: target.matchingKey, flagNames: flags)
+        return evaluations.map { eval in
+            EvaluationResult(flag: eval.flagName, treatment: eval.treatment, flagSets: eval.sets ?? [], config: eval.config)
         }
     }
 
-    func get(byFlagSets flagSets: [String], target: Target) async -> [EvaluationResult] {
-        guard let evaluations = await readDTO(for: target)?.evaluations else {
-            return []
-        }
+    func get(target: Target, byFlagSets flagSets: [String]) async -> [EvaluationResult] {
+        let allEvaluations = await storage.getAllEvaluations(matchingKey: target.matchingKey)
         let requestedSets = Set(flagSets)
-        return evaluations.compactMap { flag, resultDTO in
-            guard !Set(resultDTO.sets ?? []).isDisjoint(with: requestedSets) else {
+
+        return allEvaluations.compactMap { eval in
+            guard let sets = eval.sets, !Set(sets).isDisjoint(with: requestedSets) else {
                 return nil
             }
-            return resultDTO.toEvaluationResult(flag: flag)
+            return EvaluationResult(flag: eval.flagName, treatment: eval.treatment, flagSets: sets, config: eval.config)
+        }
+    }
+
+    func getAll(target: Target) async -> [EvaluationResult] {
+        let evaluations = await storage.getAllEvaluations(matchingKey: target.matchingKey)
+        let flagNames = evaluations.map { $0.flagName }.joined(separator: ", ")
+        Logger.d("PersistentStorage: Loaded \(evaluations.count) flags for '\(target.matchingKey)': [\(flagNames)]")
+        return evaluations.map { eval in
+            EvaluationResult(flag: eval.flagName, treatment: eval.treatment, flagSets: eval.sets ?? [], config: eval.config)
         }
     }
 
     func getFlagNames(target: Target) async -> [String] {
-        guard let evaluations = await readDTO(for: target)?.evaluations else {
-            return []
-        }
-        return Array(evaluations.keys)
+        await storage.getFlagNames(matchingKey: target.matchingKey)
     }
 
     func lastChangeNumber(target: Target) async -> Int64? {
-        await readDTO(for: target)?.changeNumber
-    }
-
-    // MARK: - Private
-
-    private func readDTO(for target: Target) async -> EvaluationChangeDTO? {
-        guard let data = await keyValueStorage.read(key: storageKey(for: target)) else {
-            return nil
-        }
-        return try? Json.decode(from: data, to: EvaluationChangeDTO.self)
-    }
-
-    private func storageKey(for target: Target) -> String {
-        "evaluations.\(target.matchingKey)"
+        await storage.getChangeNumber(matchingKey: target.matchingKey)
     }
 }

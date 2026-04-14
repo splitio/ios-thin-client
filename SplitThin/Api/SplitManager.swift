@@ -6,18 +6,15 @@ public protocol SplitManager: AnyObject {
 
 final class DefaultSplitManager: SplitManager {
 
-    private var flagNames = [String]()
-    private let lock = NSLock()
+    private let evaluationRepository: EvaluationRepository
+    private let target: Target
 
-    func getFlagNames() -> [String] {
-        withLock(lock) { flagNames }
+    init(evaluationRepository: EvaluationRepository, target: Target) {
+        self.evaluationRepository = evaluationRepository
+        self.target = target
     }
 
-    func updateFlags(_ flags: [String]) {
-        withLock(lock) {
-            for flag in flags where !flagNames.contains(flag) {
-                flagNames.append(flag)
-            }
-        }
+    func getFlagNames() -> [String] {
+        evaluationRepository.getFlagNames(target: target)
     }
 }

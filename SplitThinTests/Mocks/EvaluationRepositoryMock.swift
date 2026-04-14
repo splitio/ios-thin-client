@@ -3,27 +3,28 @@ import Foundation
 
 final class EvaluationRepositoryMock: EvaluationRepository, @unchecked Sendable {
 
-    var getTreatmentCalls = [String]()
-    var getTreatmentsCalls = [[String]]()
-    var getTreatmentsByFlagSetsCalls = [[String]]()
+    var getEvaluationCalls = [String]()
+    var getEvaluationsCalls = [[String]]()
+    var getEvaluationsByFlagSetsCalls = [[String]]()
     var setTargetCalls = [Target]()
+    var initializeErrorToThrow: Error?
 
-    var treatmentToReturn: EvaluationResult?
-    var treatmentsToReturn = [EvaluationResult]()
+    var evaluationToReturn: StoredEvaluation?
+    var evaluationsToReturn = [StoredEvaluation]()
 
-    func getTreatment(flag: String, target: Target) -> EvaluationResult? {
-        getTreatmentCalls.append(flag)
-        return treatmentToReturn
+    func getEvaluation(flag: String, target: Target) -> StoredEvaluation? {
+        getEvaluationCalls.append(flag)
+        return evaluationToReturn
     }
 
-    func getTreatments(flags: [String], target: Target) -> [EvaluationResult] {
-        getTreatmentsCalls.append(flags)
-        return treatmentsToReturn
+    func getEvaluations(flags: [String], target: Target) -> [StoredEvaluation] {
+        getEvaluationsCalls.append(flags)
+        return evaluationsToReturn
     }
 
-    func getTreatmentsByFlagSets(_ flagSets: [String], target: Target) -> [EvaluationResult] {
-        getTreatmentsByFlagSetsCalls.append(flagSets)
-        return treatmentsToReturn
+    func getEvaluationsByFlagSets(_ flagSets: [String], target: Target) -> [StoredEvaluation] {
+        getEvaluationsByFlagSetsCalls.append(flagSets)
+        return evaluationsToReturn
     }
 
     func getFlagNames(target: Target) -> [String] {
@@ -34,7 +35,11 @@ final class EvaluationRepositoryMock: EvaluationRepository, @unchecked Sendable 
         setTargetCalls.append(target)
     }
 
-    func initialize(target: Target) async {
+    func initialize(target: Target) async throws {
         setTargetCalls.append(target)
+        if let error = initializeErrorToThrow {
+            throw error
+        }
     }
+
 }

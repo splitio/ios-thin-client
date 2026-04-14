@@ -1,68 +1,71 @@
 import Foundation
+import Logging
 
-public protocol EvaluationRepository: Sendable {
-    func getTreatment(flag: String, target: Target) -> EvaluationResult?
-    func getTreatments(flags: [String], target: Target) -> [EvaluationResult]
-    func getTreatmentsByFlagSets(_ flagSets: [String], target: Target) -> [EvaluationResult]
+protocol EvaluationRepository: Sendable {
+    func getEvaluation(flag: String, target: Target) -> StoredEvaluation?
+    func getEvaluations(flags: [String], target: Target) -> [StoredEvaluation]
+    func getEvaluationsByFlagSets(_ flagSets: [String], target: Target) -> [StoredEvaluation]
     func getFlagNames(target: Target) -> [String]
     func setTarget(_ target: Target)
-    func initialize(target: Target) async
+    func initialize(target: Target) async throws
 }
 
 final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendable {
 
     private let fetchCoordinator: EvaluationFetchCoordinator
     private let evaluationFilters: EvaluationFilters?
-    private let storage: EvaluationReadStorage?
 
-    private var cache = [Target: [String: EvaluationResult]]()
+    // In-memory evaluations by user key (`matchingKey` + `bucketingKey`), not full `Target` (attributes / traffic type can differ).
+    private var cache = [Key: [String: StoredEvaluation]]()
     private let lock = NSLock()
 
-    init(fetchCoordinator: EvaluationFetchCoordinator, evaluationFilters: EvaluationFilters?, storage: EvaluationReadStorage? = nil) {
+    init(fetchCoordinator: EvaluationFetchCoordinator, evaluationFilters: EvaluationFilters?) {
         self.fetchCoordinator = fetchCoordinator
         self.evaluationFilters = evaluationFilters
-        self.storage = storage
     }
 
-    func getTreatment(flag: String, target: Target) -> EvaluationResult? {
-        withLock(lock) { cache[target]?[flag] }
+    func getEvaluation(flag: String, target: Target) -> StoredEvaluation? {
+        withLock(lock) { cache[target.key]?[flag] }
     }
 
-    func getTreatments(flags: [String], target: Target) -> [EvaluationResult] {
+    func getEvaluations(flags: [String], target: Target) -> [StoredEvaluation] {
         withLock(lock) {
-            let targetCache = cache[target] ?? [:]
+            let targetCache = cache[target.key] ?? [:]
             return flags.compactMap { targetCache[$0] }
         }
     }
 
-    func getTreatmentsByFlagSets(_ flagSets: [String], target: Target) -> [EvaluationResult] {
+    func getEvaluationsByFlagSets(_ flagSets: [String], target: Target) -> [StoredEvaluation] {
         withLock(lock) {
-            let targetCache = cache[target] ?? [:]
-            return targetCache.values.filter { evaluation in
-                !Set(evaluation.flagSets).isDisjoint(with: flagSets)
+            let targetCache = cache[target.key] ?? [:]
+            return targetCache.values.filter { stored in
+                !Set(stored.flagSets).isDisjoint(with: flagSets)
             }
         }
     }
 
     func getFlagNames(target: Target) -> [String] {
-        withLock(lock) { Array(cache[target]?.keys ?? [String: EvaluationResult]().keys) }
+        withLock(lock) { Array((cache[target.key] ?? [:]).keys) }
     }
 
     func setTarget(_ target: Target) {
         withLock(lock) {
-            cache[target] = nil
+            cache[target.key] = nil
         }
-        
+
         Task { [weak self] in
             guard let self else { return }
-            let evaluations = await self.fetchCoordinator.fetchIfNeeded(target: target, filters: self.evaluationFilters, reason: .targetSwitch)
-            self.cacheEvaluations(evaluations, for: target)
+            do {
+                let evaluations = try await self.fetchCoordinator.fetchIfNeeded(target: target, filters: self.evaluationFilters, reason: .targetSwitch)
+                self.cacheEvaluations(evaluations, for: target)
+            } catch {
+                Logger.e("EvaluationRepository: Failed to fetch evaluations for target \(target.matchingKey): \(error)")
+            }
         }
     }
 
-    func initialize(target: Target) async {
-        await loadFromStorageIfNeeded(target: target)
-        let evaluations = await fetchCoordinator.fetchIfNeeded(target: target, filters: evaluationFilters, reason: .initialization)
+    func initialize(target: Target) async throws {
+        let evaluations = try await fetchCoordinator.fetchIfNeeded(target: target, filters: evaluationFilters, reason: .initialization)
         cacheEvaluations(evaluations, for: target)
     }
 
@@ -71,23 +74,18 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
     }
 
     // MARK: - Private
-    private func loadFromStorageIfNeeded(target: Target) async {
-        guard let storage else { return }
-        let flagNames = await storage.getFlagNames(target: target)
-        guard !flagNames.isEmpty else { return }
-        let cached = await storage.get(flags: flagNames, target: target)
-        cacheEvaluations(cached, for: target)
-    }
 
     private func cacheEvaluations(_ evaluations: [EvaluationResult], for target: Target) {
         guard !evaluations.isEmpty else { return }
 
+        let userKey = target.key
         withLock(lock) {
-            var targetCache = cache[target] ?? [:]
+            var targetCache = cache[userKey] ?? [:]
             for evaluation in evaluations {
-                targetCache[evaluation.flag] = evaluation
+                let stored = StoredEvaluation(evaluationResult: evaluation, flagSets: evaluation.flagSets)
+                targetCache[evaluation.flag] = stored
             }
-            cache[target] = targetCache
+            cache[userKey] = targetCache
         }
     }
 }

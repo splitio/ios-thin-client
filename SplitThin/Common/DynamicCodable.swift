@@ -15,6 +15,8 @@ enum JsonError: Error {
     case invalidData
 }
 
+// Our custom equivalent of Codable (less safe.. but faster). 
+// The safety issue is completely mitigated with unit testing.
 enum Json {
     static func decode<T: DynamicDecodable>(from data: Data, to type: T.Type) throws -> T {
         let jsonObject = try JSONSerialization.jsonObject(with: data, options: [])

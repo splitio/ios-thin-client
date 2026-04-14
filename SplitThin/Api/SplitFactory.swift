@@ -10,8 +10,7 @@ public protocol SplitFactory {
 
 public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
 
-    private static let initErrorMessage =
-        "Something happened on Split init and the client couldn't be created"
+    private static let initErrorMessage = "Something happened on Split init and the client couldn't be created"
 
     private let sdkKey: SdkKey
     private let defaultTarget: Target
@@ -20,10 +19,12 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     private let evaluationFilters: EvaluationFilters?
     private let secureHttpClient: SecureHttpClient
     private let evaluationRepository: EvaluationRepository
-    private let syncManager: SyncManager
+    private let fetchCoordinator: EvaluationFetchCoordinator
+    private let evaluationStorage: EvaluationReadStorage
 
     private var splitManager: DefaultSplitManager?
     private var clients = [Key: SplitClient]()
+    private var syncManagers = [Key: SyncManager]()
     private var isDestroyed = false
 
     public var client: SplitClient {
@@ -34,7 +35,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         Version.sdk
     }
 
-    init(sdkKey: SdkKey, target: Target, config: SplitClientConfig, evaluationFilters: EvaluationFilters?, secureHttpClient: SecureHttpClient, evaluationRepository: EvaluationRepository, syncManager: SyncManager, splitManager: DefaultSplitManager) {
+    init(sdkKey: SdkKey, target: Target, config: SplitClientConfig, evaluationFilters: EvaluationFilters?, secureHttpClient: SecureHttpClient, evaluationRepository: EvaluationRepository, fetchCoordinator: EvaluationFetchCoordinator, evaluationStorage: EvaluationReadStorage, splitManager: DefaultSplitManager) {
         self.sdkKey = sdkKey
         self.defaultTarget = target
         self.defaultKey = target.key
@@ -42,16 +43,11 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         self.evaluationFilters = evaluationFilters
         self.secureHttpClient = secureHttpClient
         self.evaluationRepository = evaluationRepository
-        self.syncManager = syncManager
+        self.fetchCoordinator = fetchCoordinator
+        self.evaluationStorage = evaluationStorage
         self.splitManager = splitManager
 
-        let treatmentsManager = DefaultTreatmentsManager(target: target, evaluationRepository: evaluationRepository)
-        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager)
-        clients[target.key] = client
-
-        Task {
-            await syncManager.start()
-        }
+        createClient(target: target)
     }
 
     public func getClient(_ target: Target? = nil) -> SplitClient {
@@ -66,10 +62,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
             return FailedClient()
         }
 
-        let treatmentsManager = DefaultTreatmentsManager(target: resolvedTarget, evaluationRepository: evaluationRepository)
-        let newClient = DefaultSplitClient(target: resolvedTarget, treatmentsManager: treatmentsManager)
-        clients[resolvedTarget.key] = newClient
-        return newClient
+        return createClient(target: resolvedTarget)
     }
 
     public func manager() -> SplitManager {
@@ -84,13 +77,43 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         guard !isDestroyed else { return }
         isDestroyed = true
 
-        await syncManager.stop()
+        for syncManager in syncManagers.values {
+            await syncManager.stop()
+        }
+        syncManagers.removeAll()
 
         for client in clients.values {
             await client.destroy()
         }
-        
         clients.removeAll()
+
         splitManager = nil
+    }
+
+    // MARK: - Private
+
+    @discardableResult
+    private func createClient(target: Target) -> SplitClient {
+
+        // 1. Wire up just the per client components
+        let eventsManager = DefaultSplitEventsManager(config: config)
+        let periodicScheduler = DefaultEvaluationPeriodicScheduler(fetchCoordinator: fetchCoordinator, eventsManager: eventsManager, target: target, filters: evaluationFilters, intervalSeconds: config.evaluationRefreshRate)
+        let streaming = DefaultStreaming(fetchCoordinator: fetchCoordinator, eventsManager: eventsManager, secureHttpClient: secureHttpClient, target: target)
+        let syncManager = DefaultSyncManager(syncMode: config.syncMode, evaluationRepository: evaluationRepository, evaluationStorage: evaluationStorage, eventsManager: eventsManager, periodicScheduler: periodicScheduler, streaming: streaming, target: target)
+        let treatmentsManager = DefaultTreatmentsManager(target: target, evaluationRepository: evaluationRepository)
+        
+        // 2. Create
+        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager)
+
+        // 3. Register
+        clients[target.key] = client
+        syncManagers[target.key] = syncManager
+
+        // 4. Start
+        Task {
+            await syncManager.start() 
+        }
+
+        return client
     }
 }

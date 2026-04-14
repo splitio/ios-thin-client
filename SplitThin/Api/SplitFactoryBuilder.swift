@@ -84,20 +84,17 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         }
 
         let secureHttp = secureHttpClient ?? buildSecureHttpClient(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey)
-        let splitManager = DefaultSplitManager()
         let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttp)
 
         let databaseName = config.prefix.map { "split_\($0)" } ?? "split"
-        let keyValueStorage = CoreDataKeyValueStorage(databaseName: databaseName)
-        let evaluationStorage = PersistentStorage(keyValueStorage: keyValueStorage)
+        let coreDataStorage = CoreDataStorage(databaseName: databaseName)
+        let evaluationStorage = PersistentStorage(storage: coreDataStorage)
 
-        let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider, storage: evaluationStorage, splitManager: splitManager)
-        let evaluationRepository = DefaultEvaluationRepository(fetchCoordinator: fetchCoordinator, evaluationFilters: evaluationFilters, storage: evaluationStorage)
-        let periodicScheduler = DefaultEvaluationPeriodicScheduler(fetchCoordinator: fetchCoordinator, target: target, filters: evaluationFilters, intervalSeconds: config.evaluationRefreshRate)
-        let streaming = DefaultStreaming(fetchCoordinator: fetchCoordinator, secureHttpClient: secureHttp, target: target)
-        let syncManager = DefaultSyncManager(syncMode: config.syncMode, evaluationRepository: evaluationRepository, periodicScheduler: periodicScheduler, streaming: streaming, target: target)
+        let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider, storage: evaluationStorage)
+        let evaluationRepository = DefaultEvaluationRepository(fetchCoordinator: fetchCoordinator, evaluationFilters: evaluationFilters)
+        let splitManager = DefaultSplitManager(evaluationRepository: evaluationRepository, target: target)
 
-        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, evaluationRepository: evaluationRepository, syncManager: syncManager, splitManager: splitManager)
+        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, evaluationStorage: evaluationStorage, splitManager: splitManager)
     }
 
     private func configureLogger() {

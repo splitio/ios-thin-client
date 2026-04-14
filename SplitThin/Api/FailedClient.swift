@@ -21,7 +21,9 @@ final class FailedClient: SplitClient {
 
     func setTarget(target: Target) {}
 
-    func addEventListener(listener: SplitEventListener) {}
+    func addEventListener(_ listener: SplitEventListener) {}
+
+    func removeEventListener(_ listener: SplitEventListener) {}
 
     func track(eventType: String, value: Double?, properties: EventProperties?) {}
 
