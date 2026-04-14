@@ -4,7 +4,7 @@ import Logging
 /// Configuration options for the Split SDK client.
 public struct SplitClientConfig: Sendable {
 
-    static let minEvaluationRefreshRate = 60
+    static let minEvaluationRefreshRate = 1
     fileprivate static let minTimeout = -1
     fileprivate static let minPushRate = 30
     fileprivate static let prefixPattern = "^[a-zA-Z0-9_]{1,80}$"
@@ -23,8 +23,9 @@ public struct SplitClientConfig: Sendable {
     let timeout: Int
     let prefix: String?
     let pushRate: Int
+    let fallbackTreatments: FallbackTreatmentsConfig
 
-    fileprivate init(syncMode: SyncMode, serviceEndpoints: ServiceEndpoints?, impressionsMode: ImpressionsMode, dynamicConfig: Bool, logLevel: LogLevel, evaluationRefreshRate: Int, timeout: Int, prefix: String?, pushRate: Int) {
+    fileprivate init(syncMode: SyncMode, serviceEndpoints: ServiceEndpoints?, impressionsMode: ImpressionsMode, dynamicConfig: Bool, logLevel: LogLevel, evaluationRefreshRate: Int, timeout: Int, prefix: String?, pushRate: Int, fallbackTreatments: FallbackTreatmentsConfig) {
         self.syncMode = syncMode
         self.serviceEndpoints = serviceEndpoints
         self.impressionsMode = impressionsMode
@@ -34,6 +35,7 @@ public struct SplitClientConfig: Sendable {
         self.timeout = timeout
         self.prefix = prefix
         self.pushRate = pushRate
+        self.fallbackTreatments = fallbackTreatments
     }
 
     /// Creates a new builder for `SplitClientConfig`.
@@ -54,6 +56,7 @@ public final class SplitConfigBuilder {
     private var timeout: Int = -1
     private var prefix: String?
     private var pushRate: Int = 1800
+    private var fallbackTreatments: FallbackTreatmentsConfig = FallbackTreatmentsConfig.builder().build()
 
     // Internal for testing
     var minEvaluationRefreshRateOverride: Int?
@@ -155,6 +158,28 @@ public final class SplitConfigBuilder {
         return self
     }
 
+    /// Sets the fallback treatments configuration.
+    ///
+    /// Fallback treatments are used when the SDK would otherwise return `"control"`,
+    /// such as when a flag is not found or not yet synced.
+    ///
+    /// ### Usage Example:
+    /// ```swift
+    /// let fallbacks = FallbackTreatmentsConfig.builder()
+    ///     .global(FallbackTreatment(treatment: "off"))
+    ///     .byFlag(["my_flag": FallbackTreatment(treatment: "v2", config: "{\"key\":true}")])
+    ///     .build()
+    ///
+    /// let config = SplitClientConfig.builder()
+    ///     .set(fallbackTreatments: fallbacks)
+    ///     .build()
+    /// ```
+    @discardableResult
+    public func set(fallbackTreatments: FallbackTreatmentsConfig) -> Self {
+        self.fallbackTreatments = fallbackTreatments
+        return self
+    }
+
     /// Builds the `SplitClientConfig` with the configured values.
     public func build() -> SplitClientConfig {
         SplitClientConfig(
@@ -166,7 +191,8 @@ public final class SplitConfigBuilder {
             evaluationRefreshRate: evaluationRefreshRate,
             timeout: timeout,
             prefix: prefix,
-            pushRate: pushRate
+            pushRate: pushRate,
+            fallbackTreatments: fallbackTreatments
         )
     }
 }

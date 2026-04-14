@@ -2,20 +2,24 @@ import Foundation
 import Http
 @testable import SplitThin
 
-func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync, refreshRate: Int = 1, timeout: Int = -1, target: String = "user-123") throws -> SplitFactory {
-    let config = SplitClientConfig.builder()
-                                  .setMinEvaluationRefreshRate(1)
-                                  .set(syncMode: syncMode)
-                                  .set(evaluationRefreshRate: refreshRate)
-                                  .set(timeout: timeout)
-                                  .build()
+func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync, refreshRate: Int = 1, timeout: Int = -1, target: String = "user-123", fallbackTreatments: FallbackTreatmentsConfig? = nil) throws -> SplitFactory {
+    let configBuilder = SplitClientConfig.builder()
+                                         .setMinEvaluationRefreshRate(1)
+                                         .set(syncMode: syncMode)
+                                         .set(evaluationRefreshRate: refreshRate)
+                                         .set(timeout: timeout)
+                                         .build()
+
+    if let fallbacks = fallbackTreatments {
+        configBuilder = configBuilder.set(fallbackTreatments: fallbacks)
+    }
 
     let builder = DefaultSplitFactoryBuilder()
     builder.setSecureHttpClient(httpClient)
 
-    guard let factory = builder.setSdkKey("test-sdk-key")
-                               .setTarget(Target(matchingKey: target))
-                               .setConfig(config)
+    guard let factory = builder.setSdkKey(SdkKey("test-sdk-key"))
+                               .setTarget(target)
+                               .setConfig(configBuilder.build())
                                .build() else {
         throw NSError(domain: "E2ETest", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to build factory"])
     }

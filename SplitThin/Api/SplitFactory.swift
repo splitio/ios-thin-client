@@ -10,9 +10,6 @@ public protocol SplitFactory {
 
 public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
 
-    private static let initErrorMessage =
-        "Something happened on Split init and the client couldn't be created"
-
     private let sdkKey: SdkKey
     private let defaultTarget: Target
     private let defaultKey: Key
@@ -26,6 +23,8 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     private var clients = [Key: SplitClient]()
     private var syncManagers = [Key: SyncManager]()
     private var isDestroyed = false
+
+    private static let initErrorMessage = "Something happened on Split init and the client couldn't be created"
 
     public var client: SplitClient {
         clients[defaultKey] ?? FailedClient()
@@ -98,7 +97,8 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         let streaming = DefaultStreaming(fetchCoordinator: fetchCoordinator, eventsManager: eventsManager, secureHttpClient: secureHttpClient, target: target)
         let syncManager = DefaultSyncManager(syncMode: config.syncMode, evaluationRepository: evaluationRepository, eventsManager: eventsManager, periodicScheduler: periodicScheduler, streaming: streaming, target: target)
 
-        let treatmentsManager = DefaultTreatmentsManager(target: target, evaluationRepository: evaluationRepository)
+        let fallbackCalculator = DefaultFallbackTreatmentsCalculator(fallbacksConfig: config.fallbackTreatments)
+        let treatmentsManager = DefaultTreatmentsManager(target: target, evaluationRepository: evaluationRepository, fallbackCalculator: fallbackCalculator)
         let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager)
 
         clients[target.key] = client
