@@ -5,15 +5,18 @@ import Http
 final class AuthE2ETest: XCTestCase {
 
     private var httpMock: RetryableHttpClientMock!
+    private var factory: SplitFactory!
 
     override func setUp() {
         super.setUp()
         httpMock = RetryableHttpClientMock()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
+        await factory?.destroy()
+        factory = nil
         httpMock = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - Tests
@@ -24,22 +27,20 @@ final class AuthE2ETest: XCTestCase {
             HttpResponse(code: 200, data: mockEvaluationsData())
         ]
 
-        let sdkReady = expectation(description: "SDK ready")
-        let listener = TestEventListener(onReadyExpectation: sdkReady)
-        let factory = try buildFactory(syncMode: .singleSync)
+        let sdkReady = expectation("SDK ready")
+        let listener = TestEventListener(readyExpectation: sdkReady)
+        factory = try buildFactory(syncMode: .singleSync)
         factory.client.addEventListener(listener)
 
         waitFor(sdkReady)
 
         let client = factory.client
-        let treatment = client.getTreatment(flag: "my_feature").treatment
+        let treatment = client.getTreatment("my_feature").treatment
 
         XCTAssertEqual(treatment, "on")
         XCTAssertEqual(httpMock.executeCalls.count, 2)
         XCTAssertEqual(httpMock.executeCalls[0].category, .auth)
         XCTAssertEqual(httpMock.executeCalls[1].category, .evaluations)
-
-        await factory.destroy()
     }
 
     func testAuthFailureReturnsControlTreatment() async throws {
@@ -47,19 +48,17 @@ final class AuthE2ETest: XCTestCase {
             HttpResponse(code: 401, data: nil)
         ]
 
-        let sdkTimedOut = expectation(description: "SDK timed out")
-        let listener = TestEventListener(onTimedOutExpectation: sdkTimedOut)
-        let factory = try buildFactory(syncMode: .singleSync, timeout: 1)
+        let sdkTimedOut = expectation("SDK timed out")
+        let listener = TestEventListener(timeoutExpectation: sdkTimedOut)
+        factory = try buildFactory(syncMode: .singleSync, timeout: 1)
         factory.client.addEventListener(listener)
 
         waitFor(sdkTimedOut)
 
         let client = factory.client
-        let treatment = client.getTreatment(flag: "my_feature").treatment
+        let treatment = client.getTreatment("my_feature").treatment
 
         XCTAssertEqual(treatment, "control", "Should return control when auth fails")
-
-        await factory.destroy()
     }
 
     func testAuthInvalidJsonReturnsControlTreatment() async throws {
@@ -68,19 +67,17 @@ final class AuthE2ETest: XCTestCase {
             HttpResponse(code: 200, data: invalidJson)
         ]
 
-        let sdkTimedOut = expectation(description: "SDK timed out")
-        let listener = TestEventListener(onTimedOutExpectation: sdkTimedOut)
-        let factory = try buildFactory(syncMode: .singleSync, timeout: 1)
+        let sdkTimedOut = expectation("SDK timed out")
+        let listener = TestEventListener(timeoutExpectation: sdkTimedOut)
+        factory = try buildFactory(syncMode: .singleSync, timeout: 1)
         factory.client.addEventListener(listener)
 
         waitFor(sdkTimedOut)
 
         let client = factory.client
-        let treatment = client.getTreatment(flag: "my_feature").treatment
+        let treatment = client.getTreatment("my_feature").treatment
 
         XCTAssertEqual(treatment, "control", "Should return control when auth response is invalid JSON")
-
-        await factory.destroy()
     }
 
     func testAuthMissingTokenReturnsControlTreatment() async throws {
@@ -91,37 +88,33 @@ final class AuthE2ETest: XCTestCase {
             HttpResponse(code: 200, data: missingToken)
         ]
 
-        let sdkTimedOut = expectation(description: "SDK timed out")
-        let listener = TestEventListener(onTimedOutExpectation: sdkTimedOut)
-        let factory = try buildFactory(syncMode: .singleSync, timeout: 1)
+        let sdkTimedOut = expectation("SDK timed out")
+        let listener = TestEventListener(timeoutExpectation: sdkTimedOut)
+        factory = try buildFactory(syncMode: .singleSync, timeout: 1)
         factory.client.addEventListener(listener)
 
         waitFor(sdkTimedOut)
 
         let client = factory.client
-        let treatment = client.getTreatment(flag: "my_feature").treatment
+        let treatment = client.getTreatment("my_feature").treatment
 
         XCTAssertEqual(treatment, "control", "Should return control when auth response is missing token")
-
-        await factory.destroy()
     }
 
     func testAuthNetworkErrorReturnsControlTreatment() async throws {
         httpMock.errorToThrow = RetryableHttpError.networkError(NSError(domain: "test", code: -1))
 
-        let sdkTimedOut = expectation(description: "SDK timed out")
-        let listener = TestEventListener(onTimedOutExpectation: sdkTimedOut)
-        let factory = try buildFactory(syncMode: .singleSync, timeout: 1)
+        let sdkTimedOut = expectation("SDK timed out")
+        let listener = TestEventListener(timeoutExpectation: sdkTimedOut)
+        factory = try buildFactory(syncMode: .singleSync, timeout: 1)
         factory.client.addEventListener(listener)
 
         waitFor(sdkTimedOut)
 
         let client = factory.client
-        let treatment = await client.getTreatment(flag: "my_feature").treatment
+        let treatment = client.getTreatment("my_feature").treatment
 
         XCTAssertEqual(treatment, "control", "Should return control when network error occurs")
-
-        await factory.destroy()
     }
 
     func testAuthTokenExpirationIsParsedCorrectly() async throws {
@@ -132,18 +125,16 @@ final class AuthE2ETest: XCTestCase {
             HttpResponse(code: 200, data: mockEvaluationsData())
         ]
 
-        let sdkReady = expectation(description: "SDK ready")
-        let sdkUpdate = expectation(description: "SDK update")
-        let listener = TestEventListener(onReadyExpectation: sdkReady, onUpdateExpectation: sdkUpdate)
-        let factory = try buildFactory(syncMode: .polling, refreshRate: 1)
+        let sdkReady = expectation("SDK ready")
+        let sdkUpdate = expectation("SDK update")
+        let listener = TestEventListener(readyExpectation: sdkReady, updateExpectation: sdkUpdate)
+        factory = try buildFactory(syncMode: .polling, refreshRate: 1)
         factory.client.addEventListener(listener)
 
         waitFor(sdkReady, sdkUpdate)
 
         let authCalls = httpMock.executeCalls.filter { $0.category == .auth }
         XCTAssertEqual(authCalls.count, 1, "Should reuse cached credential, not re-auth")
-
-        await factory.destroy()
     }
 
     func testAuth401OnEvaluationTriggersReauth() async throws {
@@ -155,17 +146,15 @@ final class AuthE2ETest: XCTestCase {
             HttpResponse(code: 200, data: mockEvaluationsData())
         ]
 
-        let sdkReady = expectation(description: "SDK ready")
-        let listener = TestEventListener(onReadyExpectation: sdkReady)
-        let factory = try buildFactory(syncMode: .singleSync)
+        let sdkReady = expectation("SDK ready")
+        let listener = TestEventListener(readyExpectation: sdkReady)
+        factory = try buildFactory(syncMode: .singleSync)
         factory.client.addEventListener(listener)
 
         waitFor(sdkReady)
 
         let authCalls = httpMock.executeCalls.filter { $0.category == .auth }
         XCTAssertEqual(authCalls.count, 2, "Should re-auth after 401 on evaluations")
-
-        await factory.destroy()
     }
 
     func testSlowAuthDoesNotBlockSDKInitialization() async throws {
@@ -176,17 +165,15 @@ final class AuthE2ETest: XCTestCase {
         ]
 
         let startTime = Date()
-        let factory = try buildFactory(syncMode: .singleSync)
+        factory = try buildFactory(syncMode: .singleSync)
 
         let client = factory.client
-        let treatment = client.getTreatment(flag: "my_feature").treatment
+        let treatment = client.getTreatment("my_feature").treatment
 
         let elapsed = Date().timeIntervalSince(startTime)
 
         XCTAssertEqual(treatment, "control", "Should return control while auth is pending")
         XCTAssertLessThan(elapsed, 2.0, "SDK initialization should not block on slow auth")
-
-        await factory.destroy()
     }
 
     func testDestroyDuringPendingAuthDoesNotHang() async throws {
@@ -195,10 +182,9 @@ final class AuthE2ETest: XCTestCase {
             HttpResponse(code: 200, data: mockAuthResponse())
         ]
 
-        let factory = try buildFactory(syncMode: .singleSync)
+        factory = try buildFactory(syncMode: .singleSync)
 
         let startTime = Date()
-        await factory.destroy()
         let elapsed = Date().timeIntervalSince(startTime)
 
         XCTAssertLessThan(elapsed, 2.0, "Destroy should not wait for pending auth request")
@@ -218,8 +204,8 @@ final class AuthE2ETest: XCTestCase {
         let builder = DefaultSplitFactoryBuilder()
         builder.setRetryableHttpClient(httpMock)
 
-        guard let factory = builder.setSdkKey(SdkKey("test-sdk-key"))
-                                   .setTarget(Target(matchingKey: "user-123"))
+        guard let factory = builder.setSdkKey("test-sdk-key")
+                                   .setTarget("user-123")
                                    .setConfig(config)
                                    .build() else {
             throw NSError(domain: "AuthE2ETest", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to build factory"])

@@ -26,3 +26,30 @@ extension SplitConfigBuilder {
         return self
     }
 }
+
+extension SplitFactory {
+
+    func getClient(_ matchingKey: String) -> SplitClient {
+        getClient(Target(matchingKey: matchingKey))
+    }
+}
+
+extension SplitClient {
+
+    func getTreatment(_ flag: String) -> EvaluationResult {
+        getTreatment(flag: flag)
+    }
+}
+
+extension SplitFactoryBuilder {
+
+    @discardableResult
+    func setTarget(_ matchingKey: String) -> SplitFactoryBuilder {
+        setTarget(Target(matchingKey: matchingKey))
+    }
+
+    @discardableResult
+    func setSdkKey(_ key: String) -> SplitFactoryBuilder {
+        setSdkKey(SdkKey(key))
+    }
+}

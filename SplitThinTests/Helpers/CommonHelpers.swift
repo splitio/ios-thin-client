@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+@testable import SplitThin
 
 func withLock<T>(_ lock: NSLock, _ block: () -> T) -> T {
     lock.lock()
@@ -12,7 +13,11 @@ func sleep(seconds: Double) {
 }
 
 extension XCTestCase {
-    
+
+    func expectation(_ description: String = #function) -> XCTestExpectation {
+        expectation(description: description)
+    }
+
     // Utility to improve testing legibility. Timeout of 3 seconds by default.
     func waitFor(_ expectations: XCTestExpectation..., timeout: Double = 3) {
         let semaphore = DispatchSemaphore(value: 0)
@@ -21,5 +26,12 @@ extension XCTestCase {
             semaphore.signal()
         }
         semaphore.wait()
+    }
+}
+
+extension XCTestExpectation {
+    func inverted() -> XCTestExpectation {
+        isInverted = true
+        return self
     }
 }
