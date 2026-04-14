@@ -403,18 +403,18 @@ final class SplitEventsManagerTest: XCTestCase {
     // MARK: - Helpers
 
     private func waitForProcessing() {
-        let expectation = expectation(description: "wait for processing queue")
+        let exp = expectation("wait for processing queue")
         DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) {
-            expectation.fulfill()
+            exp.fulfill()
         }
-        wait(for: [expectation], timeout: 1.0)
+        wait(for: [exp], timeout: 1.0)
     }
 
     private func waitForMainQueue() {
-        let expectation = expectation(description: "wait for main queue")
+        let exp = expectation("wait for main queue")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            expectation.fulfill()
+            exp.fulfill()
         }
-        wait(for: [expectation], timeout: 1.0)
+        wait(for: [exp], timeout: 1.0)
     }
 }

@@ -10,31 +10,31 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
     }
 
     func testBuildWithEmptySdkKey() {
-        let factory = DefaultSplitFactoryBuilder().setSdkKey(SdkKey(""))
-                                                  .setTarget(Target(matchingKey: "user1"))
+        let factory = DefaultSplitFactoryBuilder().setSdkKey("")
+                                                  .setTarget("user1")
                                                   .build()
 
         XCTAssertNil(factory, "Factory should be nil with empty SDK key")
     }
 
     func testBuildWithNoTarget() {
-        let factory = DefaultSplitFactoryBuilder().setSdkKey(SdkKey("api-key-123"))
+        let factory = DefaultSplitFactoryBuilder().setSdkKey("api-key-123")
                                                   .build()
 
         XCTAssertNil(factory, "Factory should be nil when target is missing")
     }
 
     func testBuildWithEmptyMatchingKey() {
-        let factory = DefaultSplitFactoryBuilder().setSdkKey(SdkKey("api-key-123"))
-                                                  .setTarget(Target(matchingKey: ""))
+        let factory = DefaultSplitFactoryBuilder().setSdkKey("api-key-123")
+                                                  .setTarget("")
                                                   .build()
 
         XCTAssertNil(factory, "Factory should be nil with empty matching key")
     }
 
     func testBuildSuccess() {
-        let factory = DefaultSplitFactoryBuilder().setSdkKey(SdkKey("api-key-123"))
-                                                  .setTarget(Target(matchingKey: "user1"))
+        let factory = DefaultSplitFactoryBuilder().setSdkKey("api-key-123")
+                                                  .setTarget("user1")
                                                   .build()
 
         XCTAssertNotNil(factory, "Factory should not be nil with valid params")
@@ -50,7 +50,7 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
         let target = Target(matchingKey: "user1", bucketingKey: "bk1",
                             attributes: ["env": "prod"], trafficType: "user")
 
-        let factory = DefaultSplitFactoryBuilder().setSdkKey(SdkKey("api-key-123"))
+        let factory = DefaultSplitFactoryBuilder().setSdkKey("api-key-123")
                                                   .setTarget(target)
                                                   .setConfig(config)
                                                   .setEvaluationFilters(filters)
@@ -66,8 +66,8 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
                                                                              .build())
                                       .build()
 
-        let factory = DefaultSplitFactoryBuilder().setSdkKey(SdkKey("api-key-123"))
-                                                  .setTarget(Target(matchingKey: "user1"))
+        let factory = DefaultSplitFactoryBuilder().setSdkKey("api-key-123")
+                                                  .setTarget("user1")
                                                   .setConfig(config)
                                                   .build()
 
@@ -77,8 +77,8 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
     func testFluentApiReturnsSelf() {
         let builder = DefaultSplitFactoryBuilder()
 
-        let b1 = builder.setSdkKey(SdkKey("key"))
-        let b2 = b1.setTarget(Target(matchingKey: "user1"))
+        let b1 = builder.setSdkKey("key")
+        let b2 = b1.setTarget("user1")
         let b3 = b2.setConfig(SplitClientConfig.builder().build())
         let b4 = b3.setEvaluationFilters(EvaluationFilters())
 

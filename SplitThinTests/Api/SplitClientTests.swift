@@ -28,7 +28,7 @@ final class DefaultSplitClientTest: XCTestCase {
     }
 
     func testGetTreatmentReturnsControl() {
-        let result = client.getTreatment(flag: "flag_a")
+        let result = client.getTreatment("flag_a")
 
         XCTAssertEqual(result.treatment, "control")
     }

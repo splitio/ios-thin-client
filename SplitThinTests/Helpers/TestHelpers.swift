@@ -2,7 +2,7 @@ import Foundation
 import Http
 @testable import SplitThin
 
-func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync, refreshRate: Int = 1, timeout: Int = -1, target: Target = Target(matchingKey: "user-123")) throws -> SplitFactory {
+func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync, refreshRate: Int = 1, timeout: Int = -1, target: String = "user-123") throws -> SplitFactory {
     let config = SplitClientConfig.builder()
                                   .setMinEvaluationRefreshRate(1)
                                   .set(syncMode: syncMode)
@@ -13,8 +13,8 @@ func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync
     let builder = DefaultSplitFactoryBuilder()
     builder.setSecureHttpClient(httpClient)
 
-    guard let factory = builder.setSdkKey(SdkKey("test-sdk-key"))
-                               .setTarget(target)
+    guard let factory = builder.setSdkKey("test-sdk-key")
+                               .setTarget(Target(matchingKey: target))
                                .setConfig(config)
                                .build() else {
         throw NSError(domain: "E2ETest", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to build factory"])
