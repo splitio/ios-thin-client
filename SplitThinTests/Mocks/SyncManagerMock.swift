@@ -8,7 +8,7 @@ final class SyncManagerMock: SyncManager, @unchecked Sendable {
     var pauseCallCount = 0
     var resumeCallCount = 0
 
-    func start() async {
+    func start() {
         startCallCount += 1
     }
 

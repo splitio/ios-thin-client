@@ -28,21 +28,18 @@ extension SplitConfigBuilder {
 }
 
 extension SplitFactory {
-
     func getClient(_ matchingKey: String) -> SplitClient {
         getClient(Target(matchingKey: matchingKey))
     }
 }
 
 extension SplitClient {
-
     func getTreatment(_ flag: String) -> EvaluationResult {
         getTreatment(flag: flag)
     }
 }
 
 extension SplitFactoryBuilder {
-
     @discardableResult
     func setTarget(_ matchingKey: String) -> SplitFactoryBuilder {
         setTarget(Target(matchingKey: matchingKey))

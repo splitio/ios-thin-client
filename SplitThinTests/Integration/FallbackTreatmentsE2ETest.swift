@@ -37,7 +37,7 @@ final class FallbackTreatmentsE2ETest: XCTestCase {
         let fallbacks = FallbackTreatmentsConfig.builder().global("fallback_treatment").build()
 
         let sdkReady = expectation(description: "SDK ready")
-        let listener = TestEventListener(onReadyExpectation: sdkReady)
+        let listener = TestEventListener(readyExpectation: sdkReady)
         factory = try buildFactory(httpClient: httpMock, fallbackTreatments: fallbacks)
         factory.client.addEventListener(listener)
 
@@ -53,7 +53,7 @@ final class FallbackTreatmentsE2ETest: XCTestCase {
         let fallbacks = FallbackTreatmentsConfig.builder().global("fallback_treatment").build()
 
         let sdkReady = expectation(description: "SDK ready")
-        let listener = TestEventListener(onReadyExpectation: sdkReady)
+        let listener = TestEventListener(readyExpectation: sdkReady)
         factory = try buildFactory(httpClient: httpMock, fallbackTreatments: fallbacks)
         factory.client.addEventListener(listener)
 
@@ -95,7 +95,7 @@ final class FallbackTreatmentsE2ETest: XCTestCase {
         let fallbacks = FallbackTreatmentsConfig.builder().byFlag(["my-flag": "flag_fallback"]).build()
 
         let sdkReady = expectation(description: "SDK ready")
-        let listener = TestEventListener(onReadyExpectation: sdkReady)
+        let listener = TestEventListener(readyExpectation: sdkReady)
         factory = try buildFactory(httpClient: httpMock, fallbackTreatments: fallbacks)
         factory.client.addEventListener(listener)
 
@@ -111,7 +111,7 @@ final class FallbackTreatmentsE2ETest: XCTestCase {
         let fallbacks = FallbackTreatmentsConfig.builder().byFlag(["non-existent-flag": "flag_fallback"]).build()
 
         let sdkReady = expectation(description: "SDK ready")
-        let listener = TestEventListener(onReadyExpectation: sdkReady)
+        let listener = TestEventListener(readyExpectation: sdkReady)
         factory = try buildFactory(httpClient: httpMock, fallbackTreatments: fallbacks)
         factory.client.addEventListener(listener)
 

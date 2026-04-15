@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 
 protocol Streaming: Sendable {
     func start() async
@@ -7,10 +8,15 @@ protocol Streaming: Sendable {
 
 final class DefaultStreaming: Streaming, @unchecked Sendable {
 
+    // Components
     private let fetchCoordinator: EvaluationFetchCoordinator
     private let eventsManager: SplitEventsManager
     private let secureHttpClient: SecureHttpClient
     private let target: Target
+
+    // BG pause sync
+    private var isPaused = false
+    private let lock = NSLock()
 
     init(fetchCoordinator: EvaluationFetchCoordinator, eventsManager: SplitEventsManager, secureHttpClient: SecureHttpClient, target: Target) {
         self.fetchCoordinator = fetchCoordinator
@@ -21,12 +27,32 @@ final class DefaultStreaming: Streaming, @unchecked Sendable {
 
     func start() async {
         // TODO: Implement SSE streaming connection
-        // When streaming receives an update, call:
-        // let metadata = SdkUpdateMetadata(type: .flagsUpdate, names: flagNames)
-        // eventsManager.notifyInternalEvent(.evaluationsUpdated(metadata))
     }
 
     func stop() async {
         // TODO: Implement SSE streaming disconnection
+    }
+}
+
+// MARK: BG Sync (just for mobile devices)
+extension DefaultStreaming: MobileSync {
+    func pause() {
+        withLock(lock) {
+            guard !isPaused else { return }
+
+            // TODO: Disconnect SSE when implemented
+            isPaused = true
+            Logger.d("Streaming: Paused")
+        }
+    }
+
+    func resume() {
+        withLock(lock) {
+            guard isPaused else { return }
+
+            // TODO: Reconnect SSE when implemented
+            isPaused = false
+            Logger.d("Streaming: Resumed")
+        }
     }
 }
