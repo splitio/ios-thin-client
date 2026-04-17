@@ -21,6 +21,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     private let secureHttpClient: SecureHttpClient
     private let evaluationRepository: EvaluationRepository
     private let fetchCoordinator: EvaluationFetchCoordinator
+    private let streamingManager: StreamingManager
 
     private var splitManager: DefaultSplitManager?
     private var clients = [Key: SplitClient]()
@@ -35,7 +36,11 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         Version.sdk
     }
 
-    init(sdkKey: SdkKey, target: Target, config: SplitClientConfig, evaluationFilters: EvaluationFilters?, secureHttpClient: SecureHttpClient, evaluationRepository: EvaluationRepository, fetchCoordinator: EvaluationFetchCoordinator, splitManager: DefaultSplitManager) {
+    var syncManager: SyncManager? {
+        syncManagers[defaultKey]
+    }
+
+    init(sdkKey: SdkKey, target: Target, config: SplitClientConfig, evaluationFilters: EvaluationFilters?, secureHttpClient: SecureHttpClient, evaluationRepository: EvaluationRepository, fetchCoordinator: EvaluationFetchCoordinator, streamingManager: StreamingManager, splitManager: DefaultSplitManager) {
         self.sdkKey = sdkKey
         self.defaultTarget = target
         self.defaultKey = target.key
@@ -44,6 +49,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         self.secureHttpClient = secureHttpClient
         self.evaluationRepository = evaluationRepository
         self.fetchCoordinator = fetchCoordinator
+        self.streamingManager = streamingManager
         self.splitManager = splitManager
 
         createClient(target: target)
@@ -81,6 +87,8 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         }
         syncManagers.removeAll()
 
+        streamingManager.stopAll()
+
         for client in clients.values {
             await client.destroy()
         }
@@ -95,7 +103,12 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     private func createClient(target: Target) -> SplitClient {
         let eventsManager = DefaultSplitEventsManager(config: config)
         let periodicScheduler = DefaultEvaluationPeriodicScheduler(fetchCoordinator: fetchCoordinator, eventsManager: eventsManager, target: target, filters: evaluationFilters, intervalSeconds: config.evaluationRefreshRate)
-        let streaming = DefaultStreaming(fetchCoordinator: fetchCoordinator, eventsManager: eventsManager, secureHttpClient: secureHttpClient, target: target)
+        let streaming = DefaultStreaming(streamingManager: streamingManager)
+        (fetchCoordinator as? DefaultEvaluationFetchCoordinator)?.onEvaluationsUpdated = { [weak eventsManager] _, flagNames in
+            guard let eventsManager else { return }
+            let metadata = SdkUpdateMetadata(type: .flagsUpdate, names: flagNames)
+            eventsManager.notifyInternalEvent(.evaluationsUpdated(metadata))
+        }
         let syncManager = DefaultSyncManager(syncMode: config.syncMode, evaluationRepository: evaluationRepository, eventsManager: eventsManager, periodicScheduler: periodicScheduler, streaming: streaming, target: target)
 
         let treatmentsManager = DefaultTreatmentsManager(target: target, evaluationRepository: evaluationRepository)

@@ -26,6 +26,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
     // Internals for testing
     var secureHttpClient: SecureHttpClient?
     var retryableHttpClient: RetryableHttpClient?
+    var connectionManagerFactory: ((EvaluationFetchCoordinator) -> StreamingConnectionManager)?
 
     public override init() {
         super.init()
@@ -83,13 +84,36 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
             return nil
         }
 
-        let secureHttp = secureHttpClient ?? buildSecureHttpClient(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey)
+        let http = httpClient ?? DefaultHttpClient.shared
+        let (secureHttp, builtAuthProvider) = buildSecureHttpClientAndAuth(
+            serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey, http: http)
         let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttp)
-        let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider)
-        let evaluationRepository = DefaultEvaluationRepository(fetchCoordinator: fetchCoordinator, evaluationFilters: evaluationFilters)
+        let evaluationStorage = InMemoryEvaluationStorage()
+        let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider, storage: evaluationStorage)
+        let evaluationRepository = DefaultEvaluationRepository(fetchCoordinator: fetchCoordinator, storage: evaluationStorage, evaluationFilters: evaluationFilters)
         let splitManager = DefaultSplitManager(evaluationRepository: evaluationRepository, target: target)
+        let streamingComponents: StreamingComponents
+        if let factory = connectionManagerFactory {
+            streamingComponents = StreamingComponents(manager: DefaultStreamingManager(connectionManagerFactory: { factory(fetchCoordinator) }))
+        } else {
+            streamingComponents = createStreamingComponents(
+                target: target,
+                authProvider: builtAuthProvider,
+                streamingEndpoint: serviceEndpoints.streamingServiceEndpoint,
+                httpClient: http,
+                fetchCoordinator: fetchCoordinator
+            )
+        }
 
-        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, splitManager: splitManager)
+        return DefaultSplitFactory(
+            sdkKey: sdkKey, target: target, config: config,
+            evaluationFilters: evaluationFilters,
+            secureHttpClient: secureHttp,
+            evaluationRepository: evaluationRepository,
+            fetchCoordinator: fetchCoordinator,
+            streamingManager: streamingComponents.manager,
+            splitManager: splitManager
+        )
     }
 
     private func configureLogger() {
@@ -98,12 +122,12 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         }
     }
 
-    private func buildSecureHttpClient(serviceEndpoints: ServiceEndpoints, sdkKey: String) -> SecureHttpClient {
-        let http = httpClient ?? DefaultHttpClient.shared
+    private func buildSecureHttpClientAndAuth(serviceEndpoints: ServiceEndpoints, sdkKey: String, http: HttpClient) -> (SecureHttpClient, AuthProvider) {
         let retryable = retryableHttpClient ?? DefaultRetryableHttpClient(httpClient: http)
         let storage = DefaultCredentialStorage()
         let fetcher = DefaultCredentialFetcher(retryableHttpClient: retryable, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey)
         let auth = authProvider ?? DefaultAuthProvider(credentialStorage: storage, credentialFetcher: fetcher)
-        return DefaultSecureHttpClient(retryableHttpClient: retryable, authProvider: auth, serviceEndpoints: serviceEndpoints)
+        let client = secureHttpClient ?? DefaultSecureHttpClient(retryableHttpClient: retryable, authProvider: auth, serviceEndpoints: serviceEndpoints)
+        return (client, auth)
     }
 }

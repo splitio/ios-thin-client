@@ -71,6 +71,7 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
     func pause() {
         withLock(lock) { isPaused = true }
         polling.stop()
+        streaming.pause()
         Logger.d("SyncManager: Paused")
     }
 
@@ -83,6 +84,7 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
 
         if wasPaused && syncMode != .singleSync {
             polling.start()
+            streaming.resume()
             Logger.d("SyncManager: Resumed")
         }
     }

@@ -53,14 +53,13 @@ final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @un
                     break
                 }
 
-                do {
-                    let evaluations = try await self.fetchCoordinator.fetchIfNeeded(target: self.target, filters: self.filters, reason: .periodic)
+                if let evaluations = await self.fetchCoordinator.fetchIfNeeded(target: self.target, filters: self.filters, reason: .periodic) {
                     if !evaluations.isEmpty {
                         let metadata = SdkUpdateMetadata(type: .flagsUpdate, names: evaluations.map { $0.flag })
                         self.eventsManager.notifyInternalEvent(.evaluationsUpdated(metadata))
                     }
-                } catch {
-                    Logger.e("EvaluationPeriodicScheduler: Fetch failed: \(error)")
+                } else {
+                    Logger.e("EvaluationPeriodicScheduler: Fetch failed")
                 }
             }
         }

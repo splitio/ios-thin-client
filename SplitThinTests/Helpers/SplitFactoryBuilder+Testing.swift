@@ -17,6 +17,12 @@ extension DefaultSplitFactoryBuilder {
         self.retryableHttpClient = client
         return self
     }
+
+    @discardableResult
+    func setStreamingConnectionManagerFactory(_ factory: @escaping (EvaluationFetchCoordinator) -> StreamingConnectionManager) -> DefaultSplitFactoryBuilder {
+        self.connectionManagerFactory = factory
+        return self
+    }
 }
 
 extension SplitConfigBuilder {

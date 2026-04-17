@@ -1,7 +1,7 @@
 import Foundation
 import Logging
 
-public enum FetchReason: Sendable {
+enum FetchReason: Sendable {
     case initialization
     case targetSwitch
     case periodic
@@ -17,69 +17,88 @@ private struct FetchKey: Hashable {
     let filters: EvaluationFilters?
 }
 
-public protocol EvaluationFetchCoordinator: Sendable {
+protocol EvaluationFetchCoordinator: Sendable {
     /// Coordinates fetch requests so only one relevant fetch runs at a time.
-    /// Returns the fetched evaluations (can be empty on success). Throws on failure.
-    func fetchIfNeeded(target: Target, filters: EvaluationFilters?, reason: FetchReason) async throws -> [EvaluationResult]
+    /// Returns the fetched evaluations on success (may be empty), or nil on failure.
+    func fetchIfNeeded(target: Target, filters: EvaluationFilters?, reason: FetchReason) async -> [EvaluationResult]?
+
+    /// Re-fetches all previously fetched keys with push reason.
+    func refetchAll(notification: EvaluationUpdateNotification?) async
 }
 
 final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unchecked Sendable {
 
     private let provider: EvaluationProvider
-    private let storage: EvaluationWriteStorage?
+    private let storage: EvaluationWriteStorage
+    private let delayProvider: DelayProvider
 
-    private var inFlightTasks = [FetchKey: Task<[EvaluationResult], Error>]()
+    // Called after a successful push fetch, with the target and updated flag names.
+    var onEvaluationsUpdated: ((Target, [String]) -> Void)?
+
+    private var inFlightTasks = [FetchKey: Task<[EvaluationResult]?, Never>]()
+    private var fetchedKeys = Set<FetchKey>()
     private let lock = NSLock()
 
-    init(provider: EvaluationProvider, storage: EvaluationWriteStorage? = nil) {
+    init(provider: EvaluationProvider, storage: EvaluationWriteStorage,
+         delayProvider: @escaping DelayProvider = buildDelayProvider()) {
         self.provider = provider
         self.storage = storage
+        self.delayProvider = delayProvider
     }
 
     @discardableResult
-    func fetchIfNeeded(target: Target, filters: EvaluationFilters?, reason: FetchReason) async throws -> [EvaluationResult] {
+    func fetchIfNeeded(target: Target, filters: EvaluationFilters?, reason: FetchReason) async -> [EvaluationResult]? {
         let key = FetchKey(target: target, filters: filters)
 
-        // Atomic tasks
-        let task: Task<[EvaluationResult], Error> = withLock(lock) {
-
-            // 1. Check for deduplications
-            if let existing = inFlightTasks[key] {
-                Logger.d("EvaluationFetchCoordinator: Awaiting in-flight fetch for \(target.matchingKey) (reason: \(reason))")
-                return existing
-            }
-
-            // 2. Create request and add to the list (for deduplication)
-            let newTask = Task<[EvaluationResult], Error> { [weak self] in
-                guard let self else { throw EvaluationFetchError.fetchFailed }
-                defer { withLock(self.lock) { self.inFlightTasks.removeValue(forKey: key) } }
-                return try await self.performFetch(target: target, filters: filters, reason: reason)
-            }
-            inFlightTasks[key] = newTask
-            return newTask
+        let existingTask: Task<[EvaluationResult]?, Never>? = withLock(lock) {
+            fetchedKeys.insert(key)
+            return inFlightTasks[key]
         }
 
-        return try await task.value
+        if let task = existingTask {
+            Logger.d("EvaluationFetchCoordinator: Awaiting in-flight fetch for \(target.matchingKey) (reason: \(reason))")
+            return await task.value
+        }
+
+        let task = Task<[EvaluationResult]?, Never> { [weak self] in
+            guard let self else { return nil }
+            return await self.performFetch(target: target, filters: filters, reason: reason)
+        }
+
+        withLock(lock) { inFlightTasks[key] = task }
+        let result = await task.value
+        withLock(lock) { inFlightTasks.removeValue(forKey: key) }
+
+        return result
     }
 
-    private func performFetch(target: Target, filters: EvaluationFilters?, reason: FetchReason) async throws -> [EvaluationResult] {
+    func refetchAll(notification: EvaluationUpdateNotification?) async {
+        let keys = withLock(lock) { fetchedKeys }
+        for key in keys {
+            let delay = delayProvider(notification, key.target.matchingKey)
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            }
+            await fetchIfNeeded(target: key.target, filters: key.filters, reason: .push)
+        }
+    }
+
+    private func performFetch(target: Target, filters: EvaluationFilters?, reason: FetchReason) async -> [EvaluationResult]? {
         guard let result = await provider.fetch(target: target, filters: filters) else {
             Logger.d("EvaluationFetchCoordinator: Fetch failed for \(target.matchingKey) (reason: \(reason))")
-            throw EvaluationFetchError.fetchFailed
+            return nil
         }
 
-        if let storage {
-            Task { // Non-blocking persistence
-                let change = EvaluationChange(
-                    target: target,
-                    changeNumber: result.till ?? -1,
-                    evaluations: result.evaluations
-                )
-
-                try? await storage.upsert(change: change)
-            }
+        if reason == .push {
+            let change = EvaluationChange(
+                target: target,
+                changeNumber: result.till ?? -1,
+                evaluations: result.evaluations
+            )
+            try? await storage.upsert(change: change)
+            let flagNames = result.evaluations.map { $0.flag }
+            onEvaluationsUpdated?(target, flagNames)
         }
-
         Logger.d("EvaluationFetchCoordinator: Fetched \(result.evaluations.count) evaluations for \(target.matchingKey) (reason: \(reason))")
         return result.evaluations
     }

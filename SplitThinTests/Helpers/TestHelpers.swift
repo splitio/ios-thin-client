@@ -23,12 +23,12 @@ func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync
     return factory
 }
 
-func mockEvaluationsData(flags: [String]) -> Data {
+func mockEvaluationsData(flags: [String], treatment: String = "on") -> Data {
     let evaluations = flags.map { flag in
         """
         {
             "featureName": "\(flag)",
-            "treatment": "on",
+            "treatment": "\(treatment)",
             "label": "default rule",
             "changeNumber": 12345,
             "sets": ["set-a"]

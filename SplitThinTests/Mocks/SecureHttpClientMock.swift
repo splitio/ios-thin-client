@@ -12,15 +12,16 @@ final class SecureHttpClientMock: SecureHttpClient, @unchecked Sendable {
     var fetchDelay: UInt64 = 0
 
     var fetchEvaluationsCalls: [(target: Target, filters: EvaluationFilters?)] = []
+    var fetchEvaluationsCallTimestamps: [Date] = []
     var postEventsCalls: [Data] = []
     var postTelemetryCalls: [Data] = []
-    var openStreamingCalls: [String] = []
-    var closeStreamingCallCount = 0
-
     private let lock = NSLock()
 
     func fetchEvaluations(target: Target, filters: EvaluationFilters?) async throws -> HttpResponse {
-        withLock(lock) { fetchEvaluationsCalls.append((target, filters)) }
+        withLock(lock) {
+            fetchEvaluationsCalls.append((target, filters))
+            fetchEvaluationsCallTimestamps.append(Date())
+        }
 
         if fetchDelay > 0 {
             try? await Task.sleep(nanoseconds: fetchDelay)
@@ -57,18 +58,6 @@ final class SecureHttpClientMock: SecureHttpClient, @unchecked Sendable {
         return postTelemetryResult ?? HttpResponse(code: 200, data: nil)
     }
 
-    func openStreaming(token: String) async throws {
-        withLock(lock) { openStreamingCalls.append(token) }
-
-        if let error = errorToThrow {
-            throw error
-        }
-    }
-
-    func closeStreaming() async {
-        withLock(lock) { closeStreamingCallCount += 1 }
-    }
-
     func reset() {
         withLock(lock) {
             fetchEvaluationsResult = nil
@@ -77,10 +66,9 @@ final class SecureHttpClientMock: SecureHttpClient, @unchecked Sendable {
             errorToThrow = nil
             fetchDelay = 0
             fetchEvaluationsCalls = []
+            fetchEvaluationsCallTimestamps = []
             postEventsCalls = []
             postTelemetryCalls = []
-            openStreamingCalls = []
-            closeStreamingCallCount = 0
         }
     }
 }

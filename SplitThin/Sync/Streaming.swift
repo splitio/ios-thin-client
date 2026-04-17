@@ -3,30 +3,31 @@ import Foundation
 protocol Streaming: Sendable {
     func start() async
     func stop() async
+    func pause()
+    func resume()
 }
 
 final class DefaultStreaming: Streaming, @unchecked Sendable {
 
-    private let fetchCoordinator: EvaluationFetchCoordinator
-    private let eventsManager: SplitEventsManager
-    private let secureHttpClient: SecureHttpClient
-    private let target: Target
+    private let streamingManager: StreamingManager
 
-    init(fetchCoordinator: EvaluationFetchCoordinator, eventsManager: SplitEventsManager, secureHttpClient: SecureHttpClient, target: Target) {
-        self.fetchCoordinator = fetchCoordinator
-        self.eventsManager = eventsManager
-        self.secureHttpClient = secureHttpClient
-        self.target = target
+    init(streamingManager: StreamingManager) {
+        self.streamingManager = streamingManager
     }
 
     func start() async {
-        // TODO: Implement SSE streaming connection
-        // When streaming receives an update, call:
-        // let metadata = SdkUpdateMetadata(type: .flagsUpdate, names: flagNames)
-        // eventsManager.notifyInternalEvent(.evaluationsUpdated(metadata))
+        streamingManager.start()
     }
 
     func stop() async {
-        // TODO: Implement SSE streaming disconnection
+        streamingManager.stop()
+    }
+
+    func pause() {
+        streamingManager.pause()
+    }
+
+    func resume() {
+        streamingManager.resume()
     }
 }

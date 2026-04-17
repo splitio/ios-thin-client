@@ -4,16 +4,21 @@ import Foundation
 final class EvaluationFetchCoordinatorMock: EvaluationFetchCoordinator, @unchecked Sendable {
 
     var fetchCalls: [(target: Target, filters: EvaluationFilters?, reason: FetchReason)] = []
-    var evaluationsToReturn: [EvaluationResult] = []
-    var errorToThrow: Error?
+    var refetchAllCalls: [EvaluationUpdateNotification?] = []
+    var evaluationsToReturn: [EvaluationResult]? = []
+    var onFetchCallback: (() -> Void)?
+    var onRefetchAllCallback: (() -> Void)?
 
     private let lock = NSLock()
 
-    func fetchIfNeeded(target: Target, filters: EvaluationFilters?, reason: FetchReason) async throws -> [EvaluationResult] {
+    func fetchIfNeeded(target: Target, filters: EvaluationFilters?, reason: FetchReason) async -> [EvaluationResult]? {
         withLock(lock) { fetchCalls.append((target, filters, reason)) }
-        if let error = errorToThrow {
-            throw error
-        }
+        onFetchCallback?()
         return evaluationsToReturn
+    }
+
+    func refetchAll(notification: EvaluationUpdateNotification?) async {
+        withLock(lock) { refetchAllCalls.append(notification) }
+        onRefetchAllCallback?()
     }
 }

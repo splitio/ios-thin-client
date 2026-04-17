@@ -1,4 +1,5 @@
 import XCTest
+import Http
 @testable import SplitThin
 
 final class DefaultSplitFactoryBuilderTest: XCTestCase {
@@ -72,6 +73,37 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
                                                   .build()
 
         XCTAssertNil(factory, "Factory should be nil with invalid endpoints")
+    }
+
+    func testSetStreamingConnectionManagerFactoryIsUsed() async throws {
+        let connectionManagerMock = StreamingConnectionManagerMock()
+        let httpMock = SecureHttpClientMock()
+        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: []))
+
+        let sdkReady = expectation(description: "SDK ready")
+        let listener = TestEventListener(onReadyExpectation: sdkReady)
+
+        let config = SplitClientConfig.builder()
+                                      .setMinEvaluationRefreshRate(1)
+                                      .set(syncMode: .streaming)
+                                      .build()
+
+        let builder = DefaultSplitFactoryBuilder()
+        builder.setSecureHttpClient(httpMock)
+        builder.setStreamingConnectionManagerFactory { _ in connectionManagerMock }
+
+        guard let factory = builder.setSdkKey(SdkKey("api-key-123"))
+                                   .setTarget(Target(matchingKey: "user1"))
+                                   .setConfig(config)
+                                   .build() else {
+            XCTFail("Factory should build"); return
+        }
+        factory.client.addEventListener(listener)
+        waitFor(sdkReady)
+
+        XCTAssertEqual(connectionManagerMock.startCallCount, 1,
+                       "Injected connection manager factory should be used when streaming starts")
+        await factory.destroy()
     }
 
     func testFluentApiReturnsSelf() {
