@@ -19,13 +19,15 @@ final class DefaultSplitClient: SplitClient {
     private(set) var target: Target
     private let treatmentsManager: TreatmentsManager
     private let eventsManager: SplitEventsManager
+    private let syncManager: SyncManager
     private var clientListeners = [SplitEventListener]()
     private var isDestroyed = false
 
-    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager) {
+    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, syncManager: SyncManager) {
         self.target = target
         self.treatmentsManager = treatmentsManager
         self.eventsManager = eventsManager
+        self.syncManager = syncManager
     }
 
     // MARK: - Evaluations
@@ -78,6 +80,9 @@ final class DefaultSplitClient: SplitClient {
             eventsManager.removeListener(listener)
         }
         clientListeners.removeAll()
+
+        eventsManager.stop()
+        await syncManager.stop()
     }
 
     func flush() async {}

@@ -15,7 +15,7 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
 
     private let syncMode: SyncMode
     private let evaluationRepository: EvaluationRepository
-    private let eventsManager: SplitEventsManager
+    private let observer: Observer
     private let polling: EvaluationPeriodicScheduler
     private let streaming: Streaming
     private let target: Target
@@ -24,10 +24,10 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
     private var isPaused = false
     private let lock = NSLock()
 
-    init(syncMode: SyncMode, evaluationRepository: EvaluationRepository, eventsManager: SplitEventsManager, periodicScheduler: EvaluationPeriodicScheduler, streaming: Streaming, target: Target, appStateManager: AppStateManager = DefaultAppStateManager.instance) {
+    init(syncMode: SyncMode, evaluationRepository: EvaluationRepository, observer: Observer, periodicScheduler: EvaluationPeriodicScheduler, streaming: Streaming, target: Target, appStateManager: AppStateManager = DefaultAppStateManager.instance) {
         self.syncMode = syncMode
         self.evaluationRepository = evaluationRepository
-        self.eventsManager = eventsManager
+        self.observer = observer
         self.polling = periodicScheduler
         self.streaming = streaming
         self.target = target
@@ -51,7 +51,7 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
 
                 let flagNames = evaluationRepository.getFlagNames(target: target)
                 let metadata = SdkUpdateMetadata(type: .flagsUpdate, names: flagNames)
-                eventsManager.notifyInternalEvent(.evaluationsUpdated(metadata))
+                try? observer.notify(event: .evaluationsUpdated(metadata))
 
                 establishLink()
             } catch {
@@ -64,7 +64,6 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
     func stop() async {
         Logger.d("SyncManager: Stopping")
 
-        eventsManager.stop()
         polling.stop()
         await streaming.stop()
     }

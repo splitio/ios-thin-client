@@ -197,3 +197,17 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
         dataAccessQueue.sync { listeners }
     }
 }
+
+// MARK: - Observer conformance
+extension DefaultSplitEventsManager: Observer {
+    func notify(event: ObservableEvent) {
+        switch event {
+            case .evaluationsUpdated(let metadata):
+                notifyInternalEvent(.evaluationsUpdated(metadata))
+            case .evaluationsLoadedFromCache(let metadata):
+                notifyInternalEvent(.evaluationsLoadedFromCache(metadata))
+            case .sdkReadyTimeoutReached:
+                notifyInternalEvent(.sdkReadyTimeoutReached)
+        }
+    }
+}

@@ -6,7 +6,7 @@ final class SyncManagerTests: XCTestCase {
     private var syncManager: DefaultSyncManager!
     private var polling: PeriodicSchedulerMock!
     private var streaming: StreamingMock!
-    private var eventsManager: SplitEventsManagerMock!
+    private var observer: ObserverSpy!
     private var evaluationRepository: EvaluationRepositoryMock!
 
     private let target = Target(matchingKey: "user1")
@@ -15,12 +15,12 @@ final class SyncManagerTests: XCTestCase {
         super.setUp()
         polling = PeriodicSchedulerMock()
         streaming = StreamingMock()
-        eventsManager = SplitEventsManagerMock()
+        observer = ObserverSpy()
         evaluationRepository = EvaluationRepositoryMock()
     }
 
     private func createSyncManager(mode: SyncMode) -> DefaultSyncManager {
-        DefaultSyncManager(syncMode: mode, evaluationRepository: evaluationRepository, eventsManager: eventsManager, periodicScheduler: polling, streaming: streaming, target: target)
+        DefaultSyncManager(syncMode: mode, evaluationRepository: evaluationRepository, observer: observer, periodicScheduler: polling, streaming: streaming, target: target)
     }
 
     // MARK: - Pause Tests
@@ -111,6 +111,14 @@ final class PeriodicSchedulerMock: EvaluationPeriodicScheduler, @unchecked Senda
 
     func stop() {
         stopCalls += 1
+    }
+}
+
+final class ObserverSpy: Observer, @unchecked Sendable {
+    var notifiedEvents = [ObservableEvent]()
+
+    func notify(event: ObservableEvent) {
+        notifiedEvents.append(event)
     }
 }
 

@@ -9,7 +9,7 @@ protocol EvaluationPeriodicScheduler: Sendable {
 final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @unchecked Sendable {
 
     private let fetchCoordinator: EvaluationFetchCoordinator
-    private let eventsManager: SplitEventsManager
+    private let observer: Observer
     private let target: Target
     private let filters: EvaluationFilters?
     private let intervalSeconds: Int
@@ -18,9 +18,9 @@ final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @un
     private var isRunning = false
     private let lock = NSLock()
 
-    init(fetchCoordinator: EvaluationFetchCoordinator, eventsManager: SplitEventsManager, target: Target, filters: EvaluationFilters?, intervalSeconds: Int) {
+    init(fetchCoordinator: EvaluationFetchCoordinator, observer: Observer, target: Target, filters: EvaluationFilters?, intervalSeconds: Int) {
         self.fetchCoordinator = fetchCoordinator
-        self.eventsManager = eventsManager
+        self.observer = observer
         self.target = target
         self.filters = filters
         self.intervalSeconds = intervalSeconds
@@ -57,7 +57,7 @@ final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @un
                     let evaluations = try await self.fetchCoordinator.fetchIfNeeded(target: self.target, filters: self.filters, reason: .periodic)
                     if !evaluations.isEmpty {
                         let metadata = SdkUpdateMetadata(type: .flagsUpdate, names: evaluations.map { $0.flag })
-                        self.eventsManager.notifyInternalEvent(.evaluationsUpdated(metadata))
+                        try? self.observer.notify(event: .evaluationsUpdated(metadata))
                     }
                 } catch {
                     Logger.e("EvaluationPeriodicScheduler: Fetch failed: \(error)")
