@@ -208,6 +208,8 @@ extension DefaultSplitEventsManager: Observer {
                 notifyInternalEvent(.evaluationsLoadedFromCache(metadata))
             case .sdkReadyTimeoutReached:
                 notifyInternalEvent(.sdkReadyTimeoutReached)
+            default:
+                break
         }
     }
 }

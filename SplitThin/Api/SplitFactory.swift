@@ -87,9 +87,10 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     @discardableResult
     private func createClient(target: Target) -> SplitClient {
 
-        let eventDispatcher = EventDispatcher()
+        let eventDispatcher = EventDispatcher() // CompositeObserver in the spec
         let eventsManager = DefaultSplitEventsManager(config: config)
-        eventDispatcher.register(observer: eventsManager)
+        eventDispatcher.register(eventsManager)
+        eventDispatcher.register(LoggingObserver())
 
         let periodicScheduler = DefaultEvaluationPeriodicScheduler(fetchCoordinator: fetchCoordinator, observer: eventDispatcher, target: target, filters: evaluationFilters, intervalSeconds: config.evaluationRefreshRate)
         let streaming = DefaultStreaming(fetchCoordinator: fetchCoordinator, observer: eventDispatcher, secureHttpClient: secureHttpClient, target: target)

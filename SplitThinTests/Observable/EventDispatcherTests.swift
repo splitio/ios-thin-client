@@ -13,8 +13,8 @@ final class EventDispatcherTests: XCTestCase {
     func testNotifyDispatchesToAllObservers() {
         let observer1 = ObserverMock()
         let observer2 = ObserverMock()
-        dispatcher.register(observer: observer1)
-        dispatcher.register(observer: observer2)
+        dispatcher.register(observer1)
+        dispatcher.register(observer2)
 
         dispatcher.notify(event: .sdkReadyTimeoutReached)
 
@@ -29,8 +29,8 @@ final class EventDispatcherTests: XCTestCase {
     func testFailingObserverDoesNotBlockOthers() {
         let failing = FailingObserverMock()
         let healthy = ObserverMock()
-        dispatcher.register(observer: failing)
-        dispatcher.register(observer: healthy)
+        dispatcher.register(failing)
+        dispatcher.register(healthy)
 
         dispatcher.notify(event: .sdkReadyTimeoutReached)
 
@@ -39,7 +39,7 @@ final class EventDispatcherTests: XCTestCase {
 
     func testMultipleEventsDeliveredInOrder() {
         let observer = ObserverMock()
-        dispatcher.register(observer: observer)
+        dispatcher.register(observer)
 
         dispatcher.notify(event: .sdkReadyTimeoutReached)
         dispatcher.notify(event: .evaluationsUpdated(SdkUpdateMetadata(type: .flagsUpdate, names: ["flag1"])))

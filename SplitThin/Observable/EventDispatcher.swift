@@ -5,14 +5,21 @@ protocol Observer: Sendable {
     func notify(event: ObservableEvent) throws
 }
 
+// This component is "CompositeObserver" in the spec
 final class EventDispatcher: Observer, @unchecked Sendable {
 
     private var observers = [Observer]()
     private let lock = NSLock()
 
-    func register(observer: Observer) {
+    func register(_ observer: Observer) {
         withLock(lock) {
             observers.append(observer)
+        }
+    }
+
+    func unregisterAll() {
+        withLock(lock) {
+            observers.removeAll()
         }
     }
 
