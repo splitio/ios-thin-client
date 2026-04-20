@@ -56,10 +56,9 @@ final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @un
                 self.observer.notify(event: .pollTriggered(rate: self.intervalSeconds))
 
                 do {
-                    let evaluations = try await self.fetchCoordinator.fetchIfNeeded(target: self.target, filters: self.filters, reason: .periodic)
-                    if !evaluations.isEmpty {
-                        let metadata = SdkUpdateMetadata(type: .flagsUpdate, names: evaluations.map { $0.flag })
-                        try? self.observer.notify(event: .evaluationsUpdated(metadata))
+                    let result = try await self.fetchCoordinator.fetchIfNeeded(target: self.target, filters: self.filters, reason: .periodic)
+                    if !result.evaluations.isEmpty {
+                        self.observer.notify(event: .evaluationsUpdated(SdkUpdateMetadata(type: .flagsUpdate, names: result.evaluations.map { $0.flag }, changeNumber: result.changeNumber)))
                     }
                 } catch {
                     Logger.e("EvaluationPeriodicScheduler: Fetch failed: \(error)")

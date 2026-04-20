@@ -7,7 +7,8 @@ protocol EvaluationRepository: Sendable {
     func getEvaluationsByFlagSets(_ flagSets: [String], target: Target) -> [StoredEvaluation]
     func getFlagNames(target: Target) -> [String]
     func setTarget(_ target: Target)
-    func initialize(target: Target) async throws
+    @discardableResult
+    func initialize(target: Target) async throws -> FetchResult
 }
 
 final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendable {
@@ -56,17 +57,19 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
         Task { [weak self] in
             guard let self else { return }
             do {
-                let evaluations = try await self.fetchCoordinator.fetchIfNeeded(target: target, filters: self.evaluationFilters, reason: .targetSwitch)
-                self.cacheEvaluations(evaluations, for: target)
+                let result = try await self.fetchCoordinator.fetchIfNeeded(target: target, filters: self.evaluationFilters, reason: .targetSwitch)
+                self.cacheEvaluations(result.evaluations, for: target)
             } catch {
                 Logger.e("EvaluationRepository: Failed to fetch evaluations for target \(target.matchingKey): \(error)")
             }
         }
     }
 
-    func initialize(target: Target) async throws {
-        let evaluations = try await fetchCoordinator.fetchIfNeeded(target: target, filters: evaluationFilters, reason: .initialization)
-        cacheEvaluations(evaluations, for: target)
+    @discardableResult
+    func initialize(target: Target) async throws -> FetchResult {
+        let result = try await fetchCoordinator.fetchIfNeeded(target: target, filters: evaluationFilters, reason: .initialization)
+        cacheEvaluations(result.evaluations, for: target)
+        return result
     }
 
     func clear() {

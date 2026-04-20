@@ -47,9 +47,9 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
             Logger.d("SyncManager: Starting with mode \(syncMode)")
 
             do {
-                try await evaluationRepository.initialize(target: target)
+                let result = try await evaluationRepository.initialize(target: target)
 
-                observer.notify(event: .evaluationsUpdated(SdkUpdateMetadata(type: .flagsUpdate, names: evaluationRepository.getFlagNames(target: target))))
+                observer.notify(event: .evaluationsUpdated(SdkUpdateMetadata(type: .flagsUpdate, names: result.evaluations.map { $0.flag }, changeNumber: result.changeNumber)))
 
                 establishLink()
             } catch {

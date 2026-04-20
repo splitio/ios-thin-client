@@ -12,6 +12,11 @@ enum EvaluationFetchError: Error {
     case fetchFailed
 }
 
+struct FetchResult: Sendable {
+    let evaluations: [EvaluationResult]
+    let changeNumber: Int64?
+}
+
 private struct FetchKey: Hashable {
     let target: Target
     let filters: EvaluationFilters?
@@ -20,7 +25,7 @@ private struct FetchKey: Hashable {
 public protocol EvaluationFetchCoordinator: Sendable {
     /// Coordinates fetch requests so only one relevant fetch runs at a time.
     /// Returns the fetched evaluations (can be empty on success). Throws on failure.
-    func fetchIfNeeded(target: Target, filters: EvaluationFilters?, reason: FetchReason) async throws -> [EvaluationResult]
+    func fetchIfNeeded(target: Target, filters: EvaluationFilters?, reason: FetchReason) async throws -> FetchResult
 }
 
 final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unchecked Sendable {
@@ -29,7 +34,7 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
     private let observer: Observer // For logging & telemetry
     private let storage: EvaluationWriteStorage?
 
-    private var inFlightTasks = [FetchKey: Task<[EvaluationResult], Error>]()
+    private var inFlightTasks = [FetchKey: Task<FetchResult, Error>]()
     private let lock = NSLock()
 
     init(provider: EvaluationProvider, observer: Observer, storage: EvaluationWriteStorage? = nil) {
@@ -39,13 +44,13 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
     }
 
     @discardableResult
-    func fetchIfNeeded(target: Target, filters: EvaluationFilters?, reason: FetchReason) async throws -> [EvaluationResult] {
+    func fetchIfNeeded(target: Target, filters: EvaluationFilters?, reason: FetchReason) async throws -> FetchResult {
         observer.notify(event: .evalFetchRequested(reason: reason))
 
         let key = FetchKey(target: target, filters: filters)
 
         // Atomic tasks
-        let task: Task<[EvaluationResult], Error> = withLock(lock) {
+        let task: Task<FetchResult, Error> = withLock(lock) {
 
             // 1. Check for deduplications
             if let existing = inFlightTasks[key] {
@@ -55,7 +60,7 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
             }
 
             // 2. Create request and add to the list (for deduplication)
-            let newTask = Task<[EvaluationResult], Error> { [weak self] in
+            let newTask = Task<FetchResult, Error> { [weak self] in
                 guard let self else { throw EvaluationFetchError.fetchFailed }
                 defer { withLock(self.lock) { self.inFlightTasks.removeValue(forKey: key) } }
                 return try await self.performFetch(target: target, filters: filters, reason: reason)
@@ -67,7 +72,7 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
         return try await task.value
     }
 
-    private func performFetch(target: Target, filters: EvaluationFilters?, reason: FetchReason) async throws -> [EvaluationResult] {
+    private func performFetch(target: Target, filters: EvaluationFilters?, reason: FetchReason) async throws -> FetchResult {
         observer.notify(event: .evalFetchStarted(reason: reason))
 
         guard let result = await provider.fetch(target: target, filters: filters) else {
@@ -76,15 +81,17 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
             throw EvaluationFetchError.fetchFailed
         }
 
-        observer.notify(event: .evalFetchSucceeded(changeNumber: result.till ?? -1))
+        let changeNumber = result.till
+        observer.notify(event: .evalFetchSucceeded(changeNumber: changeNumber ?? -1))
 
         if let storage {
+
 
             observer.notify(event: .evalStorageWriteScheduled)
             
             Task { // Non-blocking persistence
                 do {
-                    try await storage.upsert(change: EvaluationChange(target: target, changeNumber: result.till ?? -1, evaluations: result.evaluations))
+                    try await storage.upsert(change: EvaluationChange(target: target, changeNumber: changeNumber ?? -1, evaluations: result.evaluations))
                     self.observer.notify(event: .evalStorageWriteSucceeded)
                 } catch {
                     self.observer.notify(event: .evalStorageWriteFailed)
@@ -95,6 +102,6 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
         observer.notify(event: .evalStorageUpdated(names: result.evaluations.map { $0.flag }))
 
         Logger.d("EvaluationFetchCoordinator: Fetched \(result.evaluations.count) evaluations for \(target.matchingKey) (reason: \(reason))")
-        return result.evaluations
+        return FetchResult(evaluations: result.evaluations, changeNumber: changeNumber)
     }
 }

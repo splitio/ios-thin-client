@@ -35,11 +35,15 @@ final class EvaluationRepositoryMock: EvaluationRepository, @unchecked Sendable 
         setTargetCalls.append(target)
     }
 
-    func initialize(target: Target) async throws {
+    var fetchResultToReturn = FetchResult(evaluations: [], changeNumber: nil)
+
+    @discardableResult
+    func initialize(target: Target) async throws -> FetchResult {
         setTargetCalls.append(target)
         if let error = initializeErrorToThrow {
             throw error
         }
+        return fetchResultToReturn
     }
 
 }
