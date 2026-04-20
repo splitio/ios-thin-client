@@ -83,13 +83,16 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
             return nil
         }
 
-        let secureHttp = secureHttpClient ?? buildSecureHttpClient(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey)
+        let factoryObserver = EventDispatcher()
+        factoryObserver.register(LoggingObserver())
+
+        let secureHttp = secureHttpClient ?? buildSecureHttpClient(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey, observer: factoryObserver)
         let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttp)
-        let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider)
+        let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider, observer: factoryObserver)
         let evaluationRepository = DefaultEvaluationRepository(fetchCoordinator: fetchCoordinator, evaluationFilters: evaluationFilters)
         let splitManager = DefaultSplitManager(evaluationRepository: evaluationRepository, target: target)
 
-        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, splitManager: splitManager)
+        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, splitManager: splitManager, factoryObserver: factoryObserver)
     }
 
     private func configureLogger() {
@@ -98,12 +101,12 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         }
     }
 
-    private func buildSecureHttpClient(serviceEndpoints: ServiceEndpoints, sdkKey: String) -> SecureHttpClient {
+    private func buildSecureHttpClient(serviceEndpoints: ServiceEndpoints, sdkKey: String, observer: Observer) -> SecureHttpClient {
         let http = httpClient ?? DefaultHttpClient.shared
-        let retryable = retryableHttpClient ?? DefaultRetryableHttpClient(httpClient: http)
+        let retryable = retryableHttpClient ?? DefaultRetryableHttpClient(httpClient: http, observer: observer)
         let storage = DefaultCredentialStorage()
-        let fetcher = DefaultCredentialFetcher(retryableHttpClient: retryable, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey)
-        let auth = authProvider ?? DefaultAuthProvider(credentialStorage: storage, credentialFetcher: fetcher)
+        let fetcher = DefaultCredentialFetcher(retryableHttpClient: retryable, observer: observer, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey)
+        let auth = authProvider ?? DefaultAuthProvider(credentialStorage: storage, credentialFetcher: fetcher, observer: observer)
         return DefaultSecureHttpClient(retryableHttpClient: retryable, authProvider: auth, serviceEndpoints: serviceEndpoints)
     }
 }

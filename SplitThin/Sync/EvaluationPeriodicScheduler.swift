@@ -9,7 +9,7 @@ protocol EvaluationPeriodicScheduler: Sendable {
 final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @unchecked Sendable {
 
     private let fetchCoordinator: EvaluationFetchCoordinator
-    private let observer: Observer
+    private let observer: Observer // For SDK events & logging
     private let target: Target
     private let filters: EvaluationFilters?
     private let intervalSeconds: Int
@@ -52,6 +52,8 @@ final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @un
                     Logger.d("EvaluationPeriodicScheduler: Sleep cancelled, exiting")
                     break
                 }
+
+                self.observer.notify(event: .pollTriggered(rate: self.intervalSeconds))
 
                 do {
                     let evaluations = try await self.fetchCoordinator.fetchIfNeeded(target: self.target, filters: self.filters, reason: .periodic)

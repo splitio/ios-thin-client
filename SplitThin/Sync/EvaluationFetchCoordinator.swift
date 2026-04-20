@@ -26,18 +26,22 @@ public protocol EvaluationFetchCoordinator: Sendable {
 final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unchecked Sendable {
 
     private let provider: EvaluationProvider
+    private let observer: Observer // For logging & telemetry
     private let storage: EvaluationWriteStorage?
 
     private var inFlightTasks = [FetchKey: Task<[EvaluationResult], Error>]()
     private let lock = NSLock()
 
-    init(provider: EvaluationProvider, storage: EvaluationWriteStorage? = nil) {
+    init(provider: EvaluationProvider, observer: Observer, storage: EvaluationWriteStorage? = nil) {
         self.provider = provider
+        self.observer = observer
         self.storage = storage
     }
 
     @discardableResult
     func fetchIfNeeded(target: Target, filters: EvaluationFilters?, reason: FetchReason) async throws -> [EvaluationResult] {
+        observer.notify(event: .evalFetchRequested(reason: reason))
+
         let key = FetchKey(target: target, filters: filters)
 
         // Atomic tasks
@@ -46,6 +50,7 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
             // 1. Check for deduplications
             if let existing = inFlightTasks[key] {
                 Logger.d("EvaluationFetchCoordinator: Awaiting in-flight fetch for \(target.matchingKey) (reason: \(reason))")
+                observer.notify(event: .evalFetchDeduped(reason: reason))
                 return existing
             }
 
@@ -63,22 +68,31 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
     }
 
     private func performFetch(target: Target, filters: EvaluationFilters?, reason: FetchReason) async throws -> [EvaluationResult] {
+        observer.notify(event: .evalFetchStarted(reason: reason))
+
         guard let result = await provider.fetch(target: target, filters: filters) else {
             Logger.d("EvaluationFetchCoordinator: Fetch failed for \(target.matchingKey) (reason: \(reason))")
+            observer.notify(event: .evalFetchFailed)
             throw EvaluationFetchError.fetchFailed
         }
 
-        if let storage {
-            Task { // Non-blocking persistence
-                let change = EvaluationChange(
-                    target: target,
-                    changeNumber: result.till ?? -1,
-                    evaluations: result.evaluations
-                )
+        observer.notify(event: .evalFetchSucceeded(changeNumber: result.till ?? -1))
 
-                try? await storage.upsert(change: change)
+        if let storage {
+
+            observer.notify(event: .evalStorageWriteScheduled)
+            
+            Task { // Non-blocking persistence
+                do {
+                    try await storage.upsert(change: EvaluationChange(target: target, changeNumber: result.till ?? -1, evaluations: result.evaluations))
+                    self.observer.notify(event: .evalStorageWriteSucceeded)
+                } catch {
+                    self.observer.notify(event: .evalStorageWriteFailed)
+                }
             }
         }
+
+        observer.notify(event: .evalStorageUpdated(names: result.evaluations.map { $0.flag }))
 
         Logger.d("EvaluationFetchCoordinator: Fetched \(result.evaluations.count) evaluations for \(target.matchingKey) (reason: \(reason))")
         return result.evaluations

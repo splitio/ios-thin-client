@@ -165,6 +165,7 @@ final class DefaultRetryableHttpClientTest: XCTestCase {
     private func createClient(policies: RetryPoliciesByCategory? = nil) -> DefaultRetryableHttpClient {
         DefaultRetryableHttpClient(
             httpClient: httpClientMock,
+            observer: ObserverSpy(),
             policies: policies,
             backoffCounterFactory: { [backoffCounterMock] _ in backoffCounterMock! }
         )

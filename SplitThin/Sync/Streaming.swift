@@ -10,7 +10,7 @@ final class DefaultStreaming: Streaming, @unchecked Sendable {
 
     // Components
     private let fetchCoordinator: EvaluationFetchCoordinator
-    private let observer: Observer
+    private let observer: Observer // For SDK events & logging
     private let secureHttpClient: SecureHttpClient
     private let target: Target
 
@@ -26,10 +26,12 @@ final class DefaultStreaming: Streaming, @unchecked Sendable {
     }
 
     func start() async {
+        observer.notify(event: .streamingConnectStarted)
         // TODO: Implement SSE streaming connection
     }
 
     func stop() async {
+        observer.notify(event: .streamingDisconnected)
         // TODO: Implement SSE streaming disconnection
     }
 }
@@ -42,6 +44,7 @@ extension DefaultStreaming: MobileSync {
 
             // TODO: Disconnect SSE when implemented
             isPaused = true
+            observer.notify(event: .streamingPaused)
             Logger.d("Streaming: Paused")
         }
     }
@@ -52,6 +55,7 @@ extension DefaultStreaming: MobileSync {
 
             // TODO: Reconnect SSE when implemented
             isPaused = false
+            observer.notify(event: .streamingResumed)
             Logger.d("Streaming: Resumed")
         }
     }

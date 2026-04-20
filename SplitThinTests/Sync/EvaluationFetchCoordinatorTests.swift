@@ -12,7 +12,7 @@ final class DefaultEvaluationFetchCoordinatorTest: XCTestCase {
     override func setUp() {
         super.setUp()
         provider = EvaluationProviderMock()
-        coordinator = DefaultEvaluationFetchCoordinator(provider: provider)
+        coordinator = DefaultEvaluationFetchCoordinator(provider: provider, observer: ObserverSpy())
     }
 
     func testFetchReturnsEvaluations() async throws {
