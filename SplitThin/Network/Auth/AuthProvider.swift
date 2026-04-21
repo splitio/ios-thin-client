@@ -1,6 +1,7 @@
 import Foundation
 
 protocol AuthProvider: Sendable {
+    func register(target: String)
     func getCredential(for target: String) async throws -> JwtCredential
     func invalidate(for target: String)
 }
@@ -10,6 +11,7 @@ final class DefaultAuthProvider: AuthProvider, @unchecked Sendable {
     private let credentialStorage: CredentialStorage
     private let credentialFetcher: CredentialFetcher
 
+    private var registeredTargets = Set<String>()
     private var pendingFetches = [String: [CheckedContinuation<JwtCredential, Error>]]()
     private let lock = NSLock()
 
@@ -18,52 +20,78 @@ final class DefaultAuthProvider: AuthProvider, @unchecked Sendable {
         self.credentialFetcher = credentialFetcher
     }
 
+    func register(target: String) {
+        let oldKey: String? = withLock(lock) {
+            let oldKey = registeredTargets.isEmpty ? nil : compositeKeyUnsafe()
+            let isNew = registeredTargets.insert(target).inserted
+            guard isNew, registeredTargets.count > 1 else { return nil }
+            return oldKey
+        }
+
+        if let oldKey {
+            credentialStorage.invalidate(for: oldKey)
+        }
+    }
+
     func getCredential(for target: String) async throws -> JwtCredential {
-        if let cached = credentialStorage.get(for: target) {
+        let key = compositeKey()
+
+        if let cached = credentialStorage.get(for: key) {
             return cached
         }
 
         return try await withCheckedThrowingContinuation { continuation in
             lock.lock()
 
-            if let cached = credentialStorage.get(for: target) {
+            if let cached = credentialStorage.get(for: key) {
                 lock.unlock()
                 continuation.resume(returning: cached)
                 return
             }
 
-            let isFirstRequest = pendingFetches[target] == nil || pendingFetches[target]!.isEmpty
-            if pendingFetches[target] == nil {
-                pendingFetches[target] = []
+            let isFirstRequest = pendingFetches[key] == nil || pendingFetches[key]!.isEmpty
+            if pendingFetches[key] == nil {
+                pendingFetches[key] = []
             }
-            pendingFetches[target]!.append(continuation)
+            pendingFetches[key]!.append(continuation)
             lock.unlock()
 
             if isFirstRequest {
                 Task { [weak self] in
-                    await self?.performFetch(for: target)
+                    await self?.performFetch(for: key)
                 }
             }
         }
     }
 
     func invalidate(for target: String) {
-        credentialStorage.invalidate(for: target)
+        credentialStorage.invalidate(for: compositeKey())
     }
 
-    private func performFetch(for target: String) async {
+    // MARK: - Private
+
+    private func compositeKey() -> String {
+        withLock(lock) { compositeKeyUnsafe() }
+    }
+
+    private func compositeKeyUnsafe() -> String {
+        registeredTargets.sorted().joined(separator: ",")
+    }
+
+    private func performFetch(for key: String) async {
+        let users = key.split(separator: ",").map(String.init)
         do {
-            let credential = try await credentialFetcher.fetchCredential(for: [target])
-            credentialStorage.save(credential, for: target)
-            resumePending(for: target, with: .success(credential))
+            let credential = try await credentialFetcher.fetchCredential(for: users)
+            credentialStorage.save(credential, for: key)
+            resumePending(for: key, with: .success(credential))
         } catch {
-            resumePending(for: target, with: .failure(error))
+            resumePending(for: key, with: .failure(error))
         }
     }
 
-    private func resumePending(for target: String, with result: Result<JwtCredential, Error>) {
+    private func resumePending(for key: String, with result: Result<JwtCredential, Error>) {
         let continuations = withLock(lock) {
-            pendingFetches.removeValue(forKey: target) ?? []
+            pendingFetches.removeValue(forKey: key) ?? []
         }
 
         for continuation in continuations {

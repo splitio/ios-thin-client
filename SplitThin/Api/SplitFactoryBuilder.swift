@@ -26,6 +26,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
     // Internals for testing
     var secureHttpClient: SecureHttpClient?
     var retryableHttpClient: RetryableHttpClient?
+    var credentialStorage: CredentialStorage?
 
     public override init() {
         super.init()
@@ -83,10 +84,9 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
             return nil
         }
 
-        let secureHttp = secureHttpClient ?? buildSecureHttpClient(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey)
-        let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttp)
-
         let databaseName = Self.databaseName(prefix: config.prefix, apiKey: sdkKey.sdkKey)
+        let (secureHttp, resolvedAuth) = buildSecureHttpClient(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey)
+        let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttp)
         let coreDataStorage = CoreDataStorage(databaseName: databaseName)
         let evaluationStorage = PersistentStorage(storage: coreDataStorage)
 
@@ -94,7 +94,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         let evaluationRepository = DefaultEvaluationRepository(fetchCoordinator: fetchCoordinator, evaluationFilters: evaluationFilters)
         let splitManager = DefaultSplitManager(evaluationRepository: evaluationRepository, target: target)
 
-        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, evaluationStorage: evaluationStorage, splitManager: splitManager)
+        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, authProvider: resolvedAuth, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, evaluationStorage: evaluationStorage, splitManager: splitManager)
     }
 
     private func configureLogger() {
@@ -103,13 +103,14 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         }
     }
 
-    private func buildSecureHttpClient(serviceEndpoints: ServiceEndpoints, sdkKey: String) -> SecureHttpClient {
+    private func buildSecureHttpClient(serviceEndpoints: ServiceEndpoints, sdkKey: String) -> (SecureHttpClient, AuthProvider) {
         let http = httpClient ?? DefaultHttpClient.shared
         let retryable = retryableHttpClient ?? DefaultRetryableHttpClient(httpClient: http)
-        let storage = DefaultCredentialStorage()
+        let credStorage = credentialStorage ?? KeychainCredentialStorage(keychainKey: "\(Self.databaseName(prefix: config.prefix, apiKey: sdkKey))_jwt") // We reuse the logic for unique names per key from the DB
         let fetcher = DefaultCredentialFetcher(retryableHttpClient: retryable, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey)
-        let auth = authProvider ?? DefaultAuthProvider(credentialStorage: storage, credentialFetcher: fetcher)
-        return DefaultSecureHttpClient(retryableHttpClient: retryable, authProvider: auth, serviceEndpoints: serviceEndpoints)
+        let auth = authProvider ?? DefaultAuthProvider(credentialStorage: credStorage, credentialFetcher: fetcher)
+        let secureHttp = secureHttpClient ?? DefaultSecureHttpClient(retryableHttpClient: retryable, authProvider: auth, serviceEndpoints: serviceEndpoints)
+        return (secureHttp, auth)
     }
 
     private static let kDbMagicCharsCount = 4

@@ -7,8 +7,15 @@ final class AuthProviderMock: AuthProvider, @unchecked Sendable {
     var errorToThrow: Error?
     var getCredentialCallCount = 0
     var invalidateCallCount = 0
+    var registerCallCount = 0
     var lastTargetRequested: String?
     var lastTargetInvalidated: String?
+    var lastTargetRegistered: String?
+
+    func register(target: String) {
+        registerCallCount += 1
+        lastTargetRegistered = target
+    }
 
     func getCredential(for target: String) async throws -> JwtCredential {
         getCredentialCallCount += 1

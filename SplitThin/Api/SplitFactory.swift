@@ -16,6 +16,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     private let config: SplitClientConfig
     private let evaluationFilters: EvaluationFilters?
     private let secureHttpClient: SecureHttpClient
+    private let authProvider: AuthProvider
     private let evaluationRepository: EvaluationRepository
     private let fetchCoordinator: EvaluationFetchCoordinator
     private let evaluationStorage: EvaluationReadStorage
@@ -35,13 +36,14 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         Version.sdk
     }
 
-    init(sdkKey: SdkKey, target: Target, config: SplitClientConfig, evaluationFilters: EvaluationFilters?, secureHttpClient: SecureHttpClient, evaluationRepository: EvaluationRepository, fetchCoordinator: EvaluationFetchCoordinator, evaluationStorage: EvaluationReadStorage, splitManager: DefaultSplitManager) {
+    init(sdkKey: SdkKey, target: Target, config: SplitClientConfig, evaluationFilters: EvaluationFilters?, secureHttpClient: SecureHttpClient, authProvider: AuthProvider, evaluationRepository: EvaluationRepository, fetchCoordinator: EvaluationFetchCoordinator, evaluationStorage: EvaluationReadStorage, splitManager: DefaultSplitManager) {
         self.sdkKey = sdkKey
         self.defaultTarget = target
         self.defaultKey = target.key
         self.config = config
         self.evaluationFilters = evaluationFilters
         self.secureHttpClient = secureHttpClient
+        self.authProvider = authProvider
         self.evaluationRepository = evaluationRepository
         self.fetchCoordinator = fetchCoordinator
         self.evaluationStorage = evaluationStorage
@@ -94,6 +96,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
 
     @discardableResult
     private func createClient(target: Target) -> SplitClient {
+        authProvider.register(target: target.matchingKey)
 
         // 1. Wire up just the per client components
         let eventsManager = DefaultSplitEventsManager(config: config)

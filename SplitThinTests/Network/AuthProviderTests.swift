@@ -15,6 +15,7 @@ final class DefaultAuthProviderTest: XCTestCase {
     }
 
     func testReturnsCachedCredentialWithoutFetching() async throws {
+        provider.register(target: "user1")
         let cached = makeCredential(token: "cached-token")
         storageMock.credentials["user1"] = cached
 
@@ -25,6 +26,7 @@ final class DefaultAuthProviderTest: XCTestCase {
     }
 
     func testFetchesWhenNoCachedCredential() async throws {
+        provider.register(target: "user1")
         let fresh = makeCredential(token: "fresh-token")
         fetcherMock.credentialToReturn = fresh
 
@@ -35,7 +37,8 @@ final class DefaultAuthProviderTest: XCTestCase {
         XCTAssertEqual(fetcherMock.lastUsersRequested, ["user1"])
     }
 
-    func testSavesCredentialAfterFetch() async throws {
+    func testSavesCredentialWithCompositeKey() async throws {
+        provider.register(target: "user1")
         let fresh = makeCredential(token: "fresh-token")
         fetcherMock.credentialToReturn = fresh
 
@@ -46,6 +49,7 @@ final class DefaultAuthProviderTest: XCTestCase {
     }
 
     func testPropagatesErrorFromFetcher() async {
+        provider.register(target: "user1")
         fetcherMock.errorToThrow = CredentialFetcherError.invalidAuthResponse
 
         do {
@@ -60,7 +64,8 @@ final class DefaultAuthProviderTest: XCTestCase {
         }
     }
 
-    func testInvalidateDelegatesToStorage() {
+    func testInvalidateUsesCompositeKey() {
+        provider.register(target: "user1")
         provider.invalidate(for: "user1")
 
         XCTAssertEqual(storageMock.invalidateCallCount, 1)
@@ -68,6 +73,7 @@ final class DefaultAuthProviderTest: XCTestCase {
     }
 
     func testConcurrentRequestsShareSingleFetch() async throws {
+        provider.register(target: "user1")
         let credential = makeCredential(token: "shared-token")
         fetcherMock.credentialToReturn = credential
         fetcherMock.delay = 0.1
@@ -84,17 +90,34 @@ final class DefaultAuthProviderTest: XCTestCase {
         XCTAssertEqual(fetcherMock.fetchCallCount, 1)
     }
 
-    func testDifferentTargetsFetchIndependently() async throws {
+    func testCompositeKeyUsesAllRegisteredTargetsSorted() async throws {
+        provider.register(target: "charlie")
+        provider.register(target: "alpha")
+        provider.register(target: "bravo")
+        let cred = makeCredential(token: "composite-token")
+        fetcherMock.credentialToReturn = cred
+
+        try await provider.getCredential(for: "alpha")
+
+        XCTAssertEqual(fetcherMock.lastUsersRequested, ["alpha", "bravo", "charlie"])
+        XCTAssertNotNil(storageMock.credentials["alpha,bravo,charlie"])
+    }
+
+    func testRegisterNewTargetInvalidatesOldCompositeKey() async throws {
+        provider.register(target: "user1")
         let cred = makeCredential(token: "token")
         fetcherMock.credentialToReturn = cred
 
         try await provider.getCredential(for: "user1")
-        try await provider.getCredential(for: "user2")
+        XCTAssertEqual(storageMock.invalidateCallCount, 0)
 
-        XCTAssertEqual(fetcherMock.fetchCallCount, 2)
+        provider.register(target: "user2")
+        XCTAssertEqual(storageMock.invalidateCallCount, 1)
+        XCTAssertEqual(storageMock.lastTargetInvalidate, "user1")
     }
 
     func testSecondCallUsesCacheAfterFirstFetch() async throws {
+        provider.register(target: "user1")
         let cred = makeCredential(token: "token")
         fetcherMock.credentialToReturn = cred
 
@@ -105,6 +128,7 @@ final class DefaultAuthProviderTest: XCTestCase {
     }
 
     func testFetchesAgainAfterInvalidate() async throws {
+        provider.register(target: "user1")
         let cred = makeCredential(token: "token")
         fetcherMock.credentialToReturn = cred
 
@@ -113,6 +137,13 @@ final class DefaultAuthProviderTest: XCTestCase {
         try await provider.getCredential(for: "user1")
 
         XCTAssertEqual(fetcherMock.fetchCallCount, 2)
+    }
+
+    func testRegisterSameTargetTwiceDoesNotInvalidate() {
+        provider.register(target: "user1")
+        provider.register(target: "user1")
+
+        XCTAssertEqual(storageMock.invalidateCallCount, 0)
     }
 
     // MARK: - Helpers

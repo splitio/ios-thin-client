@@ -20,6 +20,7 @@ func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync
     // Factory
     let builder = DefaultSplitFactoryBuilder()
     builder.setSecureHttpClient(httpClient)
+    builder.setCredentialStorage(DefaultCredentialStorage())
 
     guard let factory = builder.setSdkKey(SdkKey("test-sdk-key"))
                                .setTarget(target)

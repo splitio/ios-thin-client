@@ -17,6 +17,12 @@ extension DefaultSplitFactoryBuilder {
         self.retryableHttpClient = client
         return self
     }
+
+    @discardableResult
+    func setCredentialStorage(_ storage: CredentialStorage) -> DefaultSplitFactoryBuilder {
+        self.credentialStorage = storage
+        return self
+    }
 }
 
 extension SplitConfigBuilder {
