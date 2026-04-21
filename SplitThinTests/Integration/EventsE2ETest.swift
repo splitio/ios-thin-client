@@ -59,7 +59,7 @@ final class EventsE2ETest: XCTestCase {
 
         XCTAssertNotNil(listener.lastReadyMetadata)
         XCTAssertFalse(listener.lastReadyMetadata?.isInitialCacheLoad ?? true)
-        XCTAssertNil(listener.lastReadyMetadata?.lastUpdateTimestamp)
+        XCTAssertEqual(listener.lastReadyMetadata?.lastUpdateTimestamp, 12345)
     }
 
     func testSdkReadyFiresOnlyOnce() async throws {

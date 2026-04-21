@@ -114,14 +114,6 @@ final class PeriodicSchedulerMock: EvaluationPeriodicScheduler, @unchecked Senda
     }
 }
 
-final class ObserverSpy: Observer, @unchecked Sendable {
-    var notifiedEvents = [ObservableEvent]()
-
-    func notify(event: ObservableEvent) {
-        notifiedEvents.append(event)
-    }
-}
-
 final class StreamingMock: Streaming, @unchecked Sendable {
     var startCalls = 0
     var stopCalls = 0
