@@ -86,7 +86,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         let secureHttp = secureHttpClient ?? buildSecureHttpClient(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey)
         let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttp)
 
-        let databaseName = config.prefix.map { "split_\($0)" } ?? "split"
+        let databaseName = Self.databaseName(prefix: config.prefix, apiKey: sdkKey.sdkKey)
         let coreDataStorage = CoreDataStorage(databaseName: databaseName)
         let evaluationStorage = PersistentStorage(storage: coreDataStorage)
 
@@ -110,5 +110,20 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         let fetcher = DefaultCredentialFetcher(retryableHttpClient: retryable, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey)
         let auth = authProvider ?? DefaultAuthProvider(credentialStorage: storage, credentialFetcher: fetcher)
         return DefaultSecureHttpClient(retryableHttpClient: retryable, authProvider: auth, serviceEndpoints: serviceEndpoints)
+    }
+
+    private static let kDbMagicCharsCount = 4
+
+    static func databaseName(prefix: String?, apiKey: String) -> String {
+        let keyFragment: String
+        if apiKey.count >= kDbMagicCharsCount * 2 {
+            keyFragment = "\(apiKey.prefix(kDbMagicCharsCount))\(apiKey.suffix(kDbMagicCharsCount))"
+        } else {
+            keyFragment = apiKey
+        }
+        if let prefix {
+            return "split_\(prefix)_\(keyFragment)"
+        }
+        return "split_\(keyFragment)"
     }
 }
