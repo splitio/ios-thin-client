@@ -15,6 +15,7 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
 
     private let syncMode: SyncMode
     private let evaluationRepository: EvaluationRepository
+    private let evaluationStorage: EvaluationReadStorage
     private let eventsManager: SplitEventsManager
     private let polling: EvaluationPeriodicScheduler
     private let streaming: Streaming
@@ -24,9 +25,10 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
     private var isPaused = false
     private let lock = NSLock()
 
-    init(syncMode: SyncMode, evaluationRepository: EvaluationRepository, eventsManager: SplitEventsManager, periodicScheduler: EvaluationPeriodicScheduler, streaming: Streaming, target: Target, appStateManager: AppStateManager = DefaultAppStateManager.instance) {
+    init(syncMode: SyncMode, evaluationRepository: EvaluationRepository, evaluationStorage: EvaluationReadStorage, eventsManager: SplitEventsManager, periodicScheduler: EvaluationPeriodicScheduler, streaming: Streaming, target: Target, appStateManager: AppStateManager = DefaultAppStateManager.instance) {
         self.syncMode = syncMode
         self.evaluationRepository = evaluationRepository
+        self.evaluationStorage = evaluationStorage
         self.eventsManager = eventsManager
         self.polling = periodicScheduler
         self.streaming = streaming
@@ -42,10 +44,14 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
 
     func start() {
 
+        // Non-blocking: load from storage and emit cache event
+        Task { [weak self] in
+            await self?.loadFromStorage()
+        }
+
+        Logger.d("SyncManager: Starting with mode \(syncMode)")
+
         Task { // Fire and forget
-
-            Logger.d("SyncManager: Starting with mode \(syncMode)")
-
             do {
                 try await evaluationRepository.initialize(target: target)
 
@@ -59,6 +65,16 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
                 Logger.e("SyncManager: Initial fetch failed: \(error)")
             }
         }
+    }
+
+    private func loadFromStorage() async {
+        let cachedEvaluations = await evaluationStorage.getAll(target: target)
+        let changeNumber = await evaluationStorage.lastChangeNumber(target: target)
+
+        Logger.d("SyncManager: Loaded \(cachedEvaluations.count) evaluations from cache for \(target.matchingKey)")
+
+        let metadata = SdkReadyFromCacheMetadata(lastUpdateTimestamp: changeNumber, isInitialCacheLoad: true)
+        eventsManager.notifyInternalEvent(.evaluationsLoadedFromCache(metadata))
     }
 
     func stop() async {

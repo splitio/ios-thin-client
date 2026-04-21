@@ -198,6 +198,7 @@ final class AuthE2ETest: XCTestCase {
                                       .set(syncMode: syncMode)
                                       .set(evaluationRefreshRate: refreshRate)
                                       .set(timeout: timeout)
+                                      .set(prefix: "test_\(UUID().uuidString.prefix(8))")
                                       .build()
 
         let builder = DefaultSplitFactoryBuilder()

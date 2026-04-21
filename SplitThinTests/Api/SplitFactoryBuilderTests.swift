@@ -84,4 +84,48 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
 
         XCTAssertNotNil(b4.build())
     }
+
+    // MARK: - databaseName
+
+    func testDatabaseNameWithLongApiKey() {
+        let name = DefaultSplitFactoryBuilder.databaseName(prefix: nil, apiKey: "abcdefghijklmnop")
+
+        XCTAssertEqual(name, "split_abcdmnop")
+    }
+
+    func testDatabaseNameWithExactlyEightCharApiKey() {
+        let name = DefaultSplitFactoryBuilder.databaseName(prefix: nil, apiKey: "12345678")
+
+        XCTAssertEqual(name, "split_12345678")
+    }
+
+    func testDatabaseNameWithShortApiKey() {
+        let name = DefaultSplitFactoryBuilder.databaseName(prefix: nil, apiKey: "abc")
+
+        XCTAssertEqual(name, "split_abc")
+    }
+
+    func testDatabaseNameWithPrefix() {
+        let name = DefaultSplitFactoryBuilder.databaseName(prefix: "myapp", apiKey: "abcdefghijklmnop")
+
+        XCTAssertEqual(name, "split_myapp_abcdmnop")
+    }
+
+    func testDatabaseNameWithPrefixAndShortApiKey() {
+        let name = DefaultSplitFactoryBuilder.databaseName(prefix: "myapp", apiKey: "abc")
+
+        XCTAssertEqual(name, "split_myapp_abc")
+    }
+
+    func testDatabaseNameWithEmptyApiKey() {
+        let name = DefaultSplitFactoryBuilder.databaseName(prefix: nil, apiKey: "")
+
+        XCTAssertEqual(name, "split_")
+    }
+
+    func testDatabaseNameWithNilPrefixAndRealisticKey() {
+        let name = DefaultSplitFactoryBuilder.databaseName(prefix: nil, apiKey: "abc123def456xyz789")
+
+        XCTAssertEqual(name, "split_abc1z789")
+    }
 }

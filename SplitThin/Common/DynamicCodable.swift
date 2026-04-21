@@ -30,4 +30,9 @@ enum Json {
         }
         return try array.map { try T.init(jsonObject: $0) }
     }
+
+    static func encode<T: DynamicEncodable>(_ value: T) throws -> Data {
+        let jsonObject = value.toJsonObject()
+        return try JSONSerialization.data(withJSONObject: jsonObject, options: [])
+    }
 }
