@@ -18,7 +18,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     private let secureHttpClient: SecureHttpClient
     private let evaluationRepository: EvaluationRepository
     private let fetchCoordinator: EvaluationFetchCoordinator
-    private let factoryObserver: Observer // For factory lifecycle logging & telemetry
+    private let observer: Observer // For factory lifecycle logging & telemetry
 
     private var splitManager: DefaultSplitManager?
     private var clients = [Key: SplitClient]()
@@ -44,11 +44,11 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         self.evaluationRepository = evaluationRepository
         self.fetchCoordinator = fetchCoordinator
         self.splitManager = splitManager
-        self.factoryObserver = factoryObserver
+        self.observer = factoryObserver
 
-        factoryObserver.notify(event: .factoryInitStarted)
+        observer.notify(event: .factoryInitStarted)
         createClient(target: target)
-        factoryObserver.notify(event: .factoryInitCompleted)
+        observer.notify(event: .factoryInitCompleted)
     }
 
     public func getClient(_ target: Target? = nil) -> SplitClient {
@@ -76,7 +76,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
 
     public func destroy() async {
         guard !isDestroyed else { return }
-        factoryObserver.notify(event: .destroyStarted)
+        observer.notify(event: .destroyStarted)
         isDestroyed = true
 
         for client in clients.values {
@@ -85,7 +85,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         clients.removeAll()
 
         splitManager = nil
-        factoryObserver.notify(event: .destroyCompleted)
+        observer.notify(event: .destroyCompleted)
     }
 
     // MARK: - Private
@@ -93,7 +93,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     @discardableResult
     private func createClient(target: Target) -> SplitClient {
 
-        let eventDispatcher = EventDispatcher()
+        let eventDispatcher = EventDispatcher() // CompositeObserver in the spec
         let eventsManager = DefaultSplitEventsManager(config: config)
         eventDispatcher.register(eventsManager)
         eventDispatcher.register(LoggingObserver())
@@ -111,7 +111,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         eventsManager.start()
         syncManager.start()
 
-        factoryObserver.notify(event: .clientCreated)
+        observer.notify(event: .clientCreated)
 
         return client
     }
