@@ -28,7 +28,8 @@ final class DefaultSplitClient: SplitClient {
         self.eventsManager = eventsManager
     }
 
-    // MARK: - Evaluation
+    // MARK: - Evaluations
+
     func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) -> EvaluationResult {
         treatmentsManager.getTreatment(flag: flag, evaluationOptions: evaluationOptions)
     }
@@ -48,6 +49,7 @@ final class DefaultSplitClient: SplitClient {
     }
 
     // MARK: - Events
+
     func addEventListener(_ listener: SplitEventListener) {
         clientListeners.append(listener) // We are saving them here to know which ones to remove from the EventsManager when the client is
                                          // destroyed, since EventsManager does not keep a registry of listeners by client.
@@ -60,12 +62,14 @@ final class DefaultSplitClient: SplitClient {
         eventsManager.removeListener(listener)
     }
 
-    // MARK: - Track
+    // MARK: - Tracking
+
     func track(eventType: String, value: Double?, properties: EventProperties?) {
         // TODO: Connect with tracker module
     }
 
     // MARK: - Lifecycle
+
     func destroy() async {
         guard !isDestroyed else { return }
         isDestroyed = true
@@ -79,7 +83,7 @@ final class DefaultSplitClient: SplitClient {
     func flush() async {}
 }
 
-// MARK: - Evaluations API variations
+// MARK: - API variations
 public extension SplitClient {
     func getTreatment(flag: String) -> EvaluationResult {
         getTreatment(flag: flag, evaluationOptions: nil)

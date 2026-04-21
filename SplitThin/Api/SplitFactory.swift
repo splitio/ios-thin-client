@@ -110,10 +110,8 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         clients[target.key] = client
         syncManagers[target.key] = syncManager
 
-        // 4. Start
-        Task {
-            await syncManager.start() 
-        }
+        eventsManager.start()
+        syncManager.start()
 
         return client
     }

@@ -2,8 +2,11 @@ import Foundation
 import Logging
 
 protocol SyncManager: Sendable {
-    func start() async
+    func start()
     func stop() async
+}
+
+protocol MobileSync: Sendable {
     func pause()
     func resume()
 }
@@ -18,10 +21,11 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
     private let streaming: Streaming
     private let target: Target
 
+    // BG sync (just for mobile) 
     private var isPaused = false
     private let lock = NSLock()
 
-    init(syncMode: SyncMode, evaluationRepository: EvaluationRepository, evaluationStorage: EvaluationReadStorage, eventsManager: SplitEventsManager, periodicScheduler: EvaluationPeriodicScheduler, streaming: Streaming, target: Target) {
+    init(syncMode: SyncMode, evaluationRepository: EvaluationRepository, evaluationStorage: EvaluationReadStorage, eventsManager: SplitEventsManager, periodicScheduler: EvaluationPeriodicScheduler, streaming: Streaming, target: Target, appStateManager: AppStateManager = DefaultAppStateManager.instance) {
         self.syncMode = syncMode
         self.evaluationRepository = evaluationRepository
         self.evaluationStorage = evaluationStorage
@@ -29,29 +33,37 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
         self.polling = periodicScheduler
         self.streaming = streaming
         self.target = target
+
+        appStateManager.addObserver(for: .didEnterBackground) { [weak self] in
+            self?.pause()
+        }
+        appStateManager.addObserver(for: .didBecomeActive) { [weak self] in
+            self?.resume()
+        }
     }
 
-    func start() async {
-        Logger.d("SyncManager: Starting with mode \(syncMode)")
-
-        eventsManager.start()
+    func start() {
 
         // Non-blocking: load from storage and emit cache event
         Task { [weak self] in
             await self?.loadFromStorage()
         }
 
-        do {
-            try await evaluationRepository.initialize(target: target)
+        Logger.d("SyncManager: Starting with mode \(syncMode)")
 
-            let flagNames = evaluationRepository.getFlagNames(target: target)
-            let metadata = SdkUpdateMetadata(type: .flagsUpdate, names: flagNames)
-            eventsManager.notifyInternalEvent(.evaluationsUpdated(metadata))
+        Task { // Fire and forget
+            do {
+                try await evaluationRepository.initialize(target: target)
 
-            establishLink()
-        } catch {
-            // The timeout timer (already scheduled in eventsManager.start()) will take care of this scenario.
-            Logger.e("SyncManager: Initial fetch failed: \(error)")
+                let flagNames = evaluationRepository.getFlagNames(target: target)
+                let metadata = SdkUpdateMetadata(type: .flagsUpdate, names: flagNames)
+                eventsManager.notifyInternalEvent(.evaluationsUpdated(metadata))
+
+                establishLink()
+            } catch {
+                // The timeout timer (already scheduled in eventsManager.start()) will take care of this scenario.
+                Logger.e("SyncManager: Initial fetch failed: \(error)")
+            }
         }
     }
 
@@ -65,6 +77,14 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
         eventsManager.notifyInternalEvent(.evaluationsLoadedFromCache(metadata))
     }
 
+    func stop() async {
+        Logger.d("SyncManager: Stopping")
+
+        eventsManager.stop()
+        polling.stop()
+        await streaming.stop()
+    }
+
     private func establishLink() {
         switch syncMode {
             case .singleSync:
@@ -76,31 +96,41 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
                 polling.start()
         }
     }
+}
 
-    func stop() async {
-        Logger.d("SyncManager: Stopping")
-
-        eventsManager.stop()
-        polling.stop()
-        await streaming.stop()
-    }
-
+// MARK: BG Sync (just for mobile devices)
+extension DefaultSyncManager: MobileSync {
     func pause() {
-        withLock(lock) { isPaused = true }
-        polling.stop()
-        Logger.d("SyncManager: Paused")
+        #if !os(macOS)
+            withLock(lock) {
+                guard !isPaused else { return }
+
+                polling.stop()
+                streaming.pause()
+
+                isPaused = true
+                Logger.d("SyncManager: Paused")
+            }
+        #endif
     }
 
     func resume() {
-        let wasPaused = withLock(lock) {
-            let was = isPaused
-            isPaused = false
-            return was
-        }
+        #if !os(macOS)
+            withLock(lock) {
+                guard isPaused else { return }
+                
+                switch syncMode {
+                    case .singleSync:
+                        break
+                    case .polling:
+                        polling.start()
+                    case .streaming:
+                        streaming.resume()
+                }
 
-        if wasPaused && syncMode != .singleSync {
-            polling.start()
-            Logger.d("SyncManager: Resumed")
-        }
+                isPaused = false
+                Logger.d("SyncManager: Resumed")
+            }
+        #endif
     }
 }
