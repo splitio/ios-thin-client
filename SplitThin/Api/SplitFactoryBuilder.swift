@@ -26,6 +26,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
     // Internals for testing
     var secureHttpClient: SecureHttpClient?
     var retryableHttpClient: RetryableHttpClient?
+    var observer: Observer?
 
     public override init() {
         super.init()
@@ -83,13 +84,14 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
             return nil
         }
 
-        let secureHttp = secureHttpClient ?? buildSecureHttpClient(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey)
+        let resolvedObserver = buildObserver()
+        let secureHttp = secureHttpClient ?? buildSecureHttpClient(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey, observer: resolvedObserver)
         let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttp)
-        let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider)
+        let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider, observer: resolvedObserver)
         let evaluationRepository = DefaultEvaluationRepository(fetchCoordinator: fetchCoordinator, evaluationFilters: evaluationFilters)
         let splitManager = DefaultSplitManager(evaluationRepository: evaluationRepository, target: target)
 
-        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, splitManager: splitManager)
+        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, splitManager: splitManager, factoryObserver: resolvedObserver)
     }
 
     private func configureLogger() {
@@ -98,12 +100,25 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         }
     }
 
-    private func buildSecureHttpClient(serviceEndpoints: ServiceEndpoints, sdkKey: String) -> SecureHttpClient {
+    private func buildSecureHttpClient(serviceEndpoints: ServiceEndpoints, sdkKey: String, observer: Observer) -> SecureHttpClient {
         let http = httpClient ?? DefaultHttpClient.shared
-        let retryable = retryableHttpClient ?? DefaultRetryableHttpClient(httpClient: http)
+        let retryable = retryableHttpClient ?? DefaultRetryableHttpClient(httpClient: http, observer: observer)
         let storage = DefaultCredentialStorage()
-        let fetcher = DefaultCredentialFetcher(retryableHttpClient: retryable, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey)
-        let auth = authProvider ?? DefaultAuthProvider(credentialStorage: storage, credentialFetcher: fetcher)
+        let fetcher = DefaultCredentialFetcher(retryableHttpClient: retryable, observer: observer, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey)
+        let auth = authProvider ?? DefaultAuthProvider(credentialStorage: storage, credentialFetcher: fetcher, observer: observer)
+
         return DefaultSecureHttpClient(retryableHttpClient: retryable, authProvider: auth, serviceEndpoints: serviceEndpoints)
+    }
+
+    // Observer override access point. JUST for testing
+    private func buildObserver() -> Observer {
+        if let observer = observer {
+            return observer
+        }
+         
+        // Production. Default.
+        let dispatcher = EventDispatcher()
+        dispatcher.register(LoggingObserver())
+        return dispatcher
     }
 }

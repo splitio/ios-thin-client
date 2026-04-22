@@ -2,7 +2,7 @@ import Foundation
 import Logging
 
 protocol Observer: Sendable {
-    func notify(event: ObservableEvent) throws
+    func notify(event: ObservableEvent)
 }
 
 // This component is "CompositeObserver" in the spec
@@ -26,11 +26,7 @@ final class EventDispatcher: Observer, @unchecked Sendable {
     func notify(event: ObservableEvent) {
         let snapshot = withLock(lock) { observers }
         for observer in snapshot {
-            do {
-                try observer.notify(event: event)
-            } catch {
-                Logger.e("EventDispatcher: Observer failed for event \(event): \(error)")
-            }
+            observer.notify(event: event)
         }
     }
 }

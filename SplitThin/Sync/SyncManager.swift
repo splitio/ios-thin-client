@@ -15,7 +15,7 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
 
     private let syncMode: SyncMode
     private let evaluationRepository: EvaluationRepository
-    private let observer: Observer
+    private let observer: Observer // For SDK events & logging
     private let polling: EvaluationPeriodicScheduler
     private let streaming: Streaming
     private let target: Target
@@ -47,11 +47,9 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
             Logger.d("SyncManager: Starting with mode \(syncMode)")
 
             do {
-                try await evaluationRepository.initialize(target: target)
+                let result = try await evaluationRepository.initialize(target: target)
 
-                let flagNames = evaluationRepository.getFlagNames(target: target)
-                let metadata = SdkUpdateMetadata(type: .flagsUpdate, names: flagNames)
-                try? observer.notify(event: .evaluationsUpdated(metadata))
+                observer.notify(event: .evaluationsUpdated(SdkUpdateMetadata(type: .flagsUpdate, names: result.evaluations.map { $0.flag }, changeNumber: result.changeNumber)))
 
                 establishLink()
             } catch {
@@ -92,6 +90,7 @@ extension DefaultSyncManager: MobileSync {
                 streaming.pause()
 
                 isPaused = true
+                observer.notify(event: .syncPaused)
                 Logger.d("SyncManager: Paused")
             }
         #endif
@@ -112,6 +111,7 @@ extension DefaultSyncManager: MobileSync {
                 }
 
                 isPaused = false
+                observer.notify(event: .syncResumed)
                 Logger.d("SyncManager: Resumed")
             }
         #endif

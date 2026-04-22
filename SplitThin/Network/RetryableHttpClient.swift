@@ -21,16 +21,20 @@ enum RetryableHttpError: Error {
 final class DefaultRetryableHttpClient: RetryableHttpClient, @unchecked Sendable {
 
     private let httpClient: HttpClient
+    private let observer: Observer // For logging & telemetry
     private let policies: RetryPoliciesByCategory
     private let backoffCounterFactory: (Int) -> BackoffCounter
 
-    init(httpClient: HttpClient, policies: RetryPoliciesByCategory? = nil, backoffCounterFactory: @escaping (Int) -> BackoffCounter = { DefaultBackoffCounter(backoffBase: $0) }) {
+    init(httpClient: HttpClient, observer: Observer, policies: RetryPoliciesByCategory? = nil, backoffCounterFactory: @escaping (Int) -> BackoffCounter = { DefaultBackoffCounter(backoffBase: $0) }) {
         self.httpClient = httpClient
+        self.observer = observer
         self.policies = policies ?? Self.defaultPolicies()
         self.backoffCounterFactory = backoffCounterFactory
     }
 
     func execute(_ endpoint: Endpoint, category: RequestCategory, body: Data?) async throws -> HttpResponse {
+        observer.notify(event: .httpRequestStarted(category: category.toHttpCategory, method: endpoint.method == .post ? .post : .get))
+
         let categoryPolicies = policies[category] ?? CategoryRetryPolicies()
         let backoffCounter = backoffCounterFactory(Int(categoryPolicies.fallback?.backoffBaseSeconds ?? 1))
         backoffCounter.resetCounter()
@@ -43,18 +47,23 @@ final class DefaultRetryableHttpClient: RetryableHttpClient, @unchecked Sendable
             let response = try await performRequest(endpoint: endpoint, body: body)
 
             if response.isSuccess {
+                observer.notify(event: .httpRequestSucceeded(category: category.toHttpCategory, statusCode: response.code))
                 return response
             }
 
             let statusCode = response.code
             guard let policy = categoryPolicies.policy(for: statusCode) else {
+                observer.notify(event: .httpRequestFailedNonRetryable(category: category.toHttpCategory, statusCode: statusCode))
                 return response
             }
 
             attempt += 1
             if policy.maxAttempts != -1 && attempt >= policy.maxAttempts {
+                observer.notify(event: .httpRetryExhausted(category: category.toHttpCategory, statusCode: statusCode))
                 throw RetryableHttpError.maxAttemptsReached(statusCode: statusCode, attempts: attempt)
             }
+
+            observer.notify(event: .httpRequestFailedRetryable(category: category.toHttpCategory, statusCode: statusCode))
 
             let waitTime = backoffCounter.getNextRetryTime()
             try await Task.sleep(nanoseconds: UInt64(waitTime * 1_000_000_000))

@@ -18,6 +18,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     private let secureHttpClient: SecureHttpClient
     private let evaluationRepository: EvaluationRepository
     private let fetchCoordinator: EvaluationFetchCoordinator
+    private let observer: Observer // For factory lifecycle logging & telemetry
 
     private var splitManager: DefaultSplitManager?
     private var clients = [Key: SplitClient]()
@@ -33,7 +34,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         Version.sdk
     }
 
-    init(sdkKey: SdkKey, target: Target, config: SplitClientConfig, evaluationFilters: EvaluationFilters?, secureHttpClient: SecureHttpClient, evaluationRepository: EvaluationRepository, fetchCoordinator: EvaluationFetchCoordinator, splitManager: DefaultSplitManager) {
+    init(sdkKey: SdkKey, target: Target, config: SplitClientConfig, evaluationFilters: EvaluationFilters?, secureHttpClient: SecureHttpClient, evaluationRepository: EvaluationRepository, fetchCoordinator: EvaluationFetchCoordinator, splitManager: DefaultSplitManager, factoryObserver: Observer) {
         self.sdkKey = sdkKey
         self.defaultTarget = target
         self.defaultKey = target.key
@@ -43,8 +44,11 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         self.evaluationRepository = evaluationRepository
         self.fetchCoordinator = fetchCoordinator
         self.splitManager = splitManager
+        self.observer = factoryObserver
 
+        observer.notify(event: .factoryInitStarted)
         createClient(target: target)
+        observer.notify(event: .factoryInitCompleted)
     }
 
     public func getClient(_ target: Target? = nil) -> SplitClient {
@@ -72,6 +76,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
 
     public func destroy() async {
         guard !isDestroyed else { return }
+        observer.notify(event: .destroyStarted)
         isDestroyed = true
 
         for client in clients.values {
@@ -80,6 +85,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         clients.removeAll()
 
         splitManager = nil
+        observer.notify(event: .destroyCompleted)
     }
 
     // MARK: - Private
@@ -98,12 +104,14 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
 
         let fallbackCalculator = DefaultFallbackTreatmentsCalculator(fallbacksConfig: config.fallbackTreatments)
         let treatmentsManager = DefaultTreatmentsManager(target: target, evaluationRepository: evaluationRepository, fallbackCalculator: fallbackCalculator)
-        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager, syncManager: syncManager)
+        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager, observer: eventDispatcher, syncManager: syncManager)
 
         clients[target.key] = client
 
         eventsManager.start()
         syncManager.start()
+
+        observer.notify(event: .clientCreated)
 
         return client
     }

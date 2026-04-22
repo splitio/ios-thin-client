@@ -13,7 +13,7 @@ final class DefaultSplitClientTest: XCTestCase {
         treatmentsManagerMock = TreatmentsManagerMock()
         eventsManagerMock = SplitEventsManagerMock()
         syncManagerMock = SyncManagerMock()
-        client = DefaultSplitClient(target: Target(matchingKey: "user1"), treatmentsManager: treatmentsManagerMock, eventsManager: eventsManagerMock, syncManager: syncManagerMock)
+        client = DefaultSplitClient(target: Target(matchingKey: "user1"), treatmentsManager: treatmentsManagerMock, eventsManager: eventsManagerMock, observer: ObserverSpy(), syncManager: syncManagerMock)
     }
 
     override func tearDown() {
@@ -95,7 +95,7 @@ final class DefaultSplitClientTest: XCTestCase {
         let listener2 = TestEventListener()
         client.addEventListener(listener1)
 
-        let client2 = DefaultSplitClient(target: Target(matchingKey: "user2"), treatmentsManager: treatmentsManagerMock, eventsManager: eventsManagerMock, syncManager: syncManagerMock)
+        let client2 = DefaultSplitClient(target: Target(matchingKey: "user2"), treatmentsManager: treatmentsManagerMock, eventsManager: eventsManagerMock, observer: ObserverSpy(), syncManager: syncManagerMock)
         client2.addEventListener(listener2)
 
         await client.destroy()

@@ -12,7 +12,7 @@ final class DefaultCredentialFetcherTest: XCTestCase {
     override func setUp() {
         super.setUp()
         httpClientMock = RetryableHttpClientMock()
-        fetcher = DefaultCredentialFetcher(retryableHttpClient: httpClientMock, authEndpoint: authEndpoint, sdkKey: sdkKey)
+        fetcher = DefaultCredentialFetcher(retryableHttpClient: httpClientMock, observer: ObserverSpy(), authEndpoint: authEndpoint, sdkKey: sdkKey)
     }
 
     func testFetchCredentialSuccess() async throws {

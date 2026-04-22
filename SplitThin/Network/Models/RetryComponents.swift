@@ -7,6 +7,15 @@ enum RequestCategory: Sendable {
     case evaluations
     case events
     case telemetry
+
+    var toHttpCategory: HttpCategory {
+        switch self {
+            case .auth: return .auth
+            case .evaluations: return .evaluations
+            case .events: return .events
+            case .telemetry: return .telemetry
+        }
+    }
 }
 
 struct RetryPolicy: Sendable {

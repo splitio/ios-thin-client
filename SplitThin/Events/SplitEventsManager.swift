@@ -87,7 +87,7 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
                 if isSdkReadyFired() {
                     triggerUpdate(updateMetadata)
                 } else {
-                    checkAndTriggerReady()
+                    checkAndTriggerReady(changeNumber: updateMetadata.changeNumber)
                 }
 
             case .evaluationsLoadedFromCache(let metadata):
@@ -100,10 +100,9 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
         }
     }
 
-    private func checkAndTriggerReady() {
+    private func checkAndTriggerReady(changeNumber: Int64?) {
         if isEvaluationsUpdateReceived() {
-            let readyMetadata = SdkReadyMetadata(lastUpdateTimestamp: nil, isInitialCacheLoad: false)
-            triggerReady(readyMetadata)
+            triggerReady(SdkReadyMetadata(lastUpdateTimestamp: changeNumber, isInitialCacheLoad: false))
         }
     }
 
