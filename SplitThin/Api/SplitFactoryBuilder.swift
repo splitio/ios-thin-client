@@ -89,7 +89,6 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttp)
         let coreDataStorage = CoreDataStorage(databaseName: databaseName)
         let evaluationStorage = PersistentStorage(storage: coreDataStorage)
-
         let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider, storage: evaluationStorage)
         let evaluationRepository = DefaultEvaluationRepository(fetchCoordinator: fetchCoordinator, evaluationFilters: evaluationFilters)
         let splitManager = DefaultSplitManager(evaluationRepository: evaluationRepository, target: target)
@@ -113,9 +112,9 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         return (secureHttp, auth)
     }
 
-    private static let kDbMagicCharsCount = 4
-
+    // Used for generating unique names for db and keychain
     static func databaseName(prefix: String?, apiKey: String) -> String {
+        let kDbMagicCharsCount = 4
         let keyFragment: String
         if apiKey.count >= kDbMagicCharsCount * 2 {
             keyFragment = "\(apiKey.prefix(kDbMagicCharsCount))\(apiKey.suffix(kDbMagicCharsCount))"
