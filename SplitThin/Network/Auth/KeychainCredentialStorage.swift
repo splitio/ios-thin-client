@@ -23,16 +23,12 @@ final class KeychainCredentialStorage: CredentialStorage, @unchecked Sendable {
     }
 
     func save(_ credential: JwtCredential, for key: String) {
-        withLock(lock) {
-            cache[key] = credential
-        }
+        withLock(lock) { cache[key] = credential }
         persistToKeychain()
     }
 
     func invalidate(for key: String) {
-        withLock(lock) {
-            cache.removeValue(forKey: key)
-        }
+        withLock(lock) { cache.removeValue(forKey: key) }
         persistToKeychain()
     }
 
@@ -92,19 +88,20 @@ final class KeychainCredentialStorage: CredentialStorage, @unchecked Sendable {
         guard let entries = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return }
 
         let now = Date()
-        lock.lock()
-        for entry in entries {
-            guard let key = entry["key"] as? String,
-                  let token = entry["token"] as? String,
-                  let expiresAt = entry["expiresAt"] as? TimeInterval,
-                  let pushEnabled = entry["pushEnabled"] as? Bool else { continue }
+        
+        withLock(lock) {
+            for entry in entries {
+                guard let key = entry["key"] as? String,
+                    let token = entry["token"] as? String,
+                    let expiresAt = entry["expiresAt"] as? TimeInterval,
+                    let pushEnabled = entry["pushEnabled"] as? Bool else { continue }
 
-            let expDate = Date(timeIntervalSince1970: expiresAt)
-            guard expDate > now else { continue }
+                let expDate = Date(timeIntervalSince1970: expiresAt)
+                guard expDate > now else { continue }
 
-            cache[key] = JwtCredential(token: token, expiresAt: expDate, pushEnabled: pushEnabled)
+                cache[key] = JwtCredential(token: token, expiresAt: expDate, pushEnabled: pushEnabled)
+            }
         }
-        lock.unlock()
     }
 
     private func handleKeychainFailure(_ operation: String, status: OSStatus) {
