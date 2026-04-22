@@ -26,6 +26,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
     // Internals for testing
     var secureHttpClient: SecureHttpClient?
     var retryableHttpClient: RetryableHttpClient?
+    var observer: Observer?
 
     public override init() {
         super.init()
@@ -83,16 +84,14 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
             return nil
         }
 
-        let factoryObserver = EventDispatcher()
-        factoryObserver.register(LoggingObserver())
-
-        let secureHttp = secureHttpClient ?? buildSecureHttpClient(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey, observer: factoryObserver)
+        let resolvedObserver = buildObserver()
+        let secureHttp = secureHttpClient ?? buildSecureHttpClient(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey, observer: resolvedObserver)
         let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttp)
-        let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider, observer: factoryObserver)
+        let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider, observer: resolvedObserver)
         let evaluationRepository = DefaultEvaluationRepository(fetchCoordinator: fetchCoordinator, evaluationFilters: evaluationFilters)
         let splitManager = DefaultSplitManager(evaluationRepository: evaluationRepository, target: target)
 
-        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, splitManager: splitManager, factoryObserver: factoryObserver)
+        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, splitManager: splitManager, factoryObserver: resolvedObserver)
     }
 
     private func configureLogger() {
@@ -107,6 +106,19 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         let storage = DefaultCredentialStorage()
         let fetcher = DefaultCredentialFetcher(retryableHttpClient: retryable, observer: observer, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey)
         let auth = authProvider ?? DefaultAuthProvider(credentialStorage: storage, credentialFetcher: fetcher, observer: observer)
+
         return DefaultSecureHttpClient(retryableHttpClient: retryable, authProvider: auth, serviceEndpoints: serviceEndpoints)
+    }
+
+    // Observer override access point. JUST for testing
+    private func buildObserver() -> Observer {
+        if let observer = observer {
+            return observer
+        }
+         
+        // Production. Default.
+        let dispatcher = EventDispatcher()
+        dispatcher.register(LoggingObserver())
+        return dispatcher
     }
 }

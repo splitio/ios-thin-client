@@ -105,4 +105,8 @@ enum ObservableEvent: Sendable {
     case syncResumed
     case streamingPaused
     case streamingResumed
+
+    var name: String {
+        Mirror(reflecting: self).children.first?.label ?? String(describing: self)
+    }
 }

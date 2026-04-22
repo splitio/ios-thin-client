@@ -22,7 +22,7 @@ private struct FetchKey: Hashable {
     let filters: EvaluationFilters?
 }
 
-public protocol EvaluationFetchCoordinator: Sendable {
+protocol EvaluationFetchCoordinator: Sendable {
     /// Coordinates fetch requests so only one relevant fetch runs at a time.
     /// Returns the fetched evaluations (can be empty on success). Throws on failure.
     func fetchIfNeeded(target: Target, filters: EvaluationFilters?, reason: FetchReason) async throws -> FetchResult
