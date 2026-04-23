@@ -6,7 +6,7 @@ final class SyncManagerTests: XCTestCase {
     private var syncManager: DefaultSyncManager!
     private var polling: PeriodicSchedulerMock!
     private var streaming: StreamingMock!
-    private var eventsManager: SplitEventsManagerMock!
+    private var observer: ObserverSpy!
     private var evaluationRepository: EvaluationRepositoryMock!
 
     private let target = Target(matchingKey: "user1")
@@ -15,14 +15,14 @@ final class SyncManagerTests: XCTestCase {
         super.setUp()
         polling = PeriodicSchedulerMock()
         streaming = StreamingMock()
-        eventsManager = SplitEventsManagerMock()
+        observer = ObserverSpy()
         evaluationRepository = EvaluationRepositoryMock()
     }
 
     private let evaluationStorage = EvaluationStorageMock()
 
     private func createSyncManager(mode: SyncMode) -> DefaultSyncManager {
-        DefaultSyncManager(syncMode: mode, evaluationRepository: evaluationRepository, evaluationStorage: evaluationStorage, eventsManager: eventsManager, periodicScheduler: polling, streaming: streaming, target: target)
+        DefaultSyncManager(syncMode: mode, evaluationRepository: evaluationRepository, observer: observer, evaluationStorage: evaluationStorage, eventsManager: eventsManager, periodicScheduler: polling, streaming: streaming, target: target)
     }
 
     // MARK: - Pause Tests

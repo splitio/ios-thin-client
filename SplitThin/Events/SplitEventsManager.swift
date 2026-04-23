@@ -99,7 +99,7 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
                 if isSdkReadyFired() {
                     triggerUpdate(updateMetadata)
                 } else {
-                    checkAndTriggerReady()
+                    checkAndTriggerReady(changeNumber: updateMetadata.changeNumber)
                 }
 
             case .evaluationsLoadedFromCache(let metadata):
@@ -112,10 +112,9 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
         }
     }
 
-    private func checkAndTriggerReady() {
+    private func checkAndTriggerReady(changeNumber: Int64?) {
         if isEvaluationsUpdateReceived() {
-            let readyMetadata = SdkReadyMetadata(lastUpdateTimestamp: nil, isInitialCacheLoad: false)
-            triggerReady(readyMetadata)
+            triggerReady(SdkReadyMetadata(lastUpdateTimestamp: changeNumber, isInitialCacheLoad: false))
         }
     }
 
@@ -207,5 +206,21 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
 
     private func getListeners() -> [SplitEventListener] {
         dataAccessQueue.sync { listeners }
+    }
+}
+
+// MARK: - Observer conformance
+extension DefaultSplitEventsManager: Observer {
+    func notify(event: ObservableEvent) {
+        switch event {
+            case .evaluationsUpdated(let metadata):
+                notifyInternalEvent(.evaluationsUpdated(metadata))
+            case .evaluationsLoadedFromCache(let metadata):
+                notifyInternalEvent(.evaluationsLoadedFromCache(metadata))
+            case .sdkReadyTimeoutReached:
+                notifyInternalEvent(.sdkReadyTimeoutReached)
+            default:
+                break
+        }
     }
 }

@@ -17,6 +17,12 @@ extension DefaultSplitFactoryBuilder {
         self.retryableHttpClient = client
         return self
     }
+
+    @discardableResult
+    func setFactoryObserver(_ observer: Observer) -> DefaultSplitFactoryBuilder {
+        self.observer = observer
+        return self
+    }
 }
 
 extension SplitConfigBuilder {
@@ -28,12 +34,14 @@ extension SplitConfigBuilder {
 }
 
 extension SplitFactory {
+    @discardableResult
     func getClient(_ matchingKey: String) -> SplitClient {
         getClient(Target(matchingKey: matchingKey))
     }
 }
 
 extension SplitClient {
+    @discardableResult
     func getTreatment(_ flag: String) -> EvaluationResult {
         getTreatment(flag: flag)
     }

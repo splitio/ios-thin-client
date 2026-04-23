@@ -8,10 +8,12 @@ public enum SdkUpdateMetadataType: Sendable {
 public struct SdkUpdateMetadata: Sendable {
     public let type: SdkUpdateMetadataType
     public let names: [String]
+    public let changeNumber: Int64?
 
-    public init(type: SdkUpdateMetadataType, names: [String]) {
+    public init(type: SdkUpdateMetadataType, names: [String], changeNumber: Int64? = nil) {
         self.type = type
         self.names = names
+        self.changeNumber = changeNumber
     }
 }
 
