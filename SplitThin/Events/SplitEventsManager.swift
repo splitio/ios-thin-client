@@ -74,8 +74,20 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
     func notifyInternalEvent(_ event: SplitInternalEvent) {
         processQueue.async { [weak self] in
             guard let self, self.isRunning() else { return }
-            Logger.v("Event \(event) notified")
+            Logger.d("SplitEventsManager: Event notified - \(self.formatEvent(event))")
             self.processEvent(event)
+        }
+    }
+
+    private func formatEvent(_ event: SplitInternalEvent) -> String {
+        switch event {
+        case .evaluationsUpdated(let metadata):
+            let names = metadata.names.joined(separator: ", ")
+            return "evaluationsUpdated(type: \(metadata.type), names: [\(names)])"
+        case .evaluationsLoadedFromCache(let metadata):
+            return "evaluationsLoadedFromCache(lastUpdateTimestamp: \(metadata.lastUpdateTimestamp ?? -1), isInitialCacheLoad: \(metadata.isInitialCacheLoad))"
+        case .sdkReadyTimeoutReached:
+            return "sdkReadyTimeoutReached"
         }
     }
 
@@ -87,7 +99,7 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
                 if isSdkReadyFired() {
                     triggerUpdate(updateMetadata)
                 } else {
-                    checkAndTriggerReady()
+                    checkAndTriggerReady(changeNumber: updateMetadata.changeNumber)
                 }
 
             case .evaluationsLoadedFromCache(let metadata):
@@ -100,10 +112,9 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
         }
     }
 
-    private func checkAndTriggerReady() {
+    private func checkAndTriggerReady(changeNumber: Int64?) {
         if isEvaluationsUpdateReceived() {
-            let readyMetadata = SdkReadyMetadata(lastUpdateTimestamp: nil, isInitialCacheLoad: false)
-            triggerReady(readyMetadata)
+            triggerReady(SdkReadyMetadata(lastUpdateTimestamp: changeNumber, isInitialCacheLoad: false))
         }
     }
 
@@ -195,5 +206,21 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
 
     private func getListeners() -> [SplitEventListener] {
         dataAccessQueue.sync { listeners }
+    }
+}
+
+// MARK: - Observer conformance
+extension DefaultSplitEventsManager: Observer {
+    func notify(event: ObservableEvent) {
+        switch event {
+            case .evaluationsUpdated(let metadata):
+                notifyInternalEvent(.evaluationsUpdated(metadata))
+            case .evaluationsLoadedFromCache(let metadata):
+                notifyInternalEvent(.evaluationsLoadedFromCache(metadata))
+            case .sdkReadyTimeoutReached:
+                notifyInternalEvent(.sdkReadyTimeoutReached)
+            default:
+                break
+        }
     }
 }

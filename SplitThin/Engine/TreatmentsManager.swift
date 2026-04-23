@@ -11,24 +11,26 @@ final class DefaultTreatmentsManager: TreatmentsManager, @unchecked Sendable {
 
     private var target: Target
     private let evaluationRepository: EvaluationRepository
+    private let fallbackCalculator: FallbackTreatmentsCalculator
     private let lock = NSLock()
 
-    init(target: Target, evaluationRepository: EvaluationRepository) {
+    init(target: Target, evaluationRepository: EvaluationRepository, fallbackCalculator: FallbackTreatmentsCalculator) {
         self.target = target
         self.evaluationRepository = evaluationRepository
+        self.fallbackCalculator = fallbackCalculator
     }
 
     func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) -> EvaluationResult {
         let currentTarget = withLock(lock) { target }
         return evaluationRepository.getEvaluation(flag: flag, target: currentTarget)?.evaluationResult
-            ?? EvaluationResult(flag: flag, treatment: "control", flagSets: [])
+            ?? controlResult(flag: flag)
     }
 
     func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult] {
         let currentTarget = withLock(lock) { target }
         let storedEvaluations = evaluationRepository.getEvaluations(flags: flags, target: currentTarget)
         let resultsByFlag = Dictionary(uniqueKeysWithValues: storedEvaluations.map { ($0.evaluationResult.flag, $0.evaluationResult) })
-        return flags.map { resultsByFlag[$0] ?? EvaluationResult(flag: $0, treatment: "control", flagSets: []) }
+        return flags.map { resultsByFlag[$0] ?? controlResult(flag: $0) }
     }
 
     func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult] {
@@ -39,5 +41,10 @@ final class DefaultTreatmentsManager: TreatmentsManager, @unchecked Sendable {
     func setTarget(_ target: Target) {
         withLock(lock) { self.target = target }
         evaluationRepository.setTarget(target)
+    }
+
+    private func controlResult(flag: String) -> EvaluationResult {
+        let fallback = fallbackCalculator.resolve(flagName: flag, label: nil)
+        return EvaluationResult(flag: flag, treatment: fallback.treatment, flagSets: [], config: fallback.config)
     }
 }

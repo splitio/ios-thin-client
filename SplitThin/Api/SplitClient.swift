@@ -19,18 +19,24 @@ final class DefaultSplitClient: SplitClient {
     private(set) var target: Target
     private let treatmentsManager: TreatmentsManager
     private let eventsManager: SplitEventsManager
+    private let observer: Observer // For SDK events & logging
+    private let syncManager: SyncManager
     private var clientListeners = [SplitEventListener]()
     private var isDestroyed = false
 
-    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager) {
+    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, observer: Observer, syncManager: SyncManager) {
         self.target = target
         self.treatmentsManager = treatmentsManager
         self.eventsManager = eventsManager
+        self.observer = observer
+        self.syncManager = syncManager
     }
 
-    // MARK: - Evaluation
+    // MARK: - Evaluations
+
     func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) -> EvaluationResult {
-        treatmentsManager.getTreatment(flag: flag, evaluationOptions: evaluationOptions)
+        observer.notify(event: .evaluationRequested(flagName: flag, target: target))
+        return treatmentsManager.getTreatment(flag: flag, evaluationOptions: evaluationOptions)
     }
 
     func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult] {
@@ -43,11 +49,14 @@ final class DefaultSplitClient: SplitClient {
 
     // MARK: - Target switching
     func setTarget(target: Target) {
+        observer.notify(event: .targetSwitchStarted)
         self.target = target
         treatmentsManager.setTarget(target)
+        observer.notify(event: .targetSwitchCompleted)
     }
 
     // MARK: - Events
+
     func addEventListener(_ listener: SplitEventListener) {
         clientListeners.append(listener) // We are saving them here to know which ones to remove from the EventsManager when the client is
                                          // destroyed, since EventsManager does not keep a registry of listeners by client.
@@ -60,26 +69,42 @@ final class DefaultSplitClient: SplitClient {
         eventsManager.removeListener(listener)
     }
 
-    // MARK: - Track
+    // MARK: - Tracking
+
     func track(eventType: String, value: Double?, properties: EventProperties?) {
+        guard !isDestroyed else {
+            observer.notify(event: .trackDropped(reason: .destroyed))
+            return
+        }
+        observer.notify(event: .trackCalled)
         // TODO: Connect with tracker module
     }
 
     // MARK: - Lifecycle
+
     func destroy() async {
         guard !isDestroyed else { return }
+        observer.notify(event: .destroyStarted)
         isDestroyed = true
 
         for listener in clientListeners {
             eventsManager.removeListener(listener)
         }
         clientListeners.removeAll()
+
+        eventsManager.stop()
+        await syncManager.stop()
+        observer.notify(event: .destroyCompleted)
     }
 
-    func flush() async {}
+    func flush() async {
+        observer.notify(event: .flushStarted(.events))
+        // TODO: Connect with flush module
+        observer.notify(event: .flushCompleted(.events))
+    }
 }
 
-// MARK: - Evaluations API variations
+// MARK: - API variations
 public extension SplitClient {
     func getTreatment(flag: String) -> EvaluationResult {
         getTreatment(flag: flag, evaluationOptions: nil)

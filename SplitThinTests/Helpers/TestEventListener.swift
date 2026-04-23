@@ -12,20 +12,20 @@ final class TestEventListener: SplitEventListener, @unchecked Sendable {
     var lastReadyFromCacheMetadata: SdkReadyFromCacheMetadata?
     var lastUpdateMetadata: SdkUpdateMetadata?
 
-    private let onReadyExpectation: XCTestExpectation?
-    private let onTimedOutExpectation: XCTestExpectation?
-    private let onUpdateExpectation: XCTestExpectation?
+    private let readyExpectation: XCTestExpectation?
+    private let timeoutExpectation: XCTestExpectation?
+    private let updateExpectation: XCTestExpectation?
 
-    init(onReadyExpectation: XCTestExpectation? = nil, onTimedOutExpectation: XCTestExpectation? = nil, onUpdateExpectation: XCTestExpectation? = nil) {
-        self.onReadyExpectation = onReadyExpectation
-        self.onTimedOutExpectation = onTimedOutExpectation
-        self.onUpdateExpectation = onUpdateExpectation
+    init(readyExpectation: XCTestExpectation? = nil, timeoutExpectation: XCTestExpectation? = nil, updateExpectation: XCTestExpectation? = nil) {
+        self.readyExpectation = readyExpectation
+        self.timeoutExpectation = timeoutExpectation
+        self.updateExpectation = updateExpectation
     }
 
     func onReady(_ metadata: SdkReadyMetadata) {
         onReadyCallCount += 1
         lastReadyMetadata = metadata
-        onReadyExpectation?.fulfill()
+        readyExpectation?.fulfill()
     }
 
     func onReadyFromCache(_ metadata: SdkReadyFromCacheMetadata) {
@@ -35,12 +35,12 @@ final class TestEventListener: SplitEventListener, @unchecked Sendable {
 
     func onReadyTimedOut() {
         onReadyTimedOutCallCount += 1
-        onTimedOutExpectation?.fulfill()
+        timeoutExpectation?.fulfill()
     }
 
     func onUpdate(_ metadata: SdkUpdateMetadata) {
         onUpdateCallCount += 1
         lastUpdateMetadata = metadata
-        onUpdateExpectation?.fulfill()
+        updateExpectation?.fulfill()
     }
 }

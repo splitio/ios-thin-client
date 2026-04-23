@@ -27,6 +27,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
     var secureHttpClient: SecureHttpClient?
     var retryableHttpClient: RetryableHttpClient?
     var connectionManagerFactory: ((EvaluationFetchCoordinator) -> StreamingConnectionManager)?
+    var observer: Observer?
 
     public override init() {
         super.init()
@@ -84,18 +85,23 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
             return nil
         }
 
-        let http = httpClient ?? DefaultHttpClient.shared
-        let (secureHttp, builtAuthProvider) = buildSecureHttpClientAndAuth(
-            serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey, http: http)
+        let resolvedObserver = buildObserver()
+        let (secureHttp, builtAuthProvider) = buildSecureHttpClientAndAuth(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey, observer: resolvedObserver)
         let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttp)
-        let evaluationStorage = InMemoryEvaluationStorage()
-        let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider, storage: evaluationStorage)
-        let evaluationRepository = DefaultEvaluationRepository(fetchCoordinator: fetchCoordinator, storage: evaluationStorage, evaluationFilters: evaluationFilters)
+
+        let databaseName = Self.databaseName(prefix: config.prefix, apiKey: sdkKey.sdkKey)
+        let coreDataStorage = CoreDataStorage(databaseName: databaseName)
+        let evaluationStorage = PersistentStorage(storage: coreDataStorage)
+
+        let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider, observer: resolvedObserver, storage: evaluationStorage)
+        let evaluationRepository = DefaultEvaluationRepository(fetchCoordinator: fetchCoordinator, evaluationFilters: evaluationFilters)
         let splitManager = DefaultSplitManager(evaluationRepository: evaluationRepository, target: target)
+
         let streamingComponents: StreamingComponents
         if let factory = connectionManagerFactory {
             streamingComponents = StreamingComponents(manager: DefaultStreamingManager(connectionManagerFactory: { factory(fetchCoordinator) }))
         } else {
+            let http = httpClient ?? DefaultHttpClient.shared
             streamingComponents = createStreamingComponents(
                 target: target,
                 authProvider: builtAuthProvider,
@@ -105,15 +111,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
             )
         }
 
-        return DefaultSplitFactory(
-            sdkKey: sdkKey, target: target, config: config,
-            evaluationFilters: evaluationFilters,
-            secureHttpClient: secureHttp,
-            evaluationRepository: evaluationRepository,
-            fetchCoordinator: fetchCoordinator,
-            streamingManager: streamingComponents.manager,
-            splitManager: splitManager
-        )
+        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, streamingManager: streamingComponents.manager, evaluationStorage: evaluationStorage, splitManager: splitManager, factoryObserver: resolvedObserver)
     }
 
     private func configureLogger() {
@@ -122,12 +120,40 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         }
     }
 
-    private func buildSecureHttpClientAndAuth(serviceEndpoints: ServiceEndpoints, sdkKey: String, http: HttpClient) -> (SecureHttpClient, AuthProvider) {
-        let retryable = retryableHttpClient ?? DefaultRetryableHttpClient(httpClient: http)
+    private func buildSecureHttpClientAndAuth(serviceEndpoints: ServiceEndpoints, sdkKey: String, observer: Observer) -> (SecureHttpClient, AuthProvider) {
+        let http = httpClient ?? DefaultHttpClient.shared
+        let retryable = retryableHttpClient ?? DefaultRetryableHttpClient(httpClient: http, observer: observer)
         let storage = DefaultCredentialStorage()
-        let fetcher = DefaultCredentialFetcher(retryableHttpClient: retryable, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey)
-        let auth = authProvider ?? DefaultAuthProvider(credentialStorage: storage, credentialFetcher: fetcher)
+        let fetcher = DefaultCredentialFetcher(retryableHttpClient: retryable, observer: observer, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey)
+        let auth = authProvider ?? DefaultAuthProvider(credentialStorage: storage, credentialFetcher: fetcher, observer: observer)
         let client = secureHttpClient ?? DefaultSecureHttpClient(retryableHttpClient: retryable, authProvider: auth, serviceEndpoints: serviceEndpoints)
         return (client, auth)
+    }
+
+    // Observer override access point. JUST for testing
+    private func buildObserver() -> Observer {
+        if let observer = observer {
+            return observer
+        }
+
+        // Production. Default.
+        let dispatcher = EventDispatcher()
+        dispatcher.register(LoggingObserver())
+        return dispatcher
+    }
+
+    private static let kDbMagicCharsCount = 4
+
+    static func databaseName(prefix: String?, apiKey: String) -> String {
+        let keyFragment: String
+        if apiKey.count >= kDbMagicCharsCount * 2 {
+            keyFragment = "\(apiKey.prefix(kDbMagicCharsCount))\(apiKey.suffix(kDbMagicCharsCount))"
+        } else {
+            keyFragment = apiKey
+        }
+        if let prefix {
+            return "split_\(prefix)_\(keyFragment)"
+        }
+        return "split_\(keyFragment)"
     }
 }

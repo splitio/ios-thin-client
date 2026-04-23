@@ -23,6 +23,12 @@ extension DefaultSplitFactoryBuilder {
         self.connectionManagerFactory = factory
         return self
     }
+
+    @discardableResult
+    func setFactoryObserver(_ observer: Observer) -> DefaultSplitFactoryBuilder {
+        self.observer = observer
+        return self
+    }
 }
 
 extension SplitConfigBuilder {
@@ -30,5 +36,31 @@ extension SplitConfigBuilder {
     func setMinEvaluationRefreshRate(_ value: Int) -> SplitConfigBuilder {
         self.minEvaluationRefreshRateOverride = value
         return self
+    }
+}
+
+extension SplitFactory {
+    @discardableResult
+    func getClient(_ matchingKey: String) -> SplitClient {
+        getClient(Target(matchingKey: matchingKey))
+    }
+}
+
+extension SplitClient {
+    @discardableResult
+    func getTreatment(_ flag: String) -> EvaluationResult {
+        getTreatment(flag: flag)
+    }
+}
+
+extension SplitFactoryBuilder {
+    @discardableResult
+    func setTarget(_ matchingKey: String) -> SplitFactoryBuilder {
+        setTarget(Target(matchingKey: matchingKey))
+    }
+
+    @discardableResult
+    func setSdkKey(_ key: String) -> SplitFactoryBuilder {
+        setSdkKey(SdkKey(key))
     }
 }

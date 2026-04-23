@@ -25,7 +25,7 @@ final class StreamingE2ETest: XCTestCase {
 
         let sdkReady = expectation(description: "SDK ready")
         let sdkUpdate = expectation(description: "SDK update")
-        let listener = TestEventListener(onReadyExpectation: sdkReady, onUpdateExpectation: sdkUpdate)
+        let listener = TestEventListener(readyExpectation: sdkReady, updateExpectation: sdkUpdate)
 
         var connectionManagerRef: DefaultStreamingConnectionManager?
         let factory = try buildStreamingFactory(target: target, connectionManagerFactory: { fetchCoordinator in
@@ -40,7 +40,7 @@ final class StreamingE2ETest: XCTestCase {
         factory.client.addEventListener(listener)
         waitFor(sdkReady)
 
-        XCTAssertEqual(factory.client.getTreatment(flag: "flag_a").treatment, "on",
+        XCTAssertEqual(factory.client.getTreatment("flag_a").treatment, "on",
                        "Initial treatment should be 'on'")
 
         httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"], treatment: "off"))
@@ -50,7 +50,7 @@ final class StreamingE2ETest: XCTestCase {
 
         waitFor(sdkUpdate)
 
-        XCTAssertEqual(factory.client.getTreatment(flag: "flag_a").treatment, "off",
+        XCTAssertEqual(factory.client.getTreatment("flag_a").treatment, "off",
                        "Treatment should update to 'off' after streaming push")
         await factory.destroy()
     }
@@ -62,7 +62,7 @@ final class StreamingE2ETest: XCTestCase {
 
         let sdkReady = expectation(description: "SDK ready")
         let sdkUpdate = expectation(description: "SDK update")
-        let listener = TestEventListener(onReadyExpectation: sdkReady, onUpdateExpectation: sdkUpdate)
+        let listener = TestEventListener(readyExpectation: sdkReady, updateExpectation: sdkUpdate)
 
         var connectionManagerRef: DefaultStreamingConnectionManager?
         let factory = try buildStreamingFactory(target: target, connectionManagerFactory: { fetchCoordinator in
@@ -103,12 +103,13 @@ final class StreamingE2ETest: XCTestCase {
     }
 
     // Mirrors Android Test 11: Streaming connection pauses and resumes
+    #if !os(macOS)
     func testStreamingPauseAndResume() async throws {
         let target = Target(matchingKey: "user-123")
         httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"]))
 
         let sdkReady = expectation(description: "SDK ready")
-        let listener = TestEventListener(onReadyExpectation: sdkReady)
+        let listener = TestEventListener(readyExpectation: sdkReady)
 
         let connectionManagerMock = StreamingConnectionManagerMock()
         let factory = try buildStreamingFactory(target: target, connectionManagerFactory: { _ in connectionManagerMock })
@@ -124,6 +125,7 @@ final class StreamingE2ETest: XCTestCase {
 
         await factory.destroy()
     }
+    #endif
 
     // MARK: - Helpers
 

@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 
 protocol Streaming: Sendable {
     func start() async
