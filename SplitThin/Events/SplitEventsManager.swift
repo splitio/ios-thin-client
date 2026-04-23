@@ -74,8 +74,20 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
     func notifyInternalEvent(_ event: SplitInternalEvent) {
         processQueue.async { [weak self] in
             guard let self, self.isRunning() else { return }
-            Logger.v("Event \(event) notified")
+            Logger.d("SplitEventsManager: Event notified - \(self.formatEvent(event))")
             self.processEvent(event)
+        }
+    }
+
+    private func formatEvent(_ event: SplitInternalEvent) -> String {
+        switch event {
+        case .evaluationsUpdated(let metadata):
+            let names = metadata.names.joined(separator: ", ")
+            return "evaluationsUpdated(type: \(metadata.type), names: [\(names)])"
+        case .evaluationsLoadedFromCache(let metadata):
+            return "evaluationsLoadedFromCache(lastUpdateTimestamp: \(metadata.lastUpdateTimestamp ?? -1), isInitialCacheLoad: \(metadata.isInitialCacheLoad))"
+        case .sdkReadyTimeoutReached:
+            return "sdkReadyTimeoutReached"
         }
     }
 

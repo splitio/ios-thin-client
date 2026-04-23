@@ -19,6 +19,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     private let evaluationRepository: EvaluationRepository
     private let fetchCoordinator: EvaluationFetchCoordinator
     private let observer: Observer // For factory lifecycle logging & telemetry
+    private let evaluationStorage: EvaluationReadStorage
 
     private var splitManager: DefaultSplitManager?
     private var clients = [Key: SplitClient]()
@@ -34,7 +35,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         Version.sdk
     }
 
-    init(sdkKey: SdkKey, target: Target, config: SplitClientConfig, evaluationFilters: EvaluationFilters?, secureHttpClient: SecureHttpClient, evaluationRepository: EvaluationRepository, fetchCoordinator: EvaluationFetchCoordinator, splitManager: DefaultSplitManager, factoryObserver: Observer) {
+    init(sdkKey: SdkKey, target: Target, config: SplitClientConfig, evaluationFilters: EvaluationFilters?, secureHttpClient: SecureHttpClient, evaluationRepository: EvaluationRepository, fetchCoordinator: EvaluationFetchCoordinator, evaluationStorage: EvaluationReadStorage, splitManager: DefaultSplitManager, factoryObserver: Observer) {
         self.sdkKey = sdkKey
         self.defaultTarget = target
         self.defaultKey = target.key
@@ -43,6 +44,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         self.secureHttpClient = secureHttpClient
         self.evaluationRepository = evaluationRepository
         self.fetchCoordinator = fetchCoordinator
+        self.evaluationStorage = evaluationStorage
         self.splitManager = splitManager
         self.observer = factoryObserver
 
@@ -93,19 +95,22 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     @discardableResult
     private func createClient(target: Target) -> SplitClient {
 
+        // 1. Wire up just the per client components
         let eventDispatcher = EventDispatcher() // CompositeObserver in the spec
         let eventsManager = DefaultSplitEventsManager(config: config)
         eventDispatcher.register(eventsManager)
         eventDispatcher.register(LoggingObserver())
 
-        let periodicScheduler = DefaultEvaluationPeriodicScheduler(fetchCoordinator: fetchCoordinator, observer: eventDispatcher, target: target, filters: evaluationFilters, intervalSeconds: config.evaluationRefreshRate)
+        let periodicScheduler = DefaultEvaluationPeriodicScheduler(fetchCoordinator: fetchCoordinator, observer: eventsManager, target: target, filters: evaluationFilters, intervalSeconds: config.evaluationRefreshRate)
         let streaming = DefaultStreaming(fetchCoordinator: fetchCoordinator, observer: eventDispatcher, secureHttpClient: secureHttpClient, target: target)
-        let syncManager = DefaultSyncManager(syncMode: config.syncMode, evaluationRepository: evaluationRepository, observer: eventDispatcher, periodicScheduler: periodicScheduler, streaming: streaming, target: target)
-
+        let syncManager = DefaultSyncManager(syncMode: config.syncMode, evaluationRepository: evaluationRepository, observer: eventDispatcher, evaluationStorage: evaluationStorage, eventsManager: eventsManager, periodicScheduler: periodicScheduler, streaming: streaming, target: target)
         let fallbackCalculator = DefaultFallbackTreatmentsCalculator(fallbacksConfig: config.fallbackTreatments)
         let treatmentsManager = DefaultTreatmentsManager(target: target, evaluationRepository: evaluationRepository, fallbackCalculator: fallbackCalculator)
+        
+        // 2. Create
         let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager, observer: eventDispatcher, syncManager: syncManager)
 
+        // 3. Register
         clients[target.key] = client
 
         eventsManager.start()

@@ -19,8 +19,10 @@ final class SyncManagerTests: XCTestCase {
         evaluationRepository = EvaluationRepositoryMock()
     }
 
+    private let evaluationStorage = EvaluationStorageMock()
+
     private func createSyncManager(mode: SyncMode) -> DefaultSyncManager {
-        DefaultSyncManager(syncMode: mode, evaluationRepository: evaluationRepository, observer: observer, periodicScheduler: polling, streaming: streaming, target: target)
+        DefaultSyncManager(syncMode: mode, evaluationRepository: evaluationRepository, observer: observer, evaluationStorage: evaluationStorage, eventsManager: eventsManager, periodicScheduler: polling, streaming: streaming, target: target)
     }
 
     // MARK: - Pause Tests

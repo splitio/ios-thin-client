@@ -3,6 +3,8 @@ import Http
 @testable import SplitThin
 
 func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync, refreshRate: Int = 1, timeout: Int = -1, target: String = "user-123", fallbackTreatments: FallbackTreatmentsConfig? = nil, observer: Observer? = nil) throws -> SplitFactory {
+
+    // SplitConfig
     var configBuilder = SplitClientConfig.builder()
                                          .setMinEvaluationRefreshRate(1)
                                          .set(syncMode: syncMode)
@@ -15,6 +17,7 @@ func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync
 
     let config = configBuilder.build()
 
+    // Factory
     let builder = DefaultSplitFactoryBuilder()
 
     // Inject httpClient (just possible on testing)
