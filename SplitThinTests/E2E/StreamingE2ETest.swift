@@ -86,7 +86,7 @@ final class StreamingE2ETest: XCTestCase {
         let notificationSentAt = Date()
         connectionManagerRef!.handleNotification(
             EvaluationUpdateNotification(channel: nil, timestamp: 0, changeNumber: 2,
-                                         updateIntervalMs: updateIntervalMs, algorithmSeed: algorithmSeed)
+                                         algorithmSeed: algorithmSeed, updateIntervalMs: updateIntervalMs)
         )
 
         waitFor(sdkUpdate, timeout: Double(updateIntervalMs / 1000) + 3)

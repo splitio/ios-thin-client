@@ -102,22 +102,22 @@ final class DefaultStreamingConnectionManager: StreamingConnectionManager, SseHa
 
     func handleNotification(_ notification: ThinNotification) {
         switch notification.type {
-        case .evaluationUpdate:
-            let evalNotification = notification as? EvaluationUpdateNotification
-            Task { [weak self] in
-                guard let self else { return }
-                await fetchCoordinator.refetchAll(notification: evalNotification)
-            }
-        case .control:
-            handleControl(notification as? ThinControlNotification)
-        case .occupancy:
-            if let occupancy = notification as? ThinOccupancyNotification, occupancy.publishers == 0 {
-                onPushDisabled?()
-            }
-        case .error:
-            if let error = notification as? ThinStreamingError {
-                reportError(isRetryable: error.isRetryable)
-            }
+            case .evaluationUpdate:
+                let evalNotification = notification as? EvaluationUpdateNotification
+                Task { [weak self] in
+                    guard let self else { return }
+                    await self.fetchCoordinator.refetchAll(notification: evalNotification)
+                }
+            case .control:
+                handleControl(notification as? ThinControlNotification)
+            case .occupancy:
+                if let occupancy = notification as? ThinOccupancyNotification, occupancy.publishers == 0 {
+                    onPushDisabled?()
+                }
+            case .error:
+                if let error = notification as? ThinStreamingError {
+                    reportError(isRetryable: error.isRetryable)
+                }
         }
     }
 
@@ -167,7 +167,12 @@ final class DefaultStreamingConnectionManager: StreamingConnectionManager, SseHa
                 return
             }
 
-            let endpoint = Endpoint.builder(baseUrl: streamingEndpoint, path: "").set(method: .get).build()
+            let kAblySplitSdkClientKeyLength = 4
+            
+            let endpoint = Endpoint.builder(baseUrl: streamingEndpoint).set(method: .get).add(headers:
+                                                                                                ["Content-Type":"text/event-stream",
+                                                                                                 "SplitSDKClientKey": "\(String("apiKey".suffix(kAblySplitSdkClientKeyLength)))",
+                                                                                                 "SplitSDKVersion":"\(Version.semantic)"]).build()
             let factory = DefaultSseClientFactory(endpoint: endpoint, httpClient: httpClient, sseHandler: self)
             let handler = SseConnectionHandler(sseClientFactory: factory)
             withLock(stateLock) { activeConnectionHandler = handler }

@@ -27,18 +27,36 @@ class ThinNotification {
     }
 }
 
+enum NotificationDataType: Int {
+    case flagUpdate = 0
+    case rbsUpdate = 1
+    case sUpdate = 2
+    case lsUpdate = 3
+}
+
+enum UpdateStrategy: Int {
+    case fetchAll = 0
+    case boundedFetchRequest = 1
+    case keyList = 2
+}
+
 class EvaluationUpdateNotification: ThinNotification {
     let changeNumber: Int64
-    let updateIntervalMs: Int64?
+    let dataType: NotificationDataType?
+    let updateStrategy: UpdateStrategy?
     let algorithmSeed: Int?
     let hashingAlgorithm: Int?
+    let updateIntervalMs: Int64?
 
     init(channel: String?, timestamp: Int64, changeNumber: Int64,
-         updateIntervalMs: Int64? = nil, algorithmSeed: Int? = nil, hashingAlgorithm: Int? = nil) {
+         dataType: NotificationDataType? = nil, updateStrategy: UpdateStrategy? = nil,
+         algorithmSeed: Int? = nil, hashingAlgorithm: Int? = nil, updateIntervalMs: Int64? = nil) {
         self.changeNumber = changeNumber
-        self.updateIntervalMs = updateIntervalMs
+        self.dataType = dataType
+        self.updateStrategy = updateStrategy
         self.algorithmSeed = algorithmSeed
         self.hashingAlgorithm = hashingAlgorithm
+        self.updateIntervalMs = updateIntervalMs
         super.init(type: .evaluationUpdate, channel: channel, timestamp: timestamp)
     }
 }

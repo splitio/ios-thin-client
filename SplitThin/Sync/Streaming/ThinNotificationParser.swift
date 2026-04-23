@@ -1,7 +1,7 @@
 import Foundation
 
 private let kOccupancyPrefix = "[?occupancy=metrics.publishers]"
-private let kEvaluationUpdateType = "EVALUATION_UPDATE"
+private let kEvaluationUpdateType = "EVALUATIONS_UPDATE"
 private let kControlType = "CONTROL"
 private let kErrorType = "ERROR"
 
@@ -13,13 +13,19 @@ protocol ThinNotificationParser {
 final class DefaultThinNotificationParser: ThinNotificationParser {
 
     func parseRaw(jsonString: String) -> RawThinNotification? {
-        return ThinNotificationDtoParser.parseRaw(jsonString: jsonString)
+        ThinNotificationDtoParser.parseRaw(jsonString: jsonString)
     }
 
     func parse(raw: RawThinNotification) -> ThinNotification? {
-        let channel = raw.channel
-        let data = raw.data
-        let timestamp = raw.timestamp
+        // raw.data is a JSON envelope with channel, timestamp, and a nested "data" string
+        guard let outerData = raw.data.data(using: .utf8),
+              let outerDto = try? Json.decode(from: outerData, to: RawThinNotificationDto.self),
+              let data = outerDto.data, !data.isEmpty else {
+            return nil
+        }
+
+        let channel = outerDto.channel ?? raw.channel
+        let timestamp = outerDto.timestamp ?? raw.timestamp
 
         if channel.contains(kOccupancyPrefix) {
             guard let dto = ThinNotificationDtoParser.parseOccupancy(jsonString: data) else { return nil }
@@ -30,7 +36,9 @@ final class DefaultThinNotificationParser: ThinNotificationParser {
             guard let dto = ThinNotificationDtoParser.parseEvaluationUpdate(jsonString: data) else { return nil }
             return EvaluationUpdateNotification(
                 channel: channel, timestamp: timestamp, changeNumber: dto.changeNumber,
-                updateIntervalMs: dto.i, algorithmSeed: dto.s, hashingAlgorithm: dto.h)
+                dataType: dto.dt.flatMap(NotificationDataType.init),
+                updateStrategy: dto.u.flatMap(UpdateStrategy.init),
+                algorithmSeed: dto.s, hashingAlgorithm: dto.h, updateIntervalMs: dto.i)
         }
 
         if data.contains(kControlType) {

@@ -119,7 +119,7 @@ final class DefaultEvaluationFetchCoordinatorTest: XCTestCase {
     func testRefetchAllPassesNotificationAndKeyToDelayProvider() async throws {
         var delayProviderCalls: [(EvaluationUpdateNotification?, String)] = []
         let notification = EvaluationUpdateNotification(channel: nil, timestamp: 0, changeNumber: 1,
-                                                        updateIntervalMs: 5000, algorithmSeed: 42)
+                                                        algorithmSeed: 42, updateIntervalMs: 5000)
         coordinator = DefaultEvaluationFetchCoordinator(provider: provider, observer: ObserverSpy()) { notif, key in
             delayProviderCalls.append((notif, key))
             return 0
