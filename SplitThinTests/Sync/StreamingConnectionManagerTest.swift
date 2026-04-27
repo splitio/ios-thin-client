@@ -83,9 +83,11 @@ class StreamingConnectionManagerTest: XCTestCase {
         let refetched = expectation(description: "refetchAll called")
         fetchCoordinatorMock.onRefetchAllCallback = { refetched.fulfill() }
 
+        let innerData = "{\"type\":\"EVALUATIONS_UPDATE\",\"changeNumber\":55}"
+        let escaped = innerData.replacingOccurrences(of: "\\", with: "\\\\")
+                               .replacingOccurrences(of: "\"", with: "\\\"")
         manager.handleIncomingMessage(message: [
-            "data": "{\"type\":\"EVALUATION_UPDATE\",\"changeNumber\":55}",
-            "channel": "ch1"
+            "data": "{\"channel\":\"ch1\",\"data\":\"\(escaped)\",\"timestamp\":1000}"
         ])
 
         await fulfillment(of: [refetched], timeout: 2)

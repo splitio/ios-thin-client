@@ -8,6 +8,7 @@ final class DefaultSplitFactoryTest: XCTestCase {
     private var evaluationRepositoryMock: EvaluationRepositoryMock!
     private var fetchCoordinatorMock: EvaluationFetchCoordinatorMock!
     private var streamingManagerMock: StreamingManagerMock!
+    private var evaluationStorageMock: EvaluationStorageMock!
     private var splitManager: DefaultSplitManager!
 
     override func setUp() {
@@ -16,8 +17,9 @@ final class DefaultSplitFactoryTest: XCTestCase {
         evaluationRepositoryMock = EvaluationRepositoryMock()
         fetchCoordinatorMock = EvaluationFetchCoordinatorMock()
         streamingManagerMock = StreamingManagerMock()
+        evaluationStorageMock = EvaluationStorageMock()
         splitManager = DefaultSplitManager(evaluationRepository: evaluationRepositoryMock, target: Target(matchingKey: "user1"))
-        factory = DefaultSplitFactory(sdkKey: SdkKey("api-key"), target: Target(matchingKey: "user1"), config: SplitClientConfig.builder().build(), evaluationFilters: nil, secureHttpClient: secureHttpClientMock, evaluationRepository: evaluationRepositoryMock, fetchCoordinator: fetchCoordinatorMock, streamingManager: streamingManagerMock, splitManager: splitManager)
+        factory = DefaultSplitFactory(sdkKey: SdkKey("api-key"), target: Target(matchingKey: "user1"), config: SplitClientConfig.builder().build(), evaluationFilters: nil, secureHttpClient: secureHttpClientMock, evaluationRepository: evaluationRepositoryMock, fetchCoordinator: fetchCoordinatorMock, streamingManager: streamingManagerMock, evaluationStorage: evaluationStorageMock, splitManager: splitManager, factoryObserver: ObserverSpy())
     }
 
     override func tearDown() async throws {
@@ -27,6 +29,7 @@ final class DefaultSplitFactoryTest: XCTestCase {
         evaluationRepositoryMock = nil
         fetchCoordinatorMock = nil
         streamingManagerMock = nil
+        evaluationStorageMock = nil
         splitManager = nil
     }
 
@@ -52,7 +55,7 @@ final class DefaultSplitFactoryTest: XCTestCase {
     }
 
     func testGetClientDifferentTarget() {
-        let client = factory.getClient(Target(matchingKey: "user2"))
+        let client = factory.getClient("user2")
 
         XCTAssertEqual(client.target.key.matchingKey, "user2")
     }
@@ -74,8 +77,8 @@ final class DefaultSplitFactoryTest: XCTestCase {
     }
 
     func testGetClientReturnsDifferentInstancesForDifferentKeys() {
-        let client1 = factory.getClient(Target(matchingKey: "user2"))
-        let client2 = factory.getClient(Target(matchingKey: "user3"))
+        let client1 = factory.getClient("user2")
+        let client2 = factory.getClient("user3")
 
         XCTAssertNotIdentical(client1, client2, "Should return different instances for different keys")
     }
@@ -105,7 +108,7 @@ final class DefaultSplitFactoryTest: XCTestCase {
     func testDestroyReturnsFailedClientForNewTargets() async {
         await factory.destroy()
 
-        let client = factory.getClient(Target(matchingKey: "user2"))
+        let client = factory.getClient("user2")
         XCTAssertTrue(client is FailedClient)
     }
 

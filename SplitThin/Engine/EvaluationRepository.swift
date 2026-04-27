@@ -7,54 +7,88 @@ protocol EvaluationRepository: Sendable {
     func getEvaluationsByFlagSets(_ flagSets: [String], target: Target) -> [StoredEvaluation]
     func getFlagNames(target: Target) -> [String]
     func setTarget(_ target: Target)
-    func initialize(target: Target) async throws
+    func update(_ evaluations: [EvaluationResult], for target: Target)
+    @discardableResult
+    func initialize(target: Target) async throws -> FetchResult
 }
 
 final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendable {
 
     private let fetchCoordinator: EvaluationFetchCoordinator
     private let evaluationFilters: EvaluationFilters?
-    private let storage: InMemoryEvaluationStorage
 
-    init(fetchCoordinator: EvaluationFetchCoordinator, storage: InMemoryEvaluationStorage, evaluationFilters: EvaluationFilters?) {
+    private var cache = [Key: [String: StoredEvaluation]]()
+    private let lock = NSLock()
+
+    init(fetchCoordinator: EvaluationFetchCoordinator, evaluationFilters: EvaluationFilters?) {
         self.fetchCoordinator = fetchCoordinator
-        self.storage = storage
         self.evaluationFilters = evaluationFilters
     }
 
     func getEvaluation(flag: String, target: Target) -> StoredEvaluation? {
-        storage.getEvaluation(flag: flag, target: target)
+        withLock(lock) { cache[target.key]?[flag] }
     }
 
     func getEvaluations(flags: [String], target: Target) -> [StoredEvaluation] {
-        storage.getEvaluations(flags: flags, target: target)
+        withLock(lock) {
+            let targetCache = cache[target.key] ?? [:]
+            return flags.compactMap { targetCache[$0] }
+        }
     }
 
     func getEvaluationsByFlagSets(_ flagSets: [String], target: Target) -> [StoredEvaluation] {
-        storage.getEvaluationsByFlagSets(flagSets, target: target)
+        withLock(lock) {
+            let targetCache = cache[target.key] ?? [:]
+            return targetCache.values.filter { stored in
+                !Set(stored.flagSets).isDisjoint(with: flagSets)
+            }
+        }
     }
 
     func getFlagNames(target: Target) -> [String] {
-        storage.getFlagNames(target: target)
+        withLock(lock) { Array((cache[target.key] ?? [:]).keys) }
     }
 
     func setTarget(_ target: Target) {
         Task { [weak self] in
             guard let self else { return }
-            await self.storage.clear(target: target)
-            if let evaluations = await self.fetchCoordinator.fetchIfNeeded(target: target, filters: self.evaluationFilters, reason: .targetSwitch) {
-                self.storage.cacheEvaluations(evaluations, for: target)
-            } else {
-                Logger.e("EvaluationRepository: Failed to fetch evaluations for target \(target.matchingKey)")
+            do {
+                let result = try await self.fetchCoordinator.fetchIfNeeded(target: target, filters: self.evaluationFilters, reason: .targetSwitch)
+                self.cacheEvaluations(result.evaluations, for: target)
+            } catch {
+                Logger.e("EvaluationRepository: Failed to fetch evaluations for target \(target.matchingKey): \(error)")
             }
         }
     }
 
-    func initialize(target: Target) async throws {
-        guard let evaluations = await fetchCoordinator.fetchIfNeeded(target: target, filters: evaluationFilters, reason: .initialization) else {
-            throw EvaluationFetchError.fetchFailed
-        }
-        storage.cacheEvaluations(evaluations, for: target)
+    @discardableResult
+    func initialize(target: Target) async throws -> FetchResult {
+        let result = try await fetchCoordinator.fetchIfNeeded(target: target, filters: evaluationFilters, reason: .initialization)
+        cacheEvaluations(result.evaluations, for: target)
+        return result
     }
 
+    func update(_ evaluations: [EvaluationResult], for target: Target) {
+        cacheEvaluations(evaluations, for: target)
+    }
+
+    func clear() {
+        withLock(lock) { cache.removeAll() }
+    }
+
+    // MARK: - Private
+
+    private func cacheEvaluations(_ evaluations: [EvaluationResult], for target: Target) {
+        guard !evaluations.isEmpty else { return }
+
+        let userKey = target.key
+        withLock(lock) {
+            var targetCache = cache[userKey] ?? [:]
+            for evaluation in evaluations {
+                let stored = StoredEvaluation(evaluationResult: evaluation, flagSets: evaluation.flagSets)
+                targetCache[evaluation.flag] = stored
+            }
+            cache[userKey] = targetCache
+        }
+    }
 }

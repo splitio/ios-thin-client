@@ -12,14 +12,14 @@ final class DelayProviderTest: XCTestCase {
 
     func testReturnsZeroWhenUpdateIntervalMsIsMissing() {
         let notification = EvaluationUpdateNotification(channel: nil, timestamp: 0, changeNumber: 1,
-                                                        updateIntervalMs: nil, algorithmSeed: 42)
+                                                        algorithmSeed: 42, updateIntervalMs: nil)
         let delay = delayProvider(notification, "user1")
         XCTAssertEqual(delay, 0)
     }
 
     func testReturnsZeroWhenAlgorithmSeedIsMissing() {
         let notification = EvaluationUpdateNotification(channel: nil, timestamp: 0, changeNumber: 1,
-                                                        updateIntervalMs: 5000, algorithmSeed: nil)
+                                                        algorithmSeed: nil, updateIntervalMs: 5000)
         let delay = delayProvider(notification, "user1")
         XCTAssertEqual(delay, 0)
     }
@@ -28,7 +28,7 @@ final class DelayProviderTest: XCTestCase {
         let intervalMs: Int64 = 5000
         let seed = 42
         let notification = EvaluationUpdateNotification(channel: nil, timestamp: 0, changeNumber: 1,
-                                                        updateIntervalMs: intervalMs, algorithmSeed: seed)
+                                                        algorithmSeed: seed, updateIntervalMs: intervalMs)
         let delay = delayProvider(notification, "user1")
 
         let hash = Murmur3Hash.hashString("user1", UInt32(truncatingIfNeeded: seed))
@@ -43,7 +43,7 @@ final class DelayProviderTest: XCTestCase {
     func testDelayIsAlwaysWithinInterval() {
         let intervalMs: Int64 = 3000
         let notification = EvaluationUpdateNotification(channel: nil, timestamp: 0, changeNumber: 1,
-                                                        updateIntervalMs: intervalMs, algorithmSeed: 99)
+                                                        algorithmSeed: 99, updateIntervalMs: intervalMs)
         let keys = ["user1", "user2", "user3", "abc", "xyz"]
         for key in keys {
             let delay = delayProvider(notification, key)

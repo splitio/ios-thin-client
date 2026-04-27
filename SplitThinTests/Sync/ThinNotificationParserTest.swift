@@ -14,7 +14,7 @@ class ThinNotificationParserTest: XCTestCase {
 
     func testParseRawValidMessage() {
         let json = """
-        {"channel":"prefix_user1","data":"{\\"type\\":\\"EVALUATION_UPDATE\\",\\"changeNumber\\":100}","timestamp":1234567890}
+        {"channel":"prefix_user1","data":"{\\"type\\":\\"EVALUATIONS_UPDATE\\",\\"changeNumber\\":100}","timestamp":1234567890}
         """
         let raw = parser.parseRaw(jsonString: json)
         XCTAssertNotNil(raw)
@@ -30,20 +30,37 @@ class ThinNotificationParserTest: XCTestCase {
     // MARK: - parse (second phase)
 
     func testParseEvaluationUpdate() {
-        let raw = RawThinNotification(channel: "prefix_user1",
-                                      data: "{\"type\":\"EVALUATION_UPDATE\",\"changeNumber\":42}",
-                                      timestamp: 1000)
+        let raw = makeRaw(
+            channel: "prefix_user1",
+            innerData: "{\"type\":\"EVALUATIONS_UPDATE\",\"changeNumber\":42}",
+            timestamp: 1000)
         let notification = parser.parse(raw: raw)
         XCTAssertNotNil(notification)
         XCTAssertEqual(notification?.type, .evaluationUpdate)
+        XCTAssertEqual(notification?.channel, "prefix_user1")
+        XCTAssertEqual(notification?.timestamp, 1000)
         let update = notification as? EvaluationUpdateNotification
         XCTAssertEqual(update?.changeNumber, 42)
     }
 
+    func testParseEvaluationUpdateWithAllFields() {
+        let payload = "{\"type\":\"EVALUATIONS_UPDATE\",\"changeNumber\":1776901840728,\"dt\":0,\"u\":0,\"s\":0,\"h\":1,\"i\":60000}"
+        let raw = makeRaw(channel: "prefix_user1", innerData: payload, timestamp: 1000)
+        let update = parser.parse(raw: raw) as? EvaluationUpdateNotification
+        XCTAssertNotNil(update)
+        XCTAssertEqual(update?.changeNumber, 1776901840728)
+        XCTAssertEqual(update?.dataType, .flagUpdate)
+        XCTAssertEqual(update?.updateStrategy, .fetchAll)
+        XCTAssertEqual(update?.algorithmSeed, 0)
+        XCTAssertEqual(update?.hashingAlgorithm, 1)
+        XCTAssertEqual(update?.updateIntervalMs, 60000)
+    }
+
     func testParseControl() {
-        let raw = RawThinNotification(channel: "control_pri",
-                                      data: "{\"type\":\"CONTROL\",\"controlType\":\"STREAMING_PAUSED\"}",
-                                      timestamp: 1000)
+        let raw = makeRaw(
+            channel: "control_pri",
+            innerData: "{\"type\":\"CONTROL\",\"controlType\":\"STREAMING_PAUSED\"}",
+            timestamp: 1000)
         let notification = parser.parse(raw: raw)
         XCTAssertNotNil(notification)
         XCTAssertEqual(notification?.type, .control)
@@ -52,9 +69,10 @@ class ThinNotificationParserTest: XCTestCase {
     }
 
     func testParseOccupancy() {
-        let raw = RawThinNotification(channel: "[?occupancy=metrics.publishers]prefix_user1",
-                                      data: "{\"metrics\":{\"publishers\":2}}",
-                                      timestamp: 1000)
+        let raw = makeRaw(
+            channel: "[?occupancy=metrics.publishers]prefix_user1",
+            innerData: "{\"metrics\":{\"publishers\":2}}",
+            timestamp: 1000)
         let notification = parser.parse(raw: raw)
         XCTAssertNotNil(notification)
         XCTAssertEqual(notification?.type, .occupancy)
@@ -63,9 +81,10 @@ class ThinNotificationParserTest: XCTestCase {
     }
 
     func testParseStreamingError() {
-        let raw = RawThinNotification(channel: "control_pri",
-                                      data: "{\"type\":\"ERROR\",\"message\":\"something went wrong\",\"code\":40140,\"statusCode\":401}",
-                                      timestamp: 1000)
+        let raw = makeRaw(
+            channel: "control_pri",
+            innerData: "{\"type\":\"ERROR\",\"message\":\"something went wrong\",\"code\":40140,\"statusCode\":401}",
+            timestamp: 1000)
         let notification = parser.parse(raw: raw)
         XCTAssertNotNil(notification)
         XCTAssertEqual(notification?.type, .error)
@@ -78,5 +97,22 @@ class ThinNotificationParserTest: XCTestCase {
         let raw = RawThinNotification(channel: "prefix_user1", data: "invalid", timestamp: 1000)
         let notification = parser.parse(raw: raw)
         XCTAssertNil(notification)
+    }
+
+    func testParseMissingInnerDataReturnsNil() {
+        let raw = RawThinNotification(channel: "prefix_user1", data: "{\"channel\":\"ch\"}", timestamp: 1000)
+        let notification = parser.parse(raw: raw)
+        XCTAssertNil(notification)
+    }
+
+    // MARK: - Helpers
+
+    /// Builds a RawThinNotification whose `data` is the SSE envelope JSON containing channel, timestamp,
+    /// and a nested "data" field with the escaped inner payload.
+    private func makeRaw(channel: String, innerData: String, timestamp: Int64) -> RawThinNotification {
+        let escaped = innerData.replacingOccurrences(of: "\\", with: "\\\\")
+                               .replacingOccurrences(of: "\"", with: "\\\"")
+        let envelope = "{\"channel\":\"\(channel)\",\"data\":\"\(escaped)\",\"timestamp\":\(timestamp)}"
+        return RawThinNotification(channel: "", data: envelope, timestamp: 0)
     }
 }

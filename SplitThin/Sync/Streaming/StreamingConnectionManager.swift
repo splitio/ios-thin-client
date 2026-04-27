@@ -31,33 +31,7 @@ final class DefaultStreamingConnectionManager: StreamingConnectionManager, SseHa
     private let stateLock = NSLock()
     private var activeConnectionHandler: SseConnectionHandler?
 
-    // Convenience init for testing (no network required)
-    init(target: Target,
-         fetchCoordinator: EvaluationFetchCoordinator,
-         notificationParser: ThinNotificationParser,
-         onPushDisabled: (() -> Void)? = nil) {
-        self.target = target
-        self.authProvider = nil
-        self.streamingEndpoint = nil
-        self.httpClient = nil
-        self.fetchCoordinator = fetchCoordinator
-        self.notificationParser = notificationParser
-        self.jwtParser = nil
-        self.backoffCounter = nil
-        self.onConnect = nil
-        self.onPushDisabled = onPushDisabled
-    }
-
-    // Full init for production use
-    init(target: Target,
-         authProvider: AuthProvider,
-         streamingEndpoint: URL,
-         httpClient: HttpClient,
-         fetchCoordinator: EvaluationFetchCoordinator,
-         notificationParser: ThinNotificationParser,
-         jwtParser: SseJwtParser,
-         backoffCounter: BackoffCounter,
-         onConnect: (() -> Void)? = nil) {
+    init(target: Target, authProvider: AuthProvider, streamingEndpoint: URL, httpClient: HttpClient, fetchCoordinator: EvaluationFetchCoordinator, notificationParser: ThinNotificationParser, jwtParser: SseJwtParser, backoffCounter: BackoffCounter, onConnect: (() -> Void)? = nil) {
         self.target = target
         self.authProvider = authProvider
         self.streamingEndpoint = streamingEndpoint
@@ -69,6 +43,24 @@ final class DefaultStreamingConnectionManager: StreamingConnectionManager, SseHa
         self.onConnect = onConnect
         self.onPushDisabled = nil
     }
+
+    // MARK: Init for testing (doesn't need connection)
+    #if DEBUG
+    init(target: Target, fetchCoordinator: EvaluationFetchCoordinator, notificationParser: ThinNotificationParser, onPushDisabled: (() -> Void)? = nil) {
+        self.target = target
+        self.fetchCoordinator = fetchCoordinator
+        self.notificationParser = notificationParser
+        self.onPushDisabled = onPushDisabled
+
+        // All nil
+        self.authProvider = nil
+        self.streamingEndpoint = nil
+        self.httpClient = nil
+        self.jwtParser = nil
+        self.backoffCounter = nil
+        self.onConnect = nil
+    }
+    #endif
 
     func start() {
         let shouldStart: Bool = withLock(stateLock) {
@@ -102,33 +94,34 @@ final class DefaultStreamingConnectionManager: StreamingConnectionManager, SseHa
 
     func handleNotification(_ notification: ThinNotification) {
         switch notification.type {
-        case .evaluationUpdate:
-            let evalNotification = notification as? EvaluationUpdateNotification
-            Task { [weak self] in
-                guard let self else { return }
-                await fetchCoordinator.refetchAll(notification: evalNotification)
-            }
-        case .control:
-            handleControl(notification as? ThinControlNotification)
-        case .occupancy:
-            if let occupancy = notification as? ThinOccupancyNotification, occupancy.publishers == 0 {
-                onPushDisabled?()
-            }
-        case .error:
-            if let error = notification as? ThinStreamingError {
-                reportError(isRetryable: error.isRetryable)
-            }
+            case .evaluationUpdate:
+                let evalNotification = notification as? EvaluationUpdateNotification
+                Task { [weak self] in
+                    guard let self else { return }
+                    await self.fetchCoordinator.refetchAll(notification: evalNotification)
+                }
+            case .control:
+                handleControl(notification as? ThinControlNotification)
+            case .occupancy:
+                if let occupancy = notification as? ThinOccupancyNotification, occupancy.publishers == 0 {
+                    onPushDisabled?()
+                }
+            case .error:
+                if let error = notification as? ThinStreamingError {
+                    reportError(isRetryable: error.isRetryable)
+                }
         }
     }
 
     // MARK: - SseHandler
 
     func isConnectionConfirmed(message: [String: String]) -> Bool {
-        return message["id"] != nil || message["data"] != nil
+        message["id"] != nil || message["data"] != nil
     }
 
     func handleIncomingMessage(message: [String: String]) {
         guard let data = message["data"] else { return }
+
         let channel = message["channel"] ?? ""
         let timestamp = Int64(message["timestamp"] ?? "0") ?? 0
         let raw = RawThinNotification(channel: channel, data: data, timestamp: timestamp)
@@ -142,6 +135,7 @@ final class DefaultStreamingConnectionManager: StreamingConnectionManager, SseHa
             withLock(stateLock) { state = .stopped }
             return
         }
+
         Task { [weak self] in
             guard let self else { return }
             let delay = backoffCounter?.getNextRetryTime() ?? 1
@@ -167,7 +161,12 @@ final class DefaultStreamingConnectionManager: StreamingConnectionManager, SseHa
                 return
             }
 
-            let endpoint = Endpoint.builder(baseUrl: streamingEndpoint, path: "").set(method: .get).build()
+            let kAblySplitSdkClientKeyLength = 4
+            
+            let endpoint = Endpoint.builder(baseUrl: streamingEndpoint).set(method: .get).add(headers:
+                                                                                                ["Content-Type":"text/event-stream",
+                                                                                                 "SplitSDKClientKey": "\(String("apiKey".suffix(kAblySplitSdkClientKeyLength)))",
+                                                                                                 "SplitSDKVersion":"\(Version.semantic)"]).build()
             let factory = DefaultSseClientFactory(endpoint: endpoint, httpClient: httpClient, sseHandler: self)
             let handler = SseConnectionHandler(sseClientFactory: factory)
             withLock(stateLock) { activeConnectionHandler = handler }
@@ -191,24 +190,25 @@ final class DefaultStreamingConnectionManager: StreamingConnectionManager, SseHa
 
     private func handleControl(_ notification: ThinControlNotification?) {
         guard let notification else { return }
+
         switch notification.controlType {
-        case .streamingPaused:
-            Logger.d("StreamingConnectionManager: streaming paused by server")
-        case .streamingResumed:
-            Logger.d("StreamingConnectionManager: streaming resumed by server")
-        case .streamingDisabled:
-            Logger.d("StreamingConnectionManager: streaming disabled by server")
-            stop()
-        case .streamingReset:
-            Logger.d("StreamingConnectionManager: streaming reset by server")
-            stop()
-            Task { [weak self] in
-                guard let self else { return }
-                withLock(self.stateLock) { self.state = .started }
-                await connectSse()
-            }
-        case .unknown:
-            break
+            case .streamingPaused:
+                Logger.d("StreamingConnectionManager: streaming paused by server")
+            case .streamingResumed:
+                Logger.d("StreamingConnectionManager: streaming resumed by server")
+            case .streamingDisabled:
+                Logger.d("StreamingConnectionManager: streaming disabled by server")
+                stop()
+            case .streamingReset:
+                Logger.d("StreamingConnectionManager: streaming reset by server")
+                stop()
+                Task { [weak self] in
+                    guard let self else { return }
+                    withLock(self.stateLock) { self.state = .started }
+                    await connectSse()
+                }
+            case .unknown:
+                break
         }
     }
 }

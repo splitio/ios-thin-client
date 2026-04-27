@@ -6,18 +6,21 @@ final class DefaultSplitClientTest: XCTestCase {
     private var client: DefaultSplitClient!
     private var treatmentsManagerMock: TreatmentsManagerMock!
     private var eventsManagerMock: SplitEventsManagerMock!
+    private var syncManagerMock: SyncManagerMock!
 
     override func setUp() {
         super.setUp()
         treatmentsManagerMock = TreatmentsManagerMock()
         eventsManagerMock = SplitEventsManagerMock()
-        client = DefaultSplitClient(target: Target(matchingKey: "user1"), treatmentsManager: treatmentsManagerMock, eventsManager: eventsManagerMock)
+        syncManagerMock = SyncManagerMock()
+        client = DefaultSplitClient(target: Target(matchingKey: "user1"), treatmentsManager: treatmentsManagerMock, eventsManager: eventsManagerMock, observer: ObserverSpy(), syncManager: syncManagerMock)
     }
 
     override func tearDown() {
         client = nil
         treatmentsManagerMock = nil
         eventsManagerMock = nil
+        syncManagerMock = nil
         super.tearDown()
     }
 
@@ -28,7 +31,7 @@ final class DefaultSplitClientTest: XCTestCase {
     }
 
     func testGetTreatmentReturnsControl() {
-        let result = client.getTreatment(flag: "flag_a")
+        let result = client.getTreatment("flag_a")
 
         XCTAssertEqual(result.treatment, "control")
     }
@@ -75,12 +78,24 @@ final class DefaultSplitClientTest: XCTestCase {
         XCTAssertEqual(eventsManagerMock.removedListeners.count, 2)
     }
 
+    func testDestroyStopsEventsManager() async {
+        await client.destroy()
+
+        XCTAssertEqual(eventsManagerMock.stopCallCount, 1)
+    }
+
+    func testDestroyStopsSyncManager() async {
+        await client.destroy()
+
+        XCTAssertEqual(syncManagerMock.stopCallCount, 1)
+    }
+
     func testDestroyOnlyRemovesOwnListeners() async {
         let listener1 = TestEventListener()
         let listener2 = TestEventListener()
         client.addEventListener(listener1)
 
-        let client2 = DefaultSplitClient(target: Target(matchingKey: "user2"), treatmentsManager: treatmentsManagerMock, eventsManager: eventsManagerMock)
+        let client2 = DefaultSplitClient(target: Target(matchingKey: "user2"), treatmentsManager: treatmentsManagerMock, eventsManager: eventsManagerMock, observer: ObserverSpy(), syncManager: syncManagerMock)
         client2.addEventListener(listener2)
 
         await client.destroy()

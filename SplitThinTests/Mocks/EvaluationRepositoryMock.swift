@@ -27,19 +27,29 @@ final class EvaluationRepositoryMock: EvaluationRepository, @unchecked Sendable 
         return evaluationsToReturn
     }
 
+    var flagNamesToReturn = [String]()
+    var updateCalls = [(evaluations: [EvaluationResult], target: Target)]()
+
     func getFlagNames(target: Target) -> [String] {
-        []
+        flagNamesToReturn
+    }
+
+    func update(_ evaluations: [EvaluationResult], for target: Target) {
+        updateCalls.append((evaluations, target))
     }
 
     func setTarget(_ target: Target) {
         setTargetCalls.append(target)
     }
 
-    func initialize(target: Target) async throws {
+    var fetchResultToReturn = FetchResult(evaluations: [], changeNumber: nil)
+
+    @discardableResult
+    func initialize(target: Target) async throws -> FetchResult {
         setTargetCalls.append(target)
         if let error = initializeErrorToThrow {
             throw error
         }
+        return fetchResultToReturn
     }
-
 }
