@@ -7,6 +7,7 @@ protocol EvaluationRepository: Sendable {
     func getEvaluationsByFlagSets(_ flagSets: [String], target: Target) -> [StoredEvaluation]
     func getFlagNames(target: Target) -> [String]
     func setTarget(_ target: Target)
+    func update(_ evaluations: [EvaluationResult], for target: Target)
     @discardableResult
     func initialize(target: Target) async throws -> FetchResult
 }
@@ -67,7 +68,7 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
         return result
     }
 
-    func updateFromFetch(_ evaluations: [EvaluationResult], for target: Target) {
+    func update(_ evaluations: [EvaluationResult], for target: Target) {
         cacheEvaluations(evaluations, for: target)
     }
 

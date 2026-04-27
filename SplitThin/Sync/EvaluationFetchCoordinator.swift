@@ -38,9 +38,10 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
     private let storage: EvaluationWriteStorage?
     private let delayProvider: DelayProvider
 
-    // Called after a successful push fetch, with the target and the fetch result.
-    var onEvaluationsUpdated: ((Target, FetchResult) -> Void)?
+    // Called after a successful fetch, per key
+    private var onUpdateActions = [Key: (FetchResult) -> Void]()
 
+    // For requests coordination
     private var inFlightTasks = [FetchKey: Task<FetchResult, Error>]()
     private var fetchedKeys = Set<FetchKey>()
     private let lock = NSLock()
@@ -50,6 +51,14 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
         self.observer = observer
         self.storage = storage
         self.delayProvider = delayProvider
+    }
+
+    func registerOnUpdateAction(for key: Key, action: @escaping (FetchResult) -> Void) {
+        withLock(lock) { onUpdateActions[key] = action }
+    }
+
+    func unregisterOnUpdateAction(for key: Key) {
+        withLock(lock) { onUpdateActions.removeValue(forKey: key) }
     }
 
     @discardableResult
@@ -118,7 +127,9 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
         }
 
         if reason == .push {
-            onEvaluationsUpdated?(target, FetchResult(evaluations: result.evaluations, changeNumber: changeNumber))
+            let fetchResult = FetchResult(evaluations: result.evaluations, changeNumber: changeNumber)
+            let updateAction = withLock(lock) { onUpdateActions[target.key] }
+            updateAction?(fetchResult) // Notifies the eventsManager of the client
         }
 
         observer.notify(event: .evalStorageUpdated(names: result.evaluations.map { $0.flag }))

@@ -28,10 +28,10 @@ class ThinNotification {
 }
 
 enum NotificationDataType: Int {
-    case flagUpdate = 0
-    case rbsUpdate = 1
-    case sUpdate = 2
-    case lsUpdate = 3
+    case flagUpdate = 0  // Flag
+    case rbsUpdate = 1   // Rule Based Segment
+    case sUpdate = 2     // Segment  
+    case lsUpdate = 3    // Large Segment
 }
 
 enum UpdateStrategy: Int {
@@ -48,9 +48,7 @@ class EvaluationUpdateNotification: ThinNotification {
     let hashingAlgorithm: Int?
     let updateIntervalMs: Int64?
 
-    init(channel: String?, timestamp: Int64, changeNumber: Int64,
-         dataType: NotificationDataType? = nil, updateStrategy: UpdateStrategy? = nil,
-         algorithmSeed: Int? = nil, hashingAlgorithm: Int? = nil, updateIntervalMs: Int64? = nil) {
+    init(channel: String?, timestamp: Int64, changeNumber: Int64, dataType: NotificationDataType? = nil, updateStrategy: UpdateStrategy? = nil, algorithmSeed: Int? = nil, hashingAlgorithm: Int? = nil, updateIntervalMs: Int64? = nil) {
         self.changeNumber = changeNumber
         self.dataType = dataType
         self.updateStrategy = updateStrategy

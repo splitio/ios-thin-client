@@ -70,6 +70,8 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
 
         Logger.d("SyncManager: Loaded \(cachedEvaluations.count) evaluations from cache for \(target.matchingKey)")
 
+        evaluationRepository.update(cachedEvaluations, for: target)
+
         let metadata = SdkReadyFromCacheMetadata(lastUpdateTimestamp: changeNumber, isInitialCacheLoad: true)
         eventsManager.notifyInternalEvent(.evaluationsLoadedFromCache(metadata))
     }

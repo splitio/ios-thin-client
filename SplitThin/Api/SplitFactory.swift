@@ -109,14 +109,15 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         eventDispatcher.register(eventsManager)
         eventDispatcher.register(LoggingObserver())
 
-        let periodicScheduler = DefaultEvaluationPeriodicScheduler(fetchCoordinator: fetchCoordinator, observer: eventDispatcher, target: target, filters: evaluationFilters, intervalSeconds: config.evaluationRefreshRate)
-        let streaming = DefaultStreaming(streamingManager: streamingManager)
-        let concreteRepo = evaluationRepository as? DefaultEvaluationRepository
-        (fetchCoordinator as? DefaultEvaluationFetchCoordinator)?.onEvaluationsUpdated = { [weak eventDispatcher] target, fetchResult in
+        // Connect FetchCoordinator (that is factory wide) with per-client eventsManager to fire updates events
+        (fetchCoordinator as? DefaultEvaluationFetchCoordinator)?.registerOnUpdateAction(for: target.key) { [weak eventDispatcher, evaluationRepository, target] fetchResult in
             guard let eventDispatcher else { return }
-            concreteRepo?.updateFromFetch(fetchResult.evaluations, for: target)
+            evaluationRepository.update(fetchResult.evaluations, for: target)
             eventDispatcher.notify(event: .evaluationsUpdated(SdkUpdateMetadata(type: .flagsUpdate, names: fetchResult.evaluations.map { $0.flag }, changeNumber: fetchResult.changeNumber)))
         }
+
+        let periodicScheduler = DefaultEvaluationPeriodicScheduler(fetchCoordinator: fetchCoordinator, observer: eventDispatcher, target: target, filters: evaluationFilters, intervalSeconds: config.evaluationRefreshRate)
+        let streaming = DefaultStreaming(streamingManager: streamingManager)
         let syncManager = DefaultSyncManager(syncMode: config.syncMode, evaluationRepository: evaluationRepository, observer: eventDispatcher, evaluationStorage: evaluationStorage, eventsManager: eventsManager, periodicScheduler: periodicScheduler, streaming: streaming, target: target)
         let fallbackCalculator = DefaultFallbackTreatmentsCalculator(fallbacksConfig: config.fallbackTreatments)
         let treatmentsManager = DefaultTreatmentsManager(target: target, evaluationRepository: evaluationRepository, fallbackCalculator: fallbackCalculator)
@@ -128,11 +129,11 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         clients[target.key] = client
         syncManagers[target.key] = syncManager
 
+        // 4. Start
         eventsManager.start()
         syncManager.start()
 
         observer.notify(event: .clientCreated)
-
         return client
     }
 }
