@@ -27,8 +27,15 @@ final class EvaluationRepositoryMock: EvaluationRepository, @unchecked Sendable 
         return evaluationsToReturn
     }
 
+    var flagNamesToReturn = [String]()
+    var updateCalls = [(evaluations: [EvaluationResult], target: Target)]()
+
     func getFlagNames(target: Target) -> [String] {
-        []
+        flagNamesToReturn
+    }
+
+    func update(_ evaluations: [EvaluationResult], for target: Target) {
+        updateCalls.append((evaluations, target))
     }
 
     func setTarget(_ target: Target) {
@@ -45,5 +52,4 @@ final class EvaluationRepositoryMock: EvaluationRepository, @unchecked Sendable 
         }
         return fetchResultToReturn
     }
-
 }

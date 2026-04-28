@@ -1,3 +1,6 @@
+//  Created by Martin Cardozo
+//  Copyright © 2026 Harness. All rights reserved
+
 import Foundation
 import Logging
 
@@ -58,12 +61,12 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
                 let result = try await evaluationRepository.initialize(target: target)
 
                 observer.notify(event: .evaluationsUpdated(SdkUpdateMetadata(type: .flagsUpdate, names: result.evaluations.map { $0.flag }, changeNumber: result.changeNumber)))
-
-                establishLink()
             } catch {
                 // The timeout timer (already scheduled in eventsManager.start()) will take care of this scenario.
                 Logger.e("SyncManager: Initial fetch failed: \(error)")
             }
+
+            establishLink()
         }
     }
 
@@ -72,6 +75,8 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
         let changeNumber = await evaluationStorage.lastChangeNumber(target: target)
 
         Logger.d("SyncManager: Loaded \(cachedEvaluations.count) evaluations from cache for \(target.matchingKey)")
+
+        evaluationRepository.update(cachedEvaluations, for: target)
 
         let metadata = SdkReadyFromCacheMetadata(lastUpdateTimestamp: changeNumber, isInitialCacheLoad: true)
         eventsManager.notifyInternalEvent(.evaluationsLoadedFromCache(metadata))
@@ -98,16 +103,14 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
 }
 
 // MARK: BG Sync (just for mobile devices)
-extension DefaultSyncManager: MobileSync {
+extension DefaultSyncManager {
     func pause() {
         #if !os(macOS)
             withLock(lock) {
                 guard !isPaused else { return }
 
                 polling.stop()
-                Task {
-                    await streaming.stop()
-                }
+                streaming.pause()
 
                 isPaused = true
                 observer.notify(event: .syncPaused)
@@ -127,9 +130,7 @@ extension DefaultSyncManager: MobileSync {
                     case .polling:
                         polling.start()
                     case .streaming:
-                        Task {
-                            await streaming.start()
-                        }
+                        streaming.resume()
                 }
 
                 isPaused = false

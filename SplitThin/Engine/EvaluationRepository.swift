@@ -1,3 +1,6 @@
+//  Created by Martin Cardozo
+//  Copyright © 2026 Harness. All rights reserved
+
 import Foundation
 import Logging
 
@@ -7,6 +10,7 @@ protocol EvaluationRepository: Sendable {
     func getEvaluationsByFlagSets(_ flagSets: [String], target: Target) -> [StoredEvaluation]
     func getFlagNames(target: Target) -> [String]
     func setTarget(_ target: Target)
+    func update(_ evaluations: [EvaluationResult], for target: Target)
     @discardableResult
     func initialize(target: Target) async throws -> FetchResult
 }
@@ -16,7 +20,6 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
     private let fetchCoordinator: EvaluationFetchCoordinator
     private let evaluationFilters: EvaluationFilters?
 
-    // In-memory evaluations by user key (`matchingKey` + `bucketingKey`), not full `Target` (attributes / traffic type can differ).
     private var cache = [Key: [String: StoredEvaluation]]()
     private let lock = NSLock()
 
@@ -50,10 +53,6 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
     }
 
     func setTarget(_ target: Target) {
-        withLock(lock) {
-            cache[target.key] = nil
-        }
-
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -70,6 +69,10 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
         let result = try await fetchCoordinator.fetchIfNeeded(target: target, filters: evaluationFilters, reason: .initialization)
         cacheEvaluations(result.evaluations, for: target)
         return result
+    }
+
+    func update(_ evaluations: [EvaluationResult], for target: Target) {
+        cacheEvaluations(evaluations, for: target)
     }
 
     func clear() {

@@ -18,7 +18,8 @@ extension XCTestCase {
         expectation(description: description)
     }
 
-    // Utility to improve testing legibility. Timeout of 3 seconds by default.
+    // Utility to improve testing legibility. 
+    // If the expectation doesn't fulfill in 3 seconds, THE TEST FAILS.
     func waitFor(_ expectations: XCTestExpectation..., timeout: Double = 3) {
         let semaphore = DispatchSemaphore(value: 0)
         Task {

@@ -46,12 +46,12 @@ func buildClient(target: String = "user-123", treatmentsManager: TreatmentsManag
                        syncManager: syncManager ?? SyncManagerMock())
 }
 
-func mockEvaluationsData(flags: [String]) -> Data {
+func mockEvaluationsData(flags: [String], treatment: String = "on") -> Data {
     let evaluations = flags.map { flag in
         """
         {
             "featureName": "\(flag)",
-            "treatment": "on",
+            "treatment": "\(treatment)",
             "label": "default rule",
             "changeNumber": 12345,
             "sets": ["set-a"]

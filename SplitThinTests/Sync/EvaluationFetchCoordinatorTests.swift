@@ -32,10 +32,11 @@ final class DefaultEvaluationFetchCoordinatorTest: XCTestCase {
 
         do {
             _ = try await coordinator.fetchIfNeeded(target: target, filters: filters, reason: .periodic)
-            XCTFail("Expected fetchIfNeeded to throw")
+            XCTFail("Expected fetchFailed error")
         } catch {
-            XCTAssertEqual(provider.fetchCalls.count, 1)
+            XCTAssertTrue(error is EvaluationFetchError)
         }
+        XCTAssertEqual(provider.fetchCalls.count, 1)
     }
 
     func testConcurrentIdenticalRequestsAreDeduplicated() async throws {
@@ -82,5 +83,54 @@ final class DefaultEvaluationFetchCoordinatorTest: XCTestCase {
         XCTAssertEqual(result1.evaluations.count, 1)
         XCTAssertEqual(result2.evaluations.count, 1)
         XCTAssertEqual(provider.fetchCalls.count, 2)
+    }
+
+    func testRefetchAllWithNoFetchedKeysDoesNothing() async {
+        provider.resultToReturn = EvaluationsResult(evaluations: [], till: 1)
+
+        await coordinator.refetchAll(notification: nil)
+
+        XCTAssertEqual(provider.fetchCalls.count, 0)
+    }
+
+    func testRefetchAllRefetchesPreviouslyFetchedKey() async throws {
+        let evaluations = [EvaluationResult(flag: "flag1", treatment: "on", flagSets: [])]
+        provider.resultToReturn = EvaluationsResult(evaluations: evaluations, till: 1)
+
+        _ = try await coordinator.fetchIfNeeded(target: target, filters: filters, reason: .initialization)
+        await coordinator.refetchAll(notification: nil)
+
+        XCTAssertEqual(provider.fetchCalls.count, 2)
+        XCTAssertEqual(provider.fetchCalls.last?.1, filters)
+    }
+
+    func testRefetchAllRefetchesMultipleDistinctKeys() async throws {
+        let target2 = Target(matchingKey: "user2")
+        let evaluations = [EvaluationResult(flag: "flag1", treatment: "on", flagSets: [])]
+        provider.resultToReturn = EvaluationsResult(evaluations: evaluations, till: 1)
+
+        _ = try await coordinator.fetchIfNeeded(target: target, filters: filters, reason: .initialization)
+        _ = try await coordinator.fetchIfNeeded(target: target2, filters: filters, reason: .initialization)
+        await coordinator.refetchAll(notification: nil)
+
+        XCTAssertEqual(provider.fetchCalls.count, 4)
+    }
+
+    func testRefetchAllPassesNotificationAndKeyToDelayProvider() async throws {
+        var delayProviderCalls: [(EvaluationUpdateNotification?, String)] = []
+        let notification = EvaluationUpdateNotification(channel: nil, timestamp: 0, changeNumber: 1,
+                                                        algorithmSeed: 42, updateIntervalMs: 5000)
+        coordinator = DefaultEvaluationFetchCoordinator(provider: provider, observer: ObserverSpy()) { notif, key in
+            delayProviderCalls.append((notif, key))
+            return 0
+        }
+        provider.resultToReturn = EvaluationsResult(evaluations: [], till: 1)
+
+        _ = try await coordinator.fetchIfNeeded(target: target, filters: filters, reason: .initialization)
+        await coordinator.refetchAll(notification: notification)
+
+        XCTAssertEqual(delayProviderCalls.count, 1)
+        XCTAssertEqual(delayProviderCalls.first?.0?.changeNumber, 1)
+        XCTAssertEqual(delayProviderCalls.first?.1, target.matchingKey)
     }
 }

@@ -7,6 +7,7 @@ final class DefaultSplitFactoryTest: XCTestCase {
     private var secureHttpClientMock: SecureHttpClientMock!
     private var evaluationRepositoryMock: EvaluationRepositoryMock!
     private var fetchCoordinatorMock: EvaluationFetchCoordinatorMock!
+    private var streamingManagerMock: StreamingManagerMock!
     private var evaluationStorageMock: EvaluationStorageMock!
     private var splitManager: DefaultSplitManager!
 
@@ -15,13 +16,10 @@ final class DefaultSplitFactoryTest: XCTestCase {
         secureHttpClientMock = SecureHttpClientMock()
         evaluationRepositoryMock = EvaluationRepositoryMock()
         fetchCoordinatorMock = EvaluationFetchCoordinatorMock()
+        streamingManagerMock = StreamingManagerMock()
         evaluationStorageMock = EvaluationStorageMock()
         splitManager = DefaultSplitManager(evaluationRepository: evaluationRepositoryMock, target: Target(matchingKey: "user1"))
-<<<<<<< HEAD
-        factory = DefaultSplitFactory(sdkKey: SdkKey("api-key"), target: Target(matchingKey: "user1"), config: SplitClientConfig.builder().build(), evaluationFilters: nil, secureHttpClient: secureHttpClientMock, evaluationRepository: evaluationRepositoryMock, fetchCoordinator: fetchCoordinatorMock, splitManager: splitManager, factoryObserver: ObserverSpy())
-=======
-        factory = DefaultSplitFactory(sdkKey: SdkKey("api-key"), target: Target(matchingKey: "user1"), config: SplitClientConfig.builder().build(), evaluationFilters: nil, secureHttpClient: secureHttpClientMock, evaluationRepository: evaluationRepositoryMock, fetchCoordinator: fetchCoordinatorMock, evaluationStorage: evaluationStorageMock, splitManager: splitManager)
->>>>>>> development
+        factory = DefaultSplitFactory(sdkKey: SdkKey("api-key"), target: Target(matchingKey: "user1"), config: SplitClientConfig.builder().build(), evaluationFilters: nil, secureHttpClient: secureHttpClientMock, evaluationRepository: evaluationRepositoryMock, fetchCoordinator: fetchCoordinatorMock, streamingManager: streamingManagerMock, evaluationStorage: evaluationStorageMock, splitManager: splitManager, factoryObserver: ObserverSpy())
     }
 
     override func tearDown() async throws {
@@ -30,6 +28,7 @@ final class DefaultSplitFactoryTest: XCTestCase {
         secureHttpClientMock = nil
         evaluationRepositoryMock = nil
         fetchCoordinatorMock = nil
+        streamingManagerMock = nil
         evaluationStorageMock = nil
         splitManager = nil
     }

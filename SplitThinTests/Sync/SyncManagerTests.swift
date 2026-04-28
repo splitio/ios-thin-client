@@ -8,6 +8,7 @@ final class SyncManagerTests: XCTestCase {
     private var streaming: StreamingMock!
     private var observer: ObserverSpy!
     private var evaluationRepository: EvaluationRepositoryMock!
+    private var eventsManager: SplitEventsManagerMock!
 
     private let target = Target(matchingKey: "user1")
 
@@ -17,6 +18,7 @@ final class SyncManagerTests: XCTestCase {
         streaming = StreamingMock()
         observer = ObserverSpy()
         evaluationRepository = EvaluationRepositoryMock()
+        eventsManager = SplitEventsManagerMock()
     }
 
     private let evaluationStorage = EvaluationStorageMock()

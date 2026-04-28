@@ -1,7 +1,10 @@
+//  Created by Martin Cardozo
+//  Copyright © 2026 Harness. All rights reserved
+
 import Foundation
 import Logging
 
-public enum FetchReason: Sendable {
+enum FetchReason: Sendable {
     case initialization
     case targetSwitch
     case periodic
@@ -26,6 +29,9 @@ protocol EvaluationFetchCoordinator: Sendable {
     /// Coordinates fetch requests so only one relevant fetch runs at a time.
     /// Returns the fetched evaluations (can be empty on success). Throws on failure.
     func fetchIfNeeded(target: Target, filters: EvaluationFilters?, reason: FetchReason) async throws -> FetchResult
+
+    /// Re-fetches all previously fetched keys with push reason.
+    func refetchAll(notification: EvaluationUpdateNotification?) async
 }
 
 final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unchecked Sendable {
@@ -33,14 +39,29 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
     private let provider: EvaluationProvider
     private let observer: Observer // For logging & telemetry
     private let storage: EvaluationWriteStorage?
+    private let delayProvider: DelayProvider
 
+    // Called after a successful fetch, per key
+    private var onUpdateActions = [Key: (FetchResult) -> Void]()
+
+    // For requests coordination
     private var inFlightTasks = [FetchKey: Task<FetchResult, Error>]()
+    private var fetchedKeys = Set<FetchKey>()
     private let lock = NSLock()
 
-    init(provider: EvaluationProvider, observer: Observer, storage: EvaluationWriteStorage? = nil) {
+    init(provider: EvaluationProvider, observer: Observer, storage: EvaluationWriteStorage? = nil, delayProvider: @escaping DelayProvider = buildDelayProvider()) {
         self.provider = provider
         self.observer = observer
         self.storage = storage
+        self.delayProvider = delayProvider
+    }
+
+    func registerOnUpdateAction(for key: Key, action: @escaping (FetchResult) -> Void) {
+        withLock(lock) { onUpdateActions[key] = action }
+    }
+
+    func unregisterOnUpdateAction(for key: Key) {
+        withLock(lock) { onUpdateActions.removeValue(forKey: key) }
     }
 
     @discardableResult
@@ -49,8 +70,8 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
 
         let key = FetchKey(target: target, filters: filters)
 
-        // Atomic tasks
         let task: Task<FetchResult, Error> = withLock(lock) {
+            fetchedKeys.insert(key)
 
             // 1. Check for deduplications
             if let existing = inFlightTasks[key] {
@@ -72,6 +93,17 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
         return try await task.value
     }
 
+    func refetchAll(notification: EvaluationUpdateNotification?) async {
+        let keys = withLock(lock) { fetchedKeys }
+        for key in keys {
+            let delay = delayProvider(notification, key.target.matchingKey)
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            }
+            _ = try? await fetchIfNeeded(target: key.target, filters: key.filters, reason: .push)
+        }
+    }
+
     private func performFetch(target: Target, filters: EvaluationFilters?, reason: FetchReason) async throws -> FetchResult {
         observer.notify(event: .evalFetchStarted(reason: reason))
 
@@ -85,10 +117,8 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
         observer.notify(event: .evalFetchSucceeded(changeNumber: changeNumber ?? -1))
 
         if let storage {
-
-
             observer.notify(event: .evalStorageWriteScheduled)
-            
+
             Task { // Non-blocking persistence
                 do {
                     try await storage.upsert(change: EvaluationChange(target: target, changeNumber: changeNumber ?? -1, evaluations: result.evaluations))
@@ -97,6 +127,12 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
                     self.observer.notify(event: .evalStorageWriteFailed)
                 }
             }
+        }
+
+        if reason == .push {
+            let fetchResult = FetchResult(evaluations: result.evaluations, changeNumber: changeNumber)
+            let updateAction = withLock(lock) { onUpdateActions[target.key] }
+            updateAction?(fetchResult) // Notifies the eventsManager of the client
         }
 
         observer.notify(event: .evalStorageUpdated(names: result.evaluations.map { $0.flag }))

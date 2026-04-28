@@ -1,3 +1,6 @@
+//  Created by Martin Cardozo
+//  Copyright © 2026 Harness. All rights reserved
+
 import Foundation
 import Logging
 
@@ -61,7 +64,7 @@ final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @un
                         self.observer.notify(event: .evaluationsUpdated(SdkUpdateMetadata(type: .flagsUpdate, names: result.evaluations.map { $0.flag }, changeNumber: result.changeNumber)))
                     }
                 } catch {
-                    Logger.e("EvaluationPeriodicScheduler: Fetch failed: \(error)")
+                    Logger.e("EvaluationPeriodicScheduler: Fetch failed")
                 }
             }
         }
