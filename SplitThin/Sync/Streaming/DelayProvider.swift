@@ -1,3 +1,6 @@
+//  Created by Gaston Thea
+//  Copyright © 2026 Harness. All rights reserved
+
 import Foundation
 
 typealias DelayProvider = (EvaluationUpdateNotification?, String) -> TimeInterval
