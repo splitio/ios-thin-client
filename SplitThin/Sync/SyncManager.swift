@@ -4,6 +4,9 @@ import Logging
 protocol SyncManager: Sendable {
     func start()
     func stop() async
+}
+
+protocol MobileSync: Sendable {
     func pause()
     func resume()
 }
