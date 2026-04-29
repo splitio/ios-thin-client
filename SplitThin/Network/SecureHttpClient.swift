@@ -75,7 +75,14 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
                                .add(header: "Authorization", withValue: "Bearer \(token)")
                                .build()
 
-        let emptyBody = "{}".data(using: .utf8) // TODO: Remove hardcoding
-        return try await retryableHttpClient.execute(endpoint, category: .evaluations, body: emptyBody)
+        let body = serializeAttributes(target.attributes)
+        return try await retryableHttpClient.execute(endpoint, category: .evaluations, body: body)
+    }
+
+    private func serializeAttributes(_ attributes: [String: String]?) -> Data? {
+        guard let attributes, !attributes.isEmpty else {
+            return "{}".data(using: .utf8)
+        }
+        return try? JSONSerialization.data(withJSONObject: attributes)
     }
 }

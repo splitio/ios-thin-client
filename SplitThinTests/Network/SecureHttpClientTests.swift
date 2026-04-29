@@ -71,6 +71,29 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         XCTAssertTrue(url.contains("sets=setA,setB"), "URL should contain sets param: \(url)")
     }
 
+    func testFetchEvaluationsSendsEmptyBodyWhenNoAttributes() async throws {
+        retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
+
+        let target = Target(matchingKey: "user1")
+
+        _ = try await client.fetchEvaluations(target: target, filters: nil)
+
+        let body = retryableHttpMock.executeCalls[0].body
+        XCTAssertEqual(body, "{}".data(using: .utf8))
+    }
+
+    func testFetchEvaluationsSendsAttributesInBody() async throws {
+        retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
+
+        let target = Target(matchingKey: "user1", attributes: ["plan": "enterprise", "role": "admin"])
+
+        _ = try await client.fetchEvaluations(target: target, filters: nil)
+
+        let body = retryableHttpMock.executeCalls[0].body!
+        let parsed = try JSONSerialization.jsonObject(with: body) as! [String: String]
+        XCTAssertEqual(parsed, ["plan": "enterprise", "role": "admin"])
+    }
+
     func testFetchEvaluationsUsesEvaluationsCategory() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
