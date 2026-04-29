@@ -38,12 +38,14 @@ func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync
     return factory
 }
 
-func buildClient(target: String = "user-123", treatmentsManager: TreatmentsManager? = nil, eventsManager: SplitEventsManager? = nil, observer: Observer? = nil, syncManager: SyncManager? = nil) -> DefaultSplitClient {
+func buildClient(target: String = "user-123", treatmentsManager: TreatmentsManager? = nil, eventsManager: SplitEventsManager? = nil, observer: Observer? = nil, syncManager: SyncManager? = nil, eventsTracker: EventsTracker? = nil, eventsScheduler: EventsPeriodicScheduler? = nil) -> DefaultSplitClient {
     DefaultSplitClient(target: Target(matchingKey: target),
                        treatmentsManager: treatmentsManager ?? TreatmentsManagerMock(),
                        eventsManager: eventsManager ?? SplitEventsManagerMock(),
                        observer: observer ?? ObserverSpy(),
-                       syncManager: syncManager ?? SyncManagerMock())
+                       syncManager: syncManager ?? SyncManagerMock(),
+                       eventsTracker: eventsTracker ?? EventsTrackerMock(),
+                       eventsScheduler: eventsScheduler ?? EventsPeriodicSchedulerMock())
 }
 
 func mockEvaluationsData(flags: [String], treatment: String = "on") -> Data {

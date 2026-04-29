@@ -24,6 +24,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     private let streamingManager: StreamingManager
     private let observer: Observer // For factory lifecycle logging & telemetry
     private let evaluationStorage: EvaluationReadStorage
+    private let coreDataStorage: CoreDataStorage
 
     private var splitManager: DefaultSplitManager?
     private var clients = [Key: SplitClient]()
@@ -44,7 +45,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         syncManagers[defaultKey]
     }
 
-    init(sdkKey: SdkKey, target: Target, config: SplitClientConfig, evaluationFilters: EvaluationFilters?, secureHttpClient: SecureHttpClient, evaluationRepository: EvaluationRepository, fetchCoordinator: EvaluationFetchCoordinator, streamingManager: StreamingManager, evaluationStorage: EvaluationReadStorage, splitManager: DefaultSplitManager, factoryObserver: Observer) {
+    init(sdkKey: SdkKey, target: Target, config: SplitClientConfig, evaluationFilters: EvaluationFilters?, secureHttpClient: SecureHttpClient, evaluationRepository: EvaluationRepository, fetchCoordinator: EvaluationFetchCoordinator, streamingManager: StreamingManager, evaluationStorage: EvaluationReadStorage, coreDataStorage: CoreDataStorage, splitManager: DefaultSplitManager, factoryObserver: Observer) {
         self.sdkKey = sdkKey
         self.defaultTarget = target
         self.defaultKey = target.key
@@ -55,6 +56,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         self.fetchCoordinator = fetchCoordinator
         self.streamingManager = streamingManager
         self.evaluationStorage = evaluationStorage
+        self.coreDataStorage = coreDataStorage
         self.splitManager = splitManager
         self.observer = factoryObserver
 
@@ -125,8 +127,18 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         let fallbackCalculator = DefaultFallbackTreatmentsCalculator(fallbacksConfig: config.fallbackTreatments)
         let treatmentsManager = DefaultTreatmentsManager(target: target, evaluationRepository: evaluationRepository, fallbackCalculator: fallbackCalculator)
 
+        // Tracking stack
+        let eventsStorage = DefaultEventsStorage(storage: coreDataStorage)
+        let eventsValidator = DefaultEventsValidator()
+        let eventSerializer = DefaultEventSerializer()
+        let eventsSubmitter = DefaultHttpEventsSubmitter(secureHttpClient: secureHttpClient)
+        let eventTask = DefaultEventTask(storage: eventsStorage, serializer: eventSerializer, submitter: eventsSubmitter, observer: eventDispatcher, target: target)
+        let submissionCoordinator = DefaultEventSubmissionCoordinator(eventTask: eventTask, observer: eventDispatcher)
+        let eventsTracker = DefaultEventsTracker(validator: eventsValidator, storage: eventsStorage, coordinator: submissionCoordinator, observer: eventDispatcher)
+        let eventsScheduler = DefaultEventsPeriodicScheduler(coordinator: submissionCoordinator, intervalSeconds: config.pushRate)
+
         // 2. Create
-        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager, observer: eventDispatcher, syncManager: syncManager)
+        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager, observer: eventDispatcher, syncManager: syncManager, eventsTracker: eventsTracker, eventsScheduler: eventsScheduler)
 
         // 3. Register
         clients[target.key] = client
@@ -135,6 +147,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         // 4. Start
         eventsManager.start()
         syncManager.start()
+        eventsScheduler.start()
 
         observer.notify(event: .clientCreated)
         return client

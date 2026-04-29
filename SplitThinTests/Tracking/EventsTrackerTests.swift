@@ -25,7 +25,6 @@ final class DefaultEventsTrackerTest: XCTestCase {
 
         XCTAssertEqual(storage.addedEvents.count, 1)
         XCTAssertEqual(storage.addedEvents[0].eventType, "purchase")
-        XCTAssertTrue(observer.eventNames.contains("trackCalled"))
     }
 
     func testTrackInvalidEventDropsIt() async {

@@ -31,7 +31,6 @@ final class DefaultEventsTracker: EventsTracker, @unchecked Sendable {
             return
         }
 
-        observer.notify(event: .trackCalled)
         await storage.add(event)
 
         let currentCount = await storage.count()

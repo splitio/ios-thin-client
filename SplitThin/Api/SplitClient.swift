@@ -24,15 +24,19 @@ final class DefaultSplitClient: SplitClient {
     private let eventsManager: SplitEventsManager
     private let observer: Observer // For SDK events & logging
     private let syncManager: SyncManager
+    private let eventsTracker: EventsTracker
+    private let eventsScheduler: EventsPeriodicScheduler
     private var clientListeners = [SplitEventListener]()
     private var isDestroyed = false
 
-    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, observer: Observer, syncManager: SyncManager) {
+    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, observer: Observer, syncManager: SyncManager, eventsTracker: EventsTracker, eventsScheduler: EventsPeriodicScheduler) {
         self.target = target
         self.treatmentsManager = treatmentsManager
         self.eventsManager = eventsManager
         self.observer = observer
         self.syncManager = syncManager
+        self.eventsTracker = eventsTracker
+        self.eventsScheduler = eventsScheduler
     }
 
     // MARK: - Evaluations
@@ -79,8 +83,10 @@ final class DefaultSplitClient: SplitClient {
             observer.notify(event: .trackDropped(reason: .destroyed))
             return
         }
+
         observer.notify(event: .trackCalled)
-        // TODO: Connect with tracker module
+        let event = EventEntity(trafficType: "user", eventType: eventType, value: value, properties: properties)
+        Task { await eventsTracker.track(event) }
     }
 
     // MARK: - Lifecycle
@@ -89,6 +95,9 @@ final class DefaultSplitClient: SplitClient {
         guard !isDestroyed else { return }
         observer.notify(event: .destroyStarted)
         isDestroyed = true
+
+        eventsScheduler.stop()
+        await eventsTracker.flush()
 
         for listener in clientListeners {
             eventsManager.removeListener(listener)
@@ -102,7 +111,7 @@ final class DefaultSplitClient: SplitClient {
 
     func flush() async {
         observer.notify(event: .flushStarted(.events))
-        // TODO: Connect with flush module
+        await eventsTracker.flush()
         observer.notify(event: .flushCompleted(.events))
     }
 }
