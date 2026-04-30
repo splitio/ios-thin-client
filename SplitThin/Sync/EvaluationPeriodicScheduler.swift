@@ -61,6 +61,7 @@ final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @un
                 do {
                     let result = try await self.fetchCoordinator.fetchIfNeeded(target: self.target, filters: self.filters, reason: .periodic)
                     if !result.evaluations.isEmpty {
+                        // TODO: update repository
                         self.observer.notify(event: .evaluationsUpdated(SdkUpdateMetadata(type: .flagsUpdate, names: result.evaluations.map { $0.flag }, changeNumber: result.changeNumber)))
                     }
                 } catch {

@@ -68,14 +68,14 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
         } else if let flagSets = filters?.flagSets, !flagSets.isEmpty {
             queryString += "&sets=\(flagSets.joined(separator: ","))"
         }
-
-        let endpoint = Endpoint.builder(baseUrl: serviceEndpoints.sdkEndpoint,path: "evaluations", defaultQueryString: queryString)
-                               .set(method: .post)
-                               .add(header: "Content-Type", withValue: "application/json")
-                               .add(header: "Authorization", withValue: "Bearer \(token)")
-                               .build()
-
-        let body = serializeAttributes(target.attributes)
+        
+        let endpoint = Endpoint.builder(baseUrl: serviceEndpoints.sdkEndpoint, path: "evaluations", defaultQueryString: queryString)
+            .set(method: .post)
+            .add(header: "Content-Type", withValue: "application/json")
+            .add(header: "Authorization", withValue: "Bearer \(token)")
+            .build()
+        
+        let body = serializeAttributes(["attributes":target.attributes])
         return try await retryableHttpClient.execute(endpoint, category: .evaluations, body: body)
     }
 
