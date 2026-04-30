@@ -90,8 +90,9 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         _ = try await client.fetchEvaluations(target: target, filters: nil)
 
         let body = retryableHttpMock.executeCalls[0].body!
-        let parsed = try JSONSerialization.jsonObject(with: body) as! [String: String]
-        XCTAssertEqual(parsed, ["plan": "enterprise", "role": "admin"])
+        let parsed = try JSONSerialization.jsonObject(with: body) as! [String: Any]
+        XCTAssertEqual(parsed["plan"] as? String, "enterprise")
+        XCTAssertEqual(parsed["role"] as? String, "admin")
     }
 
     func testFetchEvaluationsUsesEvaluationsCategory() async throws {

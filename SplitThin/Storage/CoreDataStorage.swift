@@ -32,7 +32,7 @@ final class CoreDataStorage: @unchecked Sendable {
 
     // MARK: - ClientSession Operations
 
-    func upsertClientSession(matchingKey: String, attributes: [String: String]?, changeNumber: Int64) async throws {
+    func upsertClientSession(matchingKey: String, attributes: [String: Any]?, changeNumber: Int64) async throws {
         try await withContext { context in
             // Delete existing session for this matchingKey (ensures single state per user)
             let deleteRequest = NSFetchRequest<NSManagedObject>(entityName: Self.clientSessionEntity)
@@ -174,7 +174,7 @@ final class CoreDataStorage: @unchecked Sendable {
 
     // MARK: - Private Helpers
 
-    private func encodeAttributes(_ attributes: [String: String]?) -> String? {
+    private func encodeAttributes(_ attributes: [String: Any]?) -> String? {
         guard let attributes, !attributes.isEmpty else { return nil }
         guard let data = try? JSONSerialization.data(withJSONObject: attributes),
               let json = String(data: data, encoding: .utf8) else {

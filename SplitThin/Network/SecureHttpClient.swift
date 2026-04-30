@@ -79,7 +79,7 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
         return try await retryableHttpClient.execute(endpoint, category: .evaluations, body: body)
     }
 
-    private func serializeAttributes(_ attributes: [String: String]?) -> Data? {
+    private func serializeAttributes(_ attributes: [String: Any]?) -> Data? {
         guard let attributes, !attributes.isEmpty else {
             return "{}".data(using: .utf8)
         }
