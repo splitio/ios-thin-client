@@ -69,10 +69,13 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
             queryString += "&sets=\(flagSets.joined(separator: ","))"
         }
         
+        let digest = ContentDigest.compute(for: target)
+
         let endpoint = Endpoint.builder(baseUrl: serviceEndpoints.sdkEndpoint, path: "evaluations", defaultQueryString: queryString)
             .set(method: .post)
             .add(header: "Content-Type", withValue: "application/json")
             .add(header: "Authorization", withValue: "Bearer \(token)")
+            .add(header: "X-Harness-FME-Content-Digest", withValue: digest)
             .build()
         
         let body = serializeAttributes(["attributes":target.attributes])

@@ -26,7 +26,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
 
         let target = Target(matchingKey: "user1")
 
-        _ = try await client.fetchEvaluations(target: target, filters: nil)
+        try await client.fetchEvaluations(target: target)
 
         XCTAssertEqual(authProviderMock.getCredentialCallCount, 1)
         XCTAssertEqual(authProviderMock.lastTargetRequested, "user1")
@@ -40,7 +40,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
 
         let target = Target(matchingKey: "lucrap")
 
-        _ = try await client.fetchEvaluations(target: target, filters: nil)
+        try await client.fetchEvaluations(target: target)
 
         let url = retryableHttpMock.executeCalls[0].endpoint.url.absoluteString
         XCTAssertTrue(url.contains("user=lucrap"), "URL should contain user param: \(url)")
@@ -76,7 +76,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
 
         let target = Target(matchingKey: "user1")
 
-        _ = try await client.fetchEvaluations(target: target, filters: nil)
+        try await client.fetchEvaluations(target: target)
 
         let body = retryableHttpMock.executeCalls[0].body
         XCTAssertEqual(body, "{}".data(using: .utf8))
@@ -87,7 +87,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
 
         let target = Target(matchingKey: "user1", attributes: ["plan": "enterprise", "role": "admin"])
 
-        _ = try await client.fetchEvaluations(target: target, filters: nil)
+        try await client.fetchEvaluations(target: target)
 
         let body = retryableHttpMock.executeCalls[0].body!
         let parsed = try JSONSerialization.jsonObject(with: body) as! [String: Any]
@@ -95,12 +95,23 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         XCTAssertEqual(parsed["role"] as? String, "admin")
     }
 
+    func testFetchEvaluationsIncludesContentDigestHeader() async throws {
+        retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
+
+        let target = Target(matchingKey: "Mauro", attributes: ["city": "mdp", "age": 150])
+
+        try await client.fetchEvaluations(target: target)
+
+        let endpoint = retryableHttpMock.executeCalls[0].endpoint
+        XCTAssertEqual(endpoint.headers["X-Harness-FME-Content-Digest"], "EVu1Yxs6Jvs")
+    }
+
     func testFetchEvaluationsUsesEvaluationsCategory() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
         let target = Target(matchingKey: "user1")
 
-        _ = try await client.fetchEvaluations(target: target, filters: nil)
+        try await client.fetchEvaluations(target: target)
 
         XCTAssertEqual(retryableHttpMock.executeCalls[0].category, .evaluations)
     }
@@ -117,7 +128,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
 
         let target = Target(matchingKey: "user1")
 
-        _ = try await client.fetchEvaluations(target: target, filters: nil)
+        try await client.fetchEvaluations(target: target)
 
         XCTAssertEqual(authProviderMock.invalidateCallCount, 1)
         XCTAssertEqual(authProviderMock.lastTargetInvalidated, "user1")
@@ -135,7 +146,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
 
         let target = Target(matchingKey: "user1")
 
-        let response = try await client.fetchEvaluations(target: target, filters: nil)
+        let response = try await client.fetchEvaluations(target: target)
 
         XCTAssertEqual(response.code, 401)
         XCTAssertEqual(retryableHttpMock.executeCalls.count, 2)
@@ -146,7 +157,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
 
         let target = Target(matchingKey: "user1")
 
-        let response = try await client.fetchEvaluations(target: target, filters: nil)
+        let response = try await client.fetchEvaluations(target: target)
 
         XCTAssertEqual(response.code, 500)
         XCTAssertEqual(authProviderMock.invalidateCallCount, 0)
