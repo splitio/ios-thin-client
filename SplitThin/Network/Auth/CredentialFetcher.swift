@@ -5,6 +5,7 @@ import Foundation
 import Http
 
 enum CredentialFetcherError: Error {
+    case unauthorized
     case invalidAuthResponse
     case missingTokenExpiration
     case networkError(Error)
@@ -46,6 +47,10 @@ final class DefaultCredentialFetcher: CredentialFetcher, @unchecked Sendable {
                                .build()
 
         let response = try await retryableHttpClient.execute(endpoint, category: .auth)
+
+        if response.code == 401 {
+            throw CredentialFetcherError.unauthorized
+        }
 
         guard response.isSuccess, let data = response.data else {
             throw CredentialFetcherError.invalidAuthResponse

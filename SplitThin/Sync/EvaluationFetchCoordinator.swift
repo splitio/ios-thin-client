@@ -107,10 +107,17 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
     private func performFetch(target: Target, filters: EvaluationFilters?, reason: FetchReason) async throws -> FetchResult {
         observer.notify(event: .evalFetchStarted(reason: reason))
 
-        guard let result = await provider.fetch(target: target, filters: filters) else {
-            Logger.d("EvaluationFetchCoordinator: Fetch failed for \(target.matchingKey) (reason: \(reason))")
-            observer.notify(event: .evalFetchFailed)
-            throw EvaluationFetchError.fetchFailed
+        let result: EvaluationsResult
+        do {
+            guard let fetched = try await provider.fetch(target: target, filters: filters) else {
+                Logger.d("EvaluationFetchCoordinator: Fetch failed for \(target.matchingKey) (reason: \(reason))")
+                observer.notify(event: .evalFetchFailed)
+                throw EvaluationFetchError.fetchFailed
+            }
+            result = fetched
+        } catch CredentialFetcherError.unauthorized {
+            observer.notify(event: .authUnauthorized)
+            throw CredentialFetcherError.unauthorized
         }
 
         let changeNumber = result.till

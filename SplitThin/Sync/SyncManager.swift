@@ -61,6 +61,9 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
                 let result = try await evaluationRepository.initialize(target: target)
 
                 observer.notify(event: .evaluationsUpdated(SdkUpdateMetadata(type: .flagsUpdate, names: result.evaluations.map { $0.flag }, changeNumber: result.changeNumber)))
+            } catch CredentialFetcherError.unauthorized {
+                Logger.e("SyncManager: Invalid API key (401). Sync will not start.")
+                return
             } catch {
                 // The timeout timer (already scheduled in eventsManager.start()) will take care of this scenario.
                 Logger.e("SyncManager: Initial fetch failed: \(error)")
