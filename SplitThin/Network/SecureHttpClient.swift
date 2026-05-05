@@ -3,6 +3,7 @@
 
 import Foundation
 import Http
+import Logging
 
 enum SecureHttpError: Error {
     case invalidResponse
@@ -74,7 +75,7 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
             .add(header: "X-Harness-FME-Content-Digest", withValue: digest)
             .build()
         
-        let body = serializeAttributes(["attributes":target.attributes])
+        let body = serializeAttributes(target.attributes)
         return try await retryableHttpClient.execute(endpoint, category: .evaluations, body: body)
     }
 }
@@ -105,10 +106,19 @@ extension DefaultSecureHttpClient {
         return params.sorted { $0.0 < $1.0 }.map { "\($0)=\($1)" }.joined() // Automatic sorting
     }
 
+    //
+    // Attributes serialization
+    //
     private func serializeAttributes(_ attributes: [String: Any]?) -> Data? {
         guard let attributes, !attributes.isEmpty else {
             return "{}".data(using: .utf8)
         }
-        return try? JSONSerialization.data(withJSONObject: attributes)
+
+        do {
+            return try JSONSerialization.data(withJSONObject: ["attributes": attributes])
+        } catch {
+            Logger.e("SecureHttpClient: Failed to serialize attributes: \(error)")
+            return "{}".data(using: .utf8)
+        }
     }
 }

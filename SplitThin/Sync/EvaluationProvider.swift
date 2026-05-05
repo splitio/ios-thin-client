@@ -16,9 +16,16 @@ final class DefaultEvaluationProvider: EvaluationProvider, @unchecked Sendable {
         self.secureHttpClient = secureHttpClient
     }
 
+    private static let httpNotModified = 304
+
     func fetch(target: Target, filters: EvaluationFilters?) async -> EvaluationsResult? {
         do {
             let response = try await secureHttpClient.fetchEvaluations(target: target, filters: filters)
+
+            if response.code == Self.httpNotModified {
+                Logger.d("EvaluationProvider: Server returned 304, evaluations are up to date")
+                return EvaluationsResult(evaluations: [])
+            }
 
             guard response.isSuccess, let data = response.data else {
                 Logger.e("EvaluationProvider: Failed to fetch evaluations: HTTP \(response.code)")
