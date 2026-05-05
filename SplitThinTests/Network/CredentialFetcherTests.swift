@@ -38,7 +38,7 @@ final class DefaultCredentialFetcherTest: XCTestCase {
 
         httpClientMock.responses = [HttpResponse(code: 200, data: authResponse)]
 
-        _ = try await fetcher.fetchCredential(for: ["user1"])
+        try await fetcher.fetchCredential(for: "user1")
 
         XCTAssertEqual(httpClientMock.executeCalls.count, 1)
 
@@ -67,7 +67,7 @@ final class DefaultCredentialFetcherTest: XCTestCase {
         httpClientMock.responses = [HttpResponse(code: 401, data: nil)]
 
         do {
-            _ = try await fetcher.fetchCredential(for: ["user1"])
+            try await fetcher.fetchCredential(for: "user1")
             XCTFail("Expected error")
         } catch is CredentialFetcherError {
         } catch {
@@ -79,7 +79,7 @@ final class DefaultCredentialFetcherTest: XCTestCase {
         httpClientMock.responses = [HttpResponse(code: 200, data: nil)]
 
         do {
-            _ = try await fetcher.fetchCredential(for: ["user1"])
+            try await fetcher.fetchCredential(for: "user1")
             XCTFail("Expected error")
         } catch is CredentialFetcherError {
         } catch {
@@ -95,7 +95,7 @@ final class DefaultCredentialFetcherTest: XCTestCase {
         httpClientMock.responses = [HttpResponse(code: 200, data: authResponse)]
 
         do {
-            _ = try await fetcher.fetchCredential(for: ["user1"])
+            try await fetcher.fetchCredential(for: "user1")
             XCTFail("Expected error")
         } catch is CredentialFetcherError {
         } catch {
@@ -115,6 +115,32 @@ final class DefaultCredentialFetcherTest: XCTestCase {
         let credential = try await fetcher.fetchCredential(for: ["user1"])
 
         XCTAssertEqual(credential.expiresAt.timeIntervalSince1970, expTime, accuracy: 1)
+    }
+
+    // MARK: - Configs enabled
+
+    func testIncludesConfigsParamWhenEnabled() async throws {
+        let jwt = makeJwt(exp: Date().addingTimeInterval(3600).timeIntervalSince1970)
+        let authResponse = "{\"token\":\"\(jwt)\",\"pushEnabled\":true}".data(using: .utf8)!
+        httpClientMock.responses = [HttpResponse(code: 200, data: authResponse)]
+
+        let configsFetcher = DefaultCredentialFetcher(retryableHttpClient: httpClientMock, observer: ObserverSpy(), authEndpoint: authEndpoint, sdkKey: sdkKey, configsEnabled: true)
+
+        try await configsFetcher.fetchCredential(for: "user1")
+
+        let url = httpClientMock.executeCalls[0].endpoint.url.absoluteString
+        XCTAssertTrue(url.contains("configs=true"), "URL should contain configs param: \(url)")
+    }
+
+    func testExcludesConfigsParamWhenDisabled() async throws {
+        let jwt = makeJwt(exp: Date().addingTimeInterval(3600).timeIntervalSince1970)
+        let authResponse = "{\"token\":\"\(jwt)\",\"pushEnabled\":true}".data(using: .utf8)!
+        httpClientMock.responses = [HttpResponse(code: 200, data: authResponse)]
+
+        try await fetcher.fetchCredential(for: "user1")
+
+        let url = httpClientMock.executeCalls[0].endpoint.url.absoluteString
+        XCTAssertFalse(url.contains("configs"), "URL should not contain configs param: \(url)")
     }
 
     // MARK: - Helpers
