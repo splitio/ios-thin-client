@@ -64,16 +64,7 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
     }
 
     private func performEvaluationsRequest(target: Target, filters: EvaluationFilters?, token: String) async throws -> HttpResponse {
-        var queryString = "&user=\(target.matchingKey)&since=-1"
-        if configsEnabled {
-            queryString += "&withConfig=true"
-        }
-        if let flagNames = filters?.flagNames, !flagNames.isEmpty {
-            queryString += "&names=\(flagNames.joined(separator: ","))"
-        } else if let flagSets = filters?.flagSets, !flagSets.isEmpty {
-            queryString += "&sets=\(flagSets.joined(separator: ","))"
-        }
-        
+        let queryString = buildEvaluationsQueryString(target: target, filters: filters)
         let digest = ContentDigest.compute(for: target)
 
         let endpoint = Endpoint.builder(baseUrl: serviceEndpoints.sdkEndpoint, path: "evaluations", defaultQueryString: queryString)
@@ -85,6 +76,33 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
         
         let body = serializeAttributes(["attributes":target.attributes])
         return try await retryableHttpClient.execute(endpoint, category: .evaluations, body: body)
+    }
+}
+
+// MARK: Formatting Methods
+extension DefaultSecureHttpClient {
+
+    //
+    // Evaluations URL query (ensures it will always arrive in alphabetical order, even if new params are added).
+    //
+    // In case of adding *lists* as values, make sure they are ordered as well using .sorted()
+    //
+    private func buildEvaluationsQueryString(target: Target, filters: EvaluationFilters?) -> String {
+        var params: [(String, String)] = []
+
+        if let flagNames = filters?.flagNames, !flagNames.isEmpty {
+            params.append(("&names", flagNames.sorted().joined(separator: ","))) // Automatic sorting
+        }
+        if let flagSets = filters?.flagSets, !flagSets.isEmpty {
+            params.append(("&sets", flagSets.sorted().joined(separator: ","))) // Automatic sorting
+        }
+        params.append(("&since", "-1"))
+        params.append(("&user", target.matchingKey))
+        if configsEnabled {
+            params.append(("&withConfig", "true"))
+        }
+
+        return params.sorted { $0.0 < $1.0 }.map { "\($0)=\($1)" }.joined() // Automatic sorting
     }
 
     private func serializeAttributes(_ attributes: [String: Any]?) -> Data? {

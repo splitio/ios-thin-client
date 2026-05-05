@@ -71,6 +71,38 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         XCTAssertTrue(url.contains("sets=setA,setB"), "URL should contain sets param: \(url)")
     }
 
+    func testFetchEvaluationsIncludesBothNamesAndSets() async throws {
+        retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
+
+        let target = Target(matchingKey: "user1")
+        let filters = EvaluationFilters(flagNames: ["flag2", "flag1"], flagSets: ["setC", "setA"])
+
+        _ = try await client.fetchEvaluations(target: target, filters: filters)
+
+        let url = retryableHttpMock.executeCalls[0].endpoint.url.absoluteString
+        XCTAssertTrue(url.contains("names=flag1,flag2"), "Names should be sorted: \(url)")
+        XCTAssertTrue(url.contains("sets=setA,setC"), "Sets should be sorted: \(url)")
+    }
+
+    func testFetchEvaluationsQueryParamsAreAlphabetical() async throws {
+        retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
+        let configsClient = DefaultSecureHttpClient(retryableHttpClient: retryableHttpMock, authProvider: authProviderMock, serviceEndpoints: serviceEndpoints, configsEnabled: true)
+
+        let target = Target(matchingKey: "user1")
+        let filters = EvaluationFilters(flagNames: ["z_flag"])
+
+        _ = try await configsClient.fetchEvaluations(target: target, filters: filters)
+
+        let url = retryableHttpMock.executeCalls[0].endpoint.url.absoluteString
+        let namesIdx = url.range(of: "names=")!.lowerBound
+        let sinceIdx = url.range(of: "since=")!.lowerBound
+        let userIdx = url.range(of: "user=")!.lowerBound
+        let withConfigIdx = url.range(of: "withConfig=")!.lowerBound
+        XCTAssertTrue(namesIdx < sinceIdx, "names should come before since")
+        XCTAssertTrue(sinceIdx < userIdx, "since should come before user")
+        XCTAssertTrue(userIdx < withConfigIdx, "user should come before withConfig")
+    }
+
     func testFetchEvaluationsSendsEmptyBodyWhenNoAttributes() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 

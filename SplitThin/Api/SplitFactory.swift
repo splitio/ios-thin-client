@@ -119,7 +119,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
             eventDispatcher.notify(event: .evaluationsUpdated(SdkUpdateMetadata(type: .flagsUpdate, names: fetchResult.evaluations.map { $0.flag }, changeNumber: fetchResult.changeNumber)))
         }
 
-        let periodicScheduler = DefaultEvaluationPeriodicScheduler(fetchCoordinator: fetchCoordinator, observer: eventDispatcher, target: target, filters: evaluationFilters, intervalSeconds: config.evaluationRefreshRate)
+        let periodicScheduler = DefaultEvaluationPeriodicScheduler(fetchCoordinator: fetchCoordinator, evaluationRepository: evaluationRepository, observer: eventDispatcher, target: target, filters: evaluationFilters, intervalSeconds: config.evaluationRefreshRate)
         let streaming = DefaultStreaming(streamingManager: streamingManager)
         let syncManager = DefaultSyncManager(syncMode: config.syncMode, evaluationRepository: evaluationRepository, observer: eventDispatcher, evaluationStorage: evaluationStorage, eventsManager: eventsManager, periodicScheduler: periodicScheduler, streaming: streaming, target: target)
         let fallbackCalculator = DefaultFallbackTreatmentsCalculator(fallbacksConfig: config.fallbackTreatments)
