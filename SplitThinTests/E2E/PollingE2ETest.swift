@@ -134,6 +134,27 @@ final class PollingE2ETest: XCTestCase {
         waitFor(sdkUpdate) // First polling cycle
     }
 
+    func testPollingUpdatesRepository() async throws {
+        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["my-flag"], treatment: "v1"))
+
+        let sdkReady = expectation("SDK ready")
+        let sdkUpdate = expectation("SDK update")
+        let listener = TestEventListener(readyExpectation: sdkReady, updateExpectation: sdkUpdate)
+        factory = try buildFactory(httpClient: httpMock, syncMode: .polling, refreshRate: 1)
+        factory.client.addEventListener(listener)
+
+        waitFor(sdkReady)
+
+        XCTAssertEqual(factory.client.getTreatment("my-flag").treatment, "v1")
+
+        // Change the response before the next polling cycle
+        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["my-flag"], treatment: "v2"))
+
+        waitFor(sdkUpdate)
+
+        XCTAssertEqual(factory.client.getTreatment("my-flag").treatment, "v2")
+    }
+
     // MARK: - Multi-Client Polling Updates
 
     func testMulticlientUpdatesAreIsolated() async throws {
