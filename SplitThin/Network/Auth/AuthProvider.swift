@@ -11,14 +11,16 @@ final class DefaultAuthProvider: AuthProvider, @unchecked Sendable {
 
     private let credentialStorage: CredentialStorage
     private let credentialFetcher: CredentialFetcher
+    private let observer: Observer
 
     private var registeredTargets = Set<String>()
     private var inFlightTasks = [String: Task<JwtCredential, Error>]()
     private let lock = NSLock()
 
-    init(credentialStorage: CredentialStorage, credentialFetcher: CredentialFetcher) {
+    init(credentialStorage: CredentialStorage, credentialFetcher: CredentialFetcher, observer: Observer) {
         self.credentialStorage = credentialStorage
         self.credentialFetcher = credentialFetcher
+        self.observer = observer
     }
 
     func register(target: String) {
@@ -31,11 +33,6 @@ final class DefaultAuthProvider: AuthProvider, @unchecked Sendable {
 
         if let oldKey {
             credentialStorage.invalidate(for: oldKey)
-
-            withLock(lock) {
-                inFlightTasks.values.forEach { $0.cancel() }
-                inFlightTasks.removeAll()
-            }
         }
     }
 

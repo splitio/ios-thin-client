@@ -1,3 +1,6 @@
+//  Created by Martin Cardozo
+//  Copyright © 2026 Harness. All rights reserved
+
 import Foundation
 import Logging
 
@@ -15,6 +18,7 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
 
     private let syncMode: SyncMode
     private let evaluationRepository: EvaluationRepository
+    private let observer: Observer // For SDK events & logging
     private let evaluationStorage: EvaluationReadStorage
     private let eventsManager: SplitEventsManager
     private let polling: EvaluationPeriodicScheduler
@@ -25,11 +29,12 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
     private var isPaused = false
     private let lock = NSLock()
 
-    init(syncMode: SyncMode, evaluationRepository: EvaluationRepository, evaluationStorage: EvaluationReadStorage, eventsManager: SplitEventsManager, periodicScheduler: EvaluationPeriodicScheduler, streaming: Streaming, target: Target, appStateManager: AppStateManager = DefaultAppStateManager.instance) {
+    init(syncMode: SyncMode, evaluationRepository: EvaluationRepository, observer: Observer, evaluationStorage: EvaluationReadStorage, eventsManager: SplitEventsManager, periodicScheduler: EvaluationPeriodicScheduler, streaming: Streaming, target: Target, appStateManager: AppStateManager = DefaultAppStateManager.instance) {
         self.syncMode = syncMode
         self.evaluationRepository = evaluationRepository
         self.evaluationStorage = evaluationStorage
         self.eventsManager = eventsManager
+        self.observer = observer
         self.polling = periodicScheduler
         self.streaming = streaming
         self.target = target
@@ -53,17 +58,15 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
 
         Task { // Fire and forget
             do {
-                try await evaluationRepository.initialize(target: target)
+                let result = try await evaluationRepository.initialize(target: target)
 
-                let flagNames = evaluationRepository.getFlagNames(target: target)
-                let metadata = SdkUpdateMetadata(type: .flagsUpdate, names: flagNames)
-                eventsManager.notifyInternalEvent(.evaluationsUpdated(metadata))
-
-                establishLink()
+                observer.notify(event: .evaluationsUpdated(SdkUpdateMetadata(type: .flagsUpdate, names: result.evaluations.map { $0.flag }, changeNumber: result.changeNumber)))
             } catch {
                 // The timeout timer (already scheduled in eventsManager.start()) will take care of this scenario.
                 Logger.e("SyncManager: Initial fetch failed: \(error)")
             }
+
+            establishLink()
         }
     }
 
@@ -73,6 +76,8 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
 
         Logger.d("SyncManager: Loaded \(cachedEvaluations.count) evaluations from cache for \(target.matchingKey)")
 
+        evaluationRepository.update(cachedEvaluations, for: target)
+
         let metadata = SdkReadyFromCacheMetadata(lastUpdateTimestamp: changeNumber, isInitialCacheLoad: true)
         eventsManager.notifyInternalEvent(.evaluationsLoadedFromCache(metadata))
     }
@@ -80,7 +85,6 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
     func stop() async {
         Logger.d("SyncManager: Stopping")
 
-        eventsManager.stop()
         polling.stop()
         await streaming.stop()
     }
@@ -109,6 +113,7 @@ extension DefaultSyncManager: MobileSync {
                 streaming.pause()
 
                 isPaused = true
+                observer.notify(event: .syncPaused)
                 Logger.d("SyncManager: Paused")
             }
         #endif
@@ -129,6 +134,7 @@ extension DefaultSyncManager: MobileSync {
                 }
 
                 isPaused = false
+                observer.notify(event: .syncResumed)
                 Logger.d("SyncManager: Resumed")
             }
         #endif

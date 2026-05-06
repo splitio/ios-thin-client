@@ -1,58 +1,37 @@
+//  Created by Martin Cardozo
+//  Copyright © 2026 Harness. All rights reserved
+
 import Foundation
 import Logging
 
 protocol Streaming: Sendable {
     func start() async
     func stop() async
+    func pause()
+    func resume()
 }
 
 final class DefaultStreaming: Streaming, @unchecked Sendable {
 
-    // Components
-    private let fetchCoordinator: EvaluationFetchCoordinator
-    private let eventsManager: SplitEventsManager
-    private let secureHttpClient: SecureHttpClient
-    private let target: Target
+    private let streamingManager: StreamingManager
 
-    // BG pause sync
-    private var isPaused = false
-    private let lock = NSLock()
-
-    init(fetchCoordinator: EvaluationFetchCoordinator, eventsManager: SplitEventsManager, secureHttpClient: SecureHttpClient, target: Target) {
-        self.fetchCoordinator = fetchCoordinator
-        self.eventsManager = eventsManager
-        self.secureHttpClient = secureHttpClient
-        self.target = target
+    init(streamingManager: StreamingManager) {
+        self.streamingManager = streamingManager
     }
 
     func start() async {
-        // TODO: Implement SSE streaming connection
+        streamingManager.start()
     }
 
     func stop() async {
-        // TODO: Implement SSE streaming disconnection
+        streamingManager.stop()
     }
-}
 
-// MARK: BG Sync (just for mobile devices)
-extension DefaultStreaming: MobileSync {
     func pause() {
-        withLock(lock) {
-            guard !isPaused else { return }
-
-            // TODO: Disconnect SSE when implemented
-            isPaused = true
-            Logger.d("Streaming: Paused")
-        }
+        streamingManager.pause()
     }
 
     func resume() {
-        withLock(lock) {
-            guard isPaused else { return }
-
-            // TODO: Reconnect SSE when implemented
-            isPaused = false
-            Logger.d("Streaming: Resumed")
-        }
+        streamingManager.resume()
     }
 }

@@ -11,7 +11,7 @@ final class DefaultAuthProviderTest: XCTestCase {
         super.setUp()
         storageMock = CredentialStorageMock()
         fetcherMock = CredentialFetcherMock()
-        provider = DefaultAuthProvider(credentialStorage: storageMock, credentialFetcher: fetcherMock)
+        provider = DefaultAuthProvider(credentialStorage: storageMock, credentialFetcher: fetcherMock, observer: ObserverSpy())
     }
 
     func testReturnsCachedCredentialWithoutFetching() async throws {

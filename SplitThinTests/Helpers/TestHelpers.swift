@@ -2,7 +2,7 @@ import Foundation
 import Http
 @testable import SplitThin
 
-func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync, refreshRate: Int = 1, timeout: Int = -1, target: String = "user-123", fallbackTreatments: FallbackTreatmentsConfig? = nil) throws -> SplitFactory {
+func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync, refreshRate: Int = 1, timeout: Int = -1, target: String = "user-123", fallbackTreatments: FallbackTreatmentsConfig? = nil, observer: Observer? = nil) throws -> SplitFactory {
 
     // SplitConfig
     var configBuilder = SplitClientConfig.builder()
@@ -19,10 +19,17 @@ func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync
 
     // Factory
     let builder = DefaultSplitFactoryBuilder()
+
+    // Inject httpClient (just possible on testing)
     builder.setSecureHttpClient(httpClient)
     builder.setCredentialStorage(DefaultCredentialStorage())
 
-    guard let factory = builder.setSdkKey(SdkKey("test-sdk-key"))
+    // Inject Observer (just possible on testing)
+    if let observer = observer {
+        builder.setFactoryObserver(observer)
+    }
+
+    guard let factory = builder.setSdkKey("test-sdk-key")
                                .setTarget(target)
                                .setConfig(config)
                                .build() else {
@@ -32,12 +39,21 @@ func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync
     return factory
 }
 
-func mockEvaluationsData(flags: [String]) -> Data {
+func buildClient(target: String = "user-123", treatmentsManager: TreatmentsManager? = nil, eventsManager: SplitEventsManager? = nil, observer: Observer? = nil, syncManager: SyncManager? = nil) -> DefaultSplitClient {
+    DefaultSplitClient(target: Target(matchingKey: target),
+                       treatmentsManager: treatmentsManager ?? TreatmentsManagerMock(),
+                       eventsManager: eventsManager ?? SplitEventsManagerMock(),
+                       authProvider: AuthProviderMock(),
+                       observer: observer ?? ObserverSpy(),
+                       syncManager: syncManager ?? SyncManagerMock())
+}
+
+func mockEvaluationsData(flags: [String], treatment: String = "on") -> Data {
     let evaluations = flags.map { flag in
         """
         {
             "featureName": "\(flag)",
-            "treatment": "on",
+            "treatment": "\(treatment)",
             "label": "default rule",
             "changeNumber": 12345,
             "sets": ["set-a"]

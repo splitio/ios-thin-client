@@ -1,3 +1,6 @@
+//  Created by Martin Cardozo
+//  Copyright © 2026 Harness. All rights reserved
+
 import Foundation
 
 typealias RetryPoliciesByCategory = [RequestCategory: CategoryRetryPolicies]
@@ -7,6 +10,15 @@ enum RequestCategory: Sendable {
     case evaluations
     case events
     case telemetry
+
+    var toHttpCategory: HttpCategory {
+        switch self {
+            case .auth: return .auth
+            case .evaluations: return .evaluations
+            case .events: return .events
+            case .telemetry: return .telemetry
+        }
+    }
 }
 
 struct RetryPolicy: Sendable {

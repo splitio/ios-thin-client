@@ -1,7 +1,7 @@
 import Foundation
 @testable import SplitThin
 
-final class SyncManagerMock: SyncManager, @unchecked Sendable {
+final class SyncManagerMock: SyncManager, MobileSync, @unchecked Sendable {
 
     var startCallCount = 0
     var stopCallCount = 0

@@ -1,3 +1,6 @@
+//  Created by Martin Cardozo
+//  Copyright © 2026 Harness. All rights reserved
+
 import Foundation
 import Logging
 import Http
@@ -27,6 +30,8 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
     var secureHttpClient: SecureHttpClient?
     var retryableHttpClient: RetryableHttpClient?
     var credentialStorage: CredentialStorage?
+    var connectionManagerFactory: ((EvaluationFetchCoordinator) -> StreamingConnectionManager)?
+    var observer: Observer?
 
     public override init() {
         super.init()
@@ -84,16 +89,32 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
             return nil
         }
 
+        let resolvedObserver = buildObserver()
         let databaseName = Self.databaseName(prefix: config.prefix, apiKey: sdkKey.sdkKey)
-        let (secureHttp, resolvedAuth) = buildSecureHttpClient(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey)
+        let (secureHttp, resolvedAuth) = buildSecureHttpClientAndAuth(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey, observer: resolvedObserver)
         let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttp)
         let coreDataStorage = CoreDataStorage(databaseName: databaseName)
         let evaluationStorage = PersistentStorage(storage: coreDataStorage)
-        let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider, storage: evaluationStorage)
+
+        let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider, observer: resolvedObserver, storage: evaluationStorage)
         let evaluationRepository = DefaultEvaluationRepository(fetchCoordinator: fetchCoordinator, evaluationFilters: evaluationFilters)
         let splitManager = DefaultSplitManager(evaluationRepository: evaluationRepository, target: target)
 
-        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, authProvider: resolvedAuth, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, evaluationStorage: evaluationStorage, splitManager: splitManager)
+        let streamingComponents: StreamingComponents
+        if let factory = connectionManagerFactory {
+            streamingComponents = StreamingComponents(manager: DefaultStreamingManager(connectionManagerFactory: { factory(fetchCoordinator) }))
+        } else {
+            let http = httpClient ?? DefaultHttpClient.shared
+            streamingComponents = createStreamingComponents(
+                target: target,
+                authProvider: resolvedAuth,
+                streamingEndpoint: serviceEndpoints.streamingServiceEndpoint,
+                httpClient: http,
+                fetchCoordinator: fetchCoordinator
+            )
+        }
+
+        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, authProvider: resolvedAuth, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, streamingManager: streamingComponents.manager, evaluationStorage: evaluationStorage, splitManager: splitManager, factoryObserver: resolvedObserver)
     }
 
     private func configureLogger() {
@@ -102,14 +123,26 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         }
     }
 
-    private func buildSecureHttpClient(serviceEndpoints: ServiceEndpoints, sdkKey: String) -> (SecureHttpClient, AuthProvider) {
+    private func buildSecureHttpClientAndAuth(serviceEndpoints: ServiceEndpoints, sdkKey: String, observer: Observer) -> (SecureHttpClient, AuthProvider) {
         let http = httpClient ?? DefaultHttpClient.shared
-        let retryable = retryableHttpClient ?? DefaultRetryableHttpClient(httpClient: http)
-        let credStorage = credentialStorage ?? KeychainCredentialStorage(keychainKey: "\(Self.databaseName(prefix: config.prefix, apiKey: sdkKey))_jwt") // We reuse the logic for unique names per key from the DB
-        let fetcher = DefaultCredentialFetcher(retryableHttpClient: retryable, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey)
-        let auth = authProvider ?? DefaultAuthProvider(credentialStorage: credStorage, credentialFetcher: fetcher)
-        let secureHttp = secureHttpClient ?? DefaultSecureHttpClient(retryableHttpClient: retryable, authProvider: auth, serviceEndpoints: serviceEndpoints)
-        return (secureHttp, auth)
+        let retryable = retryableHttpClient ?? DefaultRetryableHttpClient(httpClient: http, observer: observer)
+        let credStorage = credentialStorage ?? KeychainCredentialStorage(keychainKey: "\(Self.databaseName(prefix: config.prefix, apiKey: sdkKey))_jwt")
+        let fetcher = DefaultCredentialFetcher(retryableHttpClient: retryable, observer: observer, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey)
+        let auth = authProvider ?? DefaultAuthProvider(credentialStorage: credStorage, credentialFetcher: fetcher, observer: observer)
+        let client = secureHttpClient ?? DefaultSecureHttpClient(retryableHttpClient: retryable, authProvider: auth, serviceEndpoints: serviceEndpoints)
+        return (client, auth)
+    }
+
+    // Observer override access point. JUST for testing
+    private func buildObserver() -> Observer {
+        if let observer = observer {
+            return observer
+        }
+
+        // Production. Default.
+        let dispatcher = EventDispatcher()
+        dispatcher.register(LoggingObserver())
+        return dispatcher
     }
 
     // Used for generating unique names for db and keychain

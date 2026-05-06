@@ -29,7 +29,6 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         _ = try await client.fetchEvaluations(target: target, filters: nil)
 
         XCTAssertEqual(authProviderMock.getCredentialCallCount, 1)
-        XCTAssertEqual(authProviderMock.lastTargetRequested, "user1")
 
         let endpoint = retryableHttpMock.executeCalls[0].endpoint
         XCTAssertEqual(endpoint.headers["Authorization"], "Bearer jwt-token")

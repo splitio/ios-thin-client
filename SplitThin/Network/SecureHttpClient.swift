@@ -1,3 +1,6 @@
+//  Created by Martin Cardozo
+//  Copyright © 2026 Harness. All rights reserved
+
 import Foundation
 import Http
 
@@ -12,8 +15,6 @@ protocol SecureHttpClient: Sendable {
     func fetchEvaluations(target: Target, filters: EvaluationFilters?) async throws -> HttpResponse
     func postEvents(payload: Data) async throws -> HttpResponse
     func postTelemetry(payload: Data) async throws -> HttpResponse
-    func openStreaming(token: String) async throws
-    func closeStreaming() async
 }
 
 final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
@@ -58,14 +59,6 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
                                .build()
 
         return try await retryableHttpClient.execute(endpoint, category: .telemetry, body: payload)
-    }
-
-    func openStreaming(token: String) async throws {
-        // TODO: Implement streaming connection
-    }
-
-    func closeStreaming() async {
-        // TODO: Implement streaming disconnection
     }
 
     private func performEvaluationsRequest(target: Target, filters: EvaluationFilters?, token: String) async throws -> HttpResponse {

@@ -23,6 +23,18 @@ extension DefaultSplitFactoryBuilder {
         self.credentialStorage = storage
         return self
     }
+
+    @discardableResult
+    func setStreamingConnectionManagerFactory(_ factory: @escaping (EvaluationFetchCoordinator) -> StreamingConnectionManager) -> DefaultSplitFactoryBuilder {
+        self.connectionManagerFactory = factory
+        return self
+    }
+
+    @discardableResult
+    func setFactoryObserver(_ observer: Observer) -> DefaultSplitFactoryBuilder {
+        self.observer = observer
+        return self
+    }
 }
 
 extension SplitConfigBuilder {
@@ -34,12 +46,14 @@ extension SplitConfigBuilder {
 }
 
 extension SplitFactory {
+    @discardableResult
     func getClient(_ matchingKey: String) -> SplitClient {
         getClient(Target(matchingKey: matchingKey))
     }
 }
 
 extension SplitClient {
+    @discardableResult
     func getTreatment(_ flag: String) -> EvaluationResult {
         getTreatment(flag: flag)
     }

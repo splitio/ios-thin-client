@@ -1,3 +1,6 @@
+//  Created by Martin Cardozo
+//  Copyright © 2026 Harness. All rights reserved
+
 import Foundation
 import Http
 
@@ -14,16 +17,20 @@ protocol CredentialFetcher: Sendable {
 final class DefaultCredentialFetcher: CredentialFetcher, @unchecked Sendable {
 
     private let retryableHttpClient: RetryableHttpClient
+    private let observer: Observer // For logging & telemetry
     private let authEndpoint: URL
     private let sdkKey: String
 
-    init(retryableHttpClient: RetryableHttpClient, authEndpoint: URL, sdkKey: String) {
+    init(retryableHttpClient: RetryableHttpClient, observer: Observer, authEndpoint: URL, sdkKey: String) {
         self.retryableHttpClient = retryableHttpClient
+        self.observer = observer
         self.authEndpoint = authEndpoint
         self.sdkKey = sdkKey
     }
 
     func fetchCredential(for users: [String]) async throws -> JwtCredential {
+        observer.notify(event: .jwtFetchStarted)
+
         let usersParam = users.joined(separator: ",")
         let endpoint = Endpoint.builder(baseUrl: authEndpoint, path: "auth/thin-client", defaultQueryString: "&users=\(usersParam)")
                                .set(method: .get)
@@ -40,6 +47,7 @@ final class DefaultCredentialFetcher: CredentialFetcher, @unchecked Sendable {
         let authResponse = try Json.decode(from: data, to: AuthResponse.self)
         let expiresAt = try extractExpiration(from: authResponse.token)
 
+        observer.notify(event: .jwtFetchSucceeded(expiresAt: Int64(expiresAt.timeIntervalSince1970), pushEnabled: authResponse.pushEnabled))
         return JwtCredential(token: authResponse.token, expiresAt: expiresAt, pushEnabled: authResponse.pushEnabled)
     }
 
