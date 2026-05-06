@@ -1,10 +1,9 @@
-//  Created by Martin Cardozo
-//  Copyright © 2026 Harness. All rights reserved
-
 import Foundation
 
 protocol AuthProvider: Sendable {
-    func getCredential(for target: String) async throws -> JwtCredential
+    func register(target: String)
+    func unregister(target: String)
+    func getCredential() async throws -> JwtCredential
     func invalidate(for target: String)
 }
 
@@ -12,9 +11,10 @@ final class DefaultAuthProvider: AuthProvider, @unchecked Sendable {
 
     private let credentialStorage: CredentialStorage
     private let credentialFetcher: CredentialFetcher
-    private let observer: Observer // For logging & telemetry
+    private let observer: Observer
 
-    private var pendingFetches = [String: [CheckedContinuation<JwtCredential, Error>]]()
+    private var registeredTargets = Set<String>()
+    private var inFlightTasks = [String: Task<JwtCredential, Error>]()
     private let lock = NSLock()
 
     init(credentialStorage: CredentialStorage, credentialFetcher: CredentialFetcher, observer: Observer) {
@@ -23,66 +23,111 @@ final class DefaultAuthProvider: AuthProvider, @unchecked Sendable {
         self.observer = observer
     }
 
-    func getCredential(for target: String) async throws -> JwtCredential {
-        if let cached = credentialStorage.get(for: target) {
-            observer.notify(event: .jwtRequestStarted(cached: true))
-            return cached
+    func register(target: String) {
+        let oldKey: String? = withLock(lock) {
+            let oldKey = registeredTargets.isEmpty ? nil : compositeKeyUnsafe()
+            let isNew = registeredTargets.insert(target).inserted
+            guard isNew, registeredTargets.count > 1 else { return nil }
+            return oldKey
         }
 
-        observer.notify(event: .jwtRequestStarted(cached: false))
+        if let oldKey {
+            credentialStorage.invalidate(for: oldKey)
+        }
+    }
 
-        return try await withCheckedThrowingContinuation { continuation in
-            lock.lock()
+    func unregister(target: String) {
+        let oldKey: String? = withLock(lock) {
+            guard registeredTargets.contains(target) else { return nil }
 
-            if let cached = credentialStorage.get(for: target) {
-                lock.unlock()
-                continuation.resume(returning: cached)
-                return
+            let oldKey = compositeKeyUnsafe()
+            registeredTargets.remove(target)
+            return oldKey
+        }
+
+        if let oldKey {
+            credentialStorage.invalidate(for: oldKey)
+
+            withLock(lock) {
+                inFlightTasks.values.forEach { $0.cancel() }
+                inFlightTasks.removeAll()
+            }
+        }
+    }
+
+    func getCredential() async throws -> JwtCredential {
+        let key = compositeKey()
+
+        // 1. Dedup.
+        let valueOrTask: CachedOrTask = withLock(lock) {
+
+            // Return value if cached..
+            if let cached = credentialStorage.get(for: key) {
+                return .cached(cached)
             }
 
-            let isFirstRequest = pendingFetches[target] == nil || pendingFetches[target]!.isEmpty
-            if pendingFetches[target] == nil {
-                pendingFetches[target] = []
+            // .. return Task if not cached but request already in-flight..
+            if let existing = inFlightTasks[key] {
+                return .task(existing)
             }
-            pendingFetches[target]!.append(continuation)
-            lock.unlock()
 
-            if isFirstRequest {
-                Task { [weak self] in
-                    await self?.performFetch(for: target)
+            // .. or start the Task and return it.
+            let newTask = Task { [credentialFetcher] () throws -> JwtCredential in
+                let users = key.split(separator: ",").map(String.init)
+                return try await credentialFetcher.fetchCredential(for: users)
+            }
+
+            inFlightTasks[key] = newTask
+            return .task(newTask)
+        }
+
+        // 2. Now process the result.
+        switch valueOrTask {
+            case .cached(let cached):
+                return cached
+            case .task(let task):
+                do {
+                    let credential = try await task.value
+
+                    if compositeKey() == key {
+                        credentialStorage.save(credential, for: key)
+                    }
+
+                    withLock(lock) { inFlightTasks[key] = nil }
+
+                    return credential
+                } catch is CancellationError {
+                    withLock(lock) { inFlightTasks[key] = nil }
+                    throw CancellationError()
+                } catch {
+                    withLock(lock) { inFlightTasks[key] = nil }
+                    throw error
                 }
-            }
         }
     }
 
     func invalidate(for target: String) {
-        observer.notify(event: .jwtExpiredOrInvalid)
-        credentialStorage.invalidate(for: target)
-    }
+        let key = compositeKey()
+        credentialStorage.invalidate(for: key)
 
-    private func performFetch(for target: String) async {
-        do {
-            let credential = try await credentialFetcher.fetchCredential(for: [target])
-            credentialStorage.save(credential, for: target)
-            observer.notify(event: .jwtStored(secureStorage: false))
-            resumePending(for: target, with: .success(credential))
-        } catch {
-            resumePending(for: target, with: .failure(error))
+        withLock(lock) {
+            inFlightTasks.values.forEach { $0.cancel() }
+            inFlightTasks.removeAll()
         }
     }
 
-    private func resumePending(for target: String, with result: Result<JwtCredential, Error>) {
-        let continuations = withLock(lock) {
-            pendingFetches.removeValue(forKey: target) ?? []
-        }
+    // MARK: - Private
 
-        for continuation in continuations {
-            switch result {
-            case .success(let credential):
-                continuation.resume(returning: credential)
-            case .failure(let error):
-                continuation.resume(throwing: error)
-            }
-        }
+    private enum CachedOrTask {
+        case cached(JwtCredential)
+        case task(Task<JwtCredential, Error>)
+    }
+
+    private func compositeKey() -> String {
+        withLock(lock) { compositeKeyUnsafe() }
+    }
+
+    private func compositeKeyUnsafe() -> String {
+        registeredTargets.sorted().joined(separator: ",")
     }
 }

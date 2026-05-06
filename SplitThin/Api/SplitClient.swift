@@ -22,15 +22,17 @@ final class DefaultSplitClient: SplitClient {
     private(set) var target: Target
     private let treatmentsManager: TreatmentsManager
     private let eventsManager: SplitEventsManager
+    private let authProvider: AuthProvider
     private let observer: Observer // For SDK events & logging
     private let syncManager: SyncManager
     private var clientListeners = [SplitEventListener]()
     private var isDestroyed = false
 
-    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, observer: Observer, syncManager: SyncManager) {
+    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, authProvider: AuthProvider, observer: Observer, syncManager: SyncManager) {
         self.target = target
         self.treatmentsManager = treatmentsManager
         self.eventsManager = eventsManager
+        self.authProvider = authProvider
         self.observer = observer
         self.syncManager = syncManager
     }
@@ -89,6 +91,8 @@ final class DefaultSplitClient: SplitClient {
         guard !isDestroyed else { return }
         observer.notify(event: .destroyStarted)
         isDestroyed = true
+
+        authProvider.unregister(target: target.matchingKey)
 
         for listener in clientListeners {
             eventsManager.removeListener(listener)

@@ -19,6 +19,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     private let config: SplitClientConfig
     private let evaluationFilters: EvaluationFilters?
     private let secureHttpClient: SecureHttpClient
+    private let authProvider: AuthProvider
     private let evaluationRepository: EvaluationRepository
     private let fetchCoordinator: EvaluationFetchCoordinator
     private let streamingManager: StreamingManager
@@ -44,13 +45,14 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         syncManagers[defaultKey]
     }
 
-    init(sdkKey: SdkKey, target: Target, config: SplitClientConfig, evaluationFilters: EvaluationFilters?, secureHttpClient: SecureHttpClient, evaluationRepository: EvaluationRepository, fetchCoordinator: EvaluationFetchCoordinator, streamingManager: StreamingManager, evaluationStorage: EvaluationReadStorage, splitManager: DefaultSplitManager, factoryObserver: Observer) {
+    init(sdkKey: SdkKey, target: Target, config: SplitClientConfig, evaluationFilters: EvaluationFilters?, secureHttpClient: SecureHttpClient, authProvider: AuthProvider, evaluationRepository: EvaluationRepository, fetchCoordinator: EvaluationFetchCoordinator, streamingManager: StreamingManager, evaluationStorage: EvaluationReadStorage, splitManager: DefaultSplitManager, factoryObserver: Observer) {
         self.sdkKey = sdkKey
         self.defaultTarget = target
         self.defaultKey = target.key
         self.config = config
         self.evaluationFilters = evaluationFilters
         self.secureHttpClient = secureHttpClient
+        self.authProvider = authProvider
         self.evaluationRepository = evaluationRepository
         self.fetchCoordinator = fetchCoordinator
         self.streamingManager = streamingManager
@@ -105,6 +107,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
 
     @discardableResult
     private func createClient(target: Target) -> SplitClient {
+        authProvider.register(target: target.matchingKey)
 
         // 1. Wire up just the per-client components
         let eventDispatcher = EventDispatcher() // CompositeObserver in the spec
@@ -126,7 +129,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         let treatmentsManager = DefaultTreatmentsManager(target: target, evaluationRepository: evaluationRepository, fallbackCalculator: fallbackCalculator)
 
         // 2. Create
-        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager, observer: eventDispatcher, syncManager: syncManager)
+        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager, authProvider: authProvider, observer: eventDispatcher, syncManager: syncManager)
 
         // 3. Register
         clients[target.key] = client

@@ -6,50 +6,45 @@ final class AuthProviderEventsTest: XCTestCase {
     private var storageMock: CredentialStorageMock!
     private var fetcherMock: CredentialFetcherMock!
     private var provider: DefaultAuthProvider!
-    private var observerSpy: ObserverSpy!
 
     override func setUp() {
         super.setUp()
         storageMock = CredentialStorageMock()
         fetcherMock = CredentialFetcherMock()
-        observerSpy = ObserverSpy()
-        provider = DefaultAuthProvider(credentialStorage: storageMock, credentialFetcher: fetcherMock, observer: observerSpy)
+        provider = DefaultAuthProvider(credentialStorage: storageMock, credentialFetcher: fetcherMock, observer: ObserverSpy())
     }
 
     override func tearDown() {
         provider = nil
         storageMock = nil
         fetcherMock = nil
-        observerSpy = nil
         super.tearDown()
     }
 
-    func testCachedCredentialEmitsJwtRequestStartedCached() async throws {
+    func testCachedCredentialSkipsFetch() async throws {
+        provider.register(target: "user1")
         storageMock.credentials["user1"] = makeCredential()
 
-        _ = try await provider.getCredential(for: "user1")
+        let result = try await provider.getCredential()
 
-        XCTAssertEqual(observerSpy.eventNames, ["jwtRequestStarted"])
-        if case .jwtRequestStarted(let cached) = observerSpy.notifiedEvents.first {
-            XCTAssertTrue(cached)
-        } else {
-            XCTFail("Expected jwtRequestStarted(cached: true)")
-        }
+        XCTAssertEqual(result.token, "test-token")
+        XCTAssertEqual(fetcherMock.fetchCallCount, 0)
     }
 
-    func testFetchEmitsJwtRequestStartedNotCachedAndStored() async throws {
+    func testFetchStoresCredential() async throws {
+        provider.register(target: "user1")
         fetcherMock.credentialToReturn = makeCredential()
 
-        _ = try await provider.getCredential(for: "user1")
+        _ = try await provider.getCredential()
 
-        XCTAssertTrue(observerSpy.eventNames.contains("jwtRequestStarted"))
-        XCTAssertTrue(observerSpy.eventNames.contains("jwtStored"))
+        XCTAssertEqual(storageMock.saveCallCount, 1)
     }
 
-    func testInvalidateEmitsJwtExpiredOrInvalid() {
+    func testInvalidateRemovesFromStorage() {
+        provider.register(target: "user1")
         provider.invalidate(for: "user1")
 
-        XCTAssertEqual(observerSpy.eventNames, ["jwtExpiredOrInvalid"])
+        XCTAssertEqual(storageMock.invalidateCallCount, 1)
     }
 
     // MARK: - Helpers

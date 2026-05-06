@@ -5,6 +5,7 @@ final class DefaultSplitFactoryTest: XCTestCase {
 
     private var factory: DefaultSplitFactory!
     private var secureHttpClientMock: SecureHttpClientMock!
+    private var authProviderMock: AuthProviderMock!
     private var evaluationRepositoryMock: EvaluationRepositoryMock!
     private var fetchCoordinatorMock: EvaluationFetchCoordinatorMock!
     private var streamingManagerMock: StreamingManagerMock!
@@ -14,18 +15,21 @@ final class DefaultSplitFactoryTest: XCTestCase {
     override func setUp() {
         super.setUp()
         secureHttpClientMock = SecureHttpClientMock()
+        authProviderMock = AuthProviderMock()
+        authProviderMock.credentialToReturn = JwtCredential(token: "mock", expiresAt: Date().addingTimeInterval(3600), pushEnabled: false)
         evaluationRepositoryMock = EvaluationRepositoryMock()
         fetchCoordinatorMock = EvaluationFetchCoordinatorMock()
         streamingManagerMock = StreamingManagerMock()
         evaluationStorageMock = EvaluationStorageMock()
         splitManager = DefaultSplitManager(evaluationRepository: evaluationRepositoryMock, target: Target(matchingKey: "user1"))
-        factory = DefaultSplitFactory(sdkKey: SdkKey("api-key"), target: Target(matchingKey: "user1"), config: SplitClientConfig.builder().build(), evaluationFilters: nil, secureHttpClient: secureHttpClientMock, evaluationRepository: evaluationRepositoryMock, fetchCoordinator: fetchCoordinatorMock, streamingManager: streamingManagerMock, evaluationStorage: evaluationStorageMock, splitManager: splitManager, factoryObserver: ObserverSpy())
+        factory = DefaultSplitFactory(sdkKey: SdkKey("api-key"), target: Target(matchingKey: "user1"), config: SplitClientConfig.builder().build(), evaluationFilters: nil, secureHttpClient: secureHttpClientMock, authProvider: authProviderMock, evaluationRepository: evaluationRepositoryMock, fetchCoordinator: fetchCoordinatorMock, streamingManager: streamingManagerMock, evaluationStorage: evaluationStorageMock, splitManager: splitManager, factoryObserver: ObserverSpy())
     }
 
     override func tearDown() async throws {
         await factory.destroy()
         factory = nil
         secureHttpClientMock = nil
+        authProviderMock = nil
         evaluationRepositoryMock = nil
         fetchCoordinatorMock = nil
         streamingManagerMock = nil

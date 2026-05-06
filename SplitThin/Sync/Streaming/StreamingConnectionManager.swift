@@ -154,7 +154,7 @@ final class DefaultStreamingConnectionManager: StreamingConnectionManager, SseHa
         guard !withLock(stateLock, { state == .stopped }) else { return }
 
         do {
-            let credential = try await authProvider.getCredential(for: target.matchingKey)
+            let credential = try await authProvider.getCredential()
             guard credential.pushEnabled else {
                 Logger.d("StreamingConnectionManager: push not enabled")
                 return

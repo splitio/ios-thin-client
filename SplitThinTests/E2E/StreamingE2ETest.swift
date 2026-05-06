@@ -90,15 +90,15 @@ final class StreamingE2ETest: XCTestCase {
         let listener = TestEventListener(readyExpectation: sdkReady)
 
         let connectionManagerMock = StreamingConnectionManagerMock()
-        factory = try buildStreamingFactory(target: "user-123") { _ in connectionManagerMock }
+        factory = try buildStreamingFactory(target: Target(matchingKey: "user-123")) { _ in connectionManagerMock }
         factory.client.addEventListener(listener)
         waitFor(sdkReady)
 
         let factoryImpl = factory as! DefaultSplitFactory
-        factoryImpl.syncManager?.pause()
+        (factoryImpl.syncManager as? MobileSync)?.pause()
         XCTAssertEqual(connectionManagerMock.pauseCallCount, 1, "pause() should be forwarded to connection manager")
 
-        factoryImpl.syncManager?.resume()
+        (factoryImpl.syncManager as? MobileSync)?.resume()
         XCTAssertEqual(connectionManagerMock.resumeCallCount, 1, "resume() should be forwarded to connection manager")
     }
     #endif
@@ -118,9 +118,9 @@ final class StreamingE2ETest: XCTestCase {
 
         let (built, connectionManager) = try buildStreamingFactory(target: "user-A")
         factory = built
+        factory.client.addEventListener(listener1)
 
         let client2 = factory.getClient("user-B")
-        factory.client.addEventListener(listener1)
         client2.addEventListener(listener2)
 
         waitFor(ready1, ready2)
@@ -143,9 +143,9 @@ final class StreamingE2ETest: XCTestCase {
 
         let (built, connectionManager) = try buildStreamingFactory(target: "user-A")
         factory = built
+        factory.client.addEventListener(listener1)
 
         let client2 = factory.getClient("user-B")
-        factory.client.addEventListener(listener1)
         client2.addEventListener(listener2)
 
         waitFor(ready1, ready2)

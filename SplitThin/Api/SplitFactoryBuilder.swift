@@ -29,6 +29,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
     // Internals for testing
     var secureHttpClient: SecureHttpClient?
     var retryableHttpClient: RetryableHttpClient?
+    var credentialStorage: CredentialStorage?
     var connectionManagerFactory: ((EvaluationFetchCoordinator) -> StreamingConnectionManager)?
     var observer: Observer?
 
@@ -89,10 +90,9 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         }
 
         let resolvedObserver = buildObserver()
-        let (secureHttp, builtAuthProvider) = buildSecureHttpClientAndAuth(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey, observer: resolvedObserver)
-        let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttp)
-
         let databaseName = Self.databaseName(prefix: config.prefix, apiKey: sdkKey.sdkKey)
+        let (secureHttp, resolvedAuth) = buildSecureHttpClientAndAuth(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey, observer: resolvedObserver)
+        let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttp)
         let coreDataStorage = CoreDataStorage(databaseName: databaseName)
         let evaluationStorage = PersistentStorage(storage: coreDataStorage)
 
@@ -107,14 +107,14 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
             let http = httpClient ?? DefaultHttpClient.shared
             streamingComponents = createStreamingComponents(
                 target: target,
-                authProvider: builtAuthProvider,
+                authProvider: resolvedAuth,
                 streamingEndpoint: serviceEndpoints.streamingServiceEndpoint,
                 httpClient: http,
                 fetchCoordinator: fetchCoordinator
             )
         }
 
-        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, streamingManager: streamingComponents.manager, evaluationStorage: evaluationStorage, splitManager: splitManager, factoryObserver: resolvedObserver)
+        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, authProvider: resolvedAuth, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, streamingManager: streamingComponents.manager, evaluationStorage: evaluationStorage, splitManager: splitManager, factoryObserver: resolvedObserver)
     }
 
     private func configureLogger() {
@@ -126,9 +126,9 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
     private func buildSecureHttpClientAndAuth(serviceEndpoints: ServiceEndpoints, sdkKey: String, observer: Observer) -> (SecureHttpClient, AuthProvider) {
         let http = httpClient ?? DefaultHttpClient.shared
         let retryable = retryableHttpClient ?? DefaultRetryableHttpClient(httpClient: http, observer: observer)
-        let storage = DefaultCredentialStorage()
+        let credStorage = credentialStorage ?? KeychainCredentialStorage(keychainKey: "\(Self.databaseName(prefix: config.prefix, apiKey: sdkKey))_jwt")
         let fetcher = DefaultCredentialFetcher(retryableHttpClient: retryable, observer: observer, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey)
-        let auth = authProvider ?? DefaultAuthProvider(credentialStorage: storage, credentialFetcher: fetcher, observer: observer)
+        let auth = authProvider ?? DefaultAuthProvider(credentialStorage: credStorage, credentialFetcher: fetcher, observer: observer)
         let client = secureHttpClient ?? DefaultSecureHttpClient(retryableHttpClient: retryable, authProvider: auth, serviceEndpoints: serviceEndpoints)
         return (client, auth)
     }
@@ -145,9 +145,9 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         return dispatcher
     }
 
-    private static let kDbMagicCharsCount = 4
-
+    // Used for generating unique names for db and keychain
     static func databaseName(prefix: String?, apiKey: String) -> String {
+        let kDbMagicCharsCount = 4
         let keyFragment: String
         if apiKey.count >= kDbMagicCharsCount * 2 {
             keyFragment = "\(apiKey.prefix(kDbMagicCharsCount))\(apiKey.suffix(kDbMagicCharsCount))"

@@ -103,7 +103,7 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
 }
 
 // MARK: BG Sync (just for mobile devices)
-extension DefaultSyncManager {
+extension DefaultSyncManager: MobileSync {
     func pause() {
         #if !os(macOS)
             withLock(lock) {

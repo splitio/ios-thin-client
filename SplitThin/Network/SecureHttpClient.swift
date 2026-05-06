@@ -30,13 +30,13 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
     }
 
     func fetchEvaluations(target: Target, filters: EvaluationFilters?) async throws -> HttpResponse {
-        let credential = try await authProvider.getCredential(for: target.matchingKey)
+        let credential = try await authProvider.getCredential()
 
         let response = try await performEvaluationsRequest(target: target, filters: filters, token: credential.token)
 
         if response.code == 401 {
             authProvider.invalidate(for: target.matchingKey)
-            let refreshedCredential = try await authProvider.getCredential(for: target.matchingKey)
+            let refreshedCredential = try await authProvider.getCredential()
             return try await performEvaluationsRequest(target: target, filters: filters, token: refreshedCredential.token)
         }
 
@@ -63,6 +63,11 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
 
     private func performEvaluationsRequest(target: Target, filters: EvaluationFilters?, token: String) async throws -> HttpResponse {
         var queryString = "&user=\(target.matchingKey)&since=-1"
+
+        if let bucketingKey = target.bucketingKey {
+            queryString += "&bucketingKey=\(bucketingKey)"
+        }
+
         if let flagNames = filters?.flagNames, !flagNames.isEmpty {
             queryString += "&names=\(flagNames.joined(separator: ","))"
         } else if let flagSets = filters?.flagSets, !flagSets.isEmpty {

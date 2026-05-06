@@ -19,6 +19,12 @@ extension DefaultSplitFactoryBuilder {
     }
 
     @discardableResult
+    func setCredentialStorage(_ storage: CredentialStorage) -> DefaultSplitFactoryBuilder {
+        self.credentialStorage = storage
+        return self
+    }
+
+    @discardableResult
     func setStreamingConnectionManagerFactory(_ factory: @escaping (EvaluationFetchCoordinator) -> StreamingConnectionManager) -> DefaultSplitFactoryBuilder {
         self.connectionManagerFactory = factory
         return self

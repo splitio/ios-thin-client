@@ -22,6 +22,7 @@ func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync
 
     // Inject httpClient (just possible on testing)
     builder.setSecureHttpClient(httpClient)
+    builder.setCredentialStorage(DefaultCredentialStorage())
 
     // Inject Observer (just possible on testing)
     if let observer = observer {
@@ -42,6 +43,7 @@ func buildClient(target: String = "user-123", treatmentsManager: TreatmentsManag
     DefaultSplitClient(target: Target(matchingKey: target),
                        treatmentsManager: treatmentsManager ?? TreatmentsManagerMock(),
                        eventsManager: eventsManager ?? SplitEventsManagerMock(),
+                       authProvider: AuthProviderMock(),
                        observer: observer ?? ObserverSpy(),
                        syncManager: syncManager ?? SyncManagerMock())
 }
