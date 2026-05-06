@@ -107,7 +107,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         let treatmentsManager = DefaultTreatmentsManager(target: target, evaluationRepository: evaluationRepository, fallbackCalculator: fallbackCalculator)
         
         // 2. Create
-        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager)
+        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager, authProvider: authProvider)
 
         // 3. Register
         clients[target.key] = client

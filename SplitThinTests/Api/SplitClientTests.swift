@@ -6,12 +6,14 @@ final class DefaultSplitClientTest: XCTestCase {
     private var client: DefaultSplitClient!
     private var treatmentsManagerMock: TreatmentsManagerMock!
     private var eventsManagerMock: SplitEventsManagerMock!
+    private var authProviderMock: AuthProviderMock!
 
     override func setUp() {
         super.setUp()
         treatmentsManagerMock = TreatmentsManagerMock()
         eventsManagerMock = SplitEventsManagerMock()
-        client = DefaultSplitClient(target: Target(matchingKey: "user1"), treatmentsManager: treatmentsManagerMock, eventsManager: eventsManagerMock)
+        authProviderMock = AuthProviderMock()
+        client = DefaultSplitClient(target: Target(matchingKey: "user1"), treatmentsManager: treatmentsManagerMock, eventsManager: eventsManagerMock, authProvider: authProviderMock)
     }
 
     override func tearDown() {
@@ -75,12 +77,19 @@ final class DefaultSplitClientTest: XCTestCase {
         XCTAssertEqual(eventsManagerMock.removedListeners.count, 2)
     }
 
+    func testDestroyUnregistersTarget() async {
+        await client.destroy()
+
+        XCTAssertEqual(authProviderMock.unregisterCallCount, 1)
+        XCTAssertEqual(authProviderMock.lastTargetUnregistered, "user1")
+    }
+
     func testDestroyOnlyRemovesOwnListeners() async {
         let listener1 = TestEventListener()
         let listener2 = TestEventListener()
         client.addEventListener(listener1)
 
-        let client2 = DefaultSplitClient(target: Target(matchingKey: "user2"), treatmentsManager: treatmentsManagerMock, eventsManager: eventsManagerMock)
+        let client2 = DefaultSplitClient(target: Target(matchingKey: "user2"), treatmentsManager: treatmentsManagerMock, eventsManager: eventsManagerMock, authProvider: AuthProviderMock())
         client2.addEventListener(listener2)
 
         await client.destroy()

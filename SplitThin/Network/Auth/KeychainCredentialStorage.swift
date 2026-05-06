@@ -3,8 +3,11 @@ import Logging
 
 final class KeychainCredentialStorage: CredentialStorage, @unchecked Sendable {
 
-    private let keychainKey: String
+    // Keyed by AuthProvider's composite key. In practice only one entry is
+    // present at a time (AuthProvider invalidates the old composite key on
+    // target registration changes); the map shape is kept for future extensibility.
     private var cache = [String: JwtCredential]()
+    private let keychainKey: String
     private let lock = NSLock()
     private var keychainAvailable = true
 
@@ -59,6 +62,7 @@ final class KeychainCredentialStorage: CredentialStorage, @unchecked Sendable {
 
         var addQuery = query
         addQuery[kSecValueData as String] = data
+        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
 
         let status = SecItemAdd(addQuery as CFDictionary, nil)
         if status != errSecSuccess && status != errSecDuplicateItem {

@@ -19,13 +19,15 @@ final class DefaultSplitClient: SplitClient {
     private(set) var target: Target
     private let treatmentsManager: TreatmentsManager
     private let eventsManager: SplitEventsManager
+    private let authProvider: AuthProvider
     private var clientListeners = [SplitEventListener]()
     private var isDestroyed = false
 
-    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager) {
+    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, authProvider: AuthProvider) {
         self.target = target
         self.treatmentsManager = treatmentsManager
         self.eventsManager = eventsManager
+        self.authProvider = authProvider
     }
 
     // MARK: - Evaluations
@@ -73,6 +75,8 @@ final class DefaultSplitClient: SplitClient {
     func destroy() async {
         guard !isDestroyed else { return }
         isDestroyed = true
+
+        authProvider.unregister(target: target.matchingKey)
 
         for listener in clientListeners {
             eventsManager.removeListener(listener)

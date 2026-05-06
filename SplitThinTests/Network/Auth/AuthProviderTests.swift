@@ -19,7 +19,7 @@ final class DefaultAuthProviderTest: XCTestCase {
         let cached = makeCredential(token: "cached-token")
         storageMock.credentials["user1"] = cached
 
-        let result = try await provider.getCredential(for: "user1")
+        let result = try await provider.getCredential()
 
         XCTAssertEqual(result.token, "cached-token")
         XCTAssertEqual(fetcherMock.fetchCallCount, 0)
@@ -30,7 +30,7 @@ final class DefaultAuthProviderTest: XCTestCase {
         let fresh = makeCredential(token: "fresh-token")
         fetcherMock.credentialToReturn = fresh
 
-        let result = try await provider.getCredential(for: "user1")
+        let result = try await provider.getCredential()
 
         XCTAssertEqual(result.token, "fresh-token")
         XCTAssertEqual(fetcherMock.fetchCallCount, 1)
@@ -42,7 +42,7 @@ final class DefaultAuthProviderTest: XCTestCase {
         let fresh = makeCredential(token: "fresh-token")
         fetcherMock.credentialToReturn = fresh
 
-        try await provider.getCredential(for: "user1")
+        try await provider.getCredential()
 
         XCTAssertEqual(storageMock.saveCallCount, 1)
         XCTAssertEqual(storageMock.credentials["user1"]?.token, "fresh-token")
@@ -53,7 +53,7 @@ final class DefaultAuthProviderTest: XCTestCase {
         fetcherMock.errorToThrow = CredentialFetcherError.invalidAuthResponse
 
         do {
-            try await provider.getCredential(for: "user1")
+            try await provider.getCredential()
             XCTFail("Expected error")
         } catch let error as CredentialFetcherError {
             if case .invalidAuthResponse = error {} else {
@@ -78,9 +78,9 @@ final class DefaultAuthProviderTest: XCTestCase {
         fetcherMock.credentialToReturn = credential
         fetcherMock.delay = 0.1
 
-        async let result1 = provider.getCredential(for: "user1")
-        async let result2 = provider.getCredential(for: "user1")
-        async let result3 = provider.getCredential(for: "user1")
+        async let result1 = provider.getCredential()
+        async let result2 = provider.getCredential()
+        async let result3 = provider.getCredential()
 
         let results = try await [result1, result2, result3]
 
@@ -97,7 +97,7 @@ final class DefaultAuthProviderTest: XCTestCase {
         let cred = makeCredential(token: "composite-token")
         fetcherMock.credentialToReturn = cred
 
-        try await provider.getCredential(for: "alpha")
+        try await provider.getCredential()
 
         XCTAssertEqual(fetcherMock.lastUsersRequested, ["alpha", "bravo", "charlie"])
         XCTAssertNotNil(storageMock.credentials["alpha,bravo,charlie"])
@@ -108,7 +108,7 @@ final class DefaultAuthProviderTest: XCTestCase {
         let cred = makeCredential(token: "token")
         fetcherMock.credentialToReturn = cred
 
-        try await provider.getCredential(for: "user1")
+        try await provider.getCredential()
         XCTAssertEqual(storageMock.invalidateCallCount, 0)
 
         provider.register(target: "user2")
@@ -121,8 +121,8 @@ final class DefaultAuthProviderTest: XCTestCase {
         let cred = makeCredential(token: "token")
         fetcherMock.credentialToReturn = cred
 
-        try await provider.getCredential(for: "user1")
-        try await provider.getCredential(for: "user1")
+        try await provider.getCredential()
+        try await provider.getCredential()
 
         XCTAssertEqual(fetcherMock.fetchCallCount, 1)
     }
@@ -132,11 +132,56 @@ final class DefaultAuthProviderTest: XCTestCase {
         let cred = makeCredential(token: "token")
         fetcherMock.credentialToReturn = cred
 
-        try await provider.getCredential(for: "user1")
+        try await provider.getCredential()
         provider.invalidate(for: "user1")
-        try await provider.getCredential(for: "user1")
+        try await provider.getCredential()
 
         XCTAssertEqual(fetcherMock.fetchCallCount, 2)
+    }
+
+    // MARK: - Unregister
+
+    func testUnregisterRemovesTargetFromCompositeKey() async throws {
+        provider.register(target: "user1")
+        provider.register(target: "user2")
+        provider.register(target: "user3")
+        fetcherMock.credentialToReturn = makeCredential()
+
+        provider.unregister(target: "user2")
+
+        try await provider.getCredential()
+
+        XCTAssertEqual(storageMock.lastTargetSave, "user1,user3")
+    }
+
+    func testUnregisterInvalidatesOldCompositeKey() {
+        provider.register(target: "user1")
+        provider.register(target: "user2")
+        storageMock.invalidateCallCount = 0
+
+        provider.unregister(target: "user2")
+
+        XCTAssertEqual(storageMock.invalidateCallCount, 1)
+        XCTAssertEqual(storageMock.lastTargetInvalidate, "user1,user2")
+    }
+
+    func testUnregisterNonExistentTargetDoesNothing() {
+        provider.register(target: "user1")
+        storageMock.invalidateCallCount = 0
+
+        provider.unregister(target: "unknown")
+
+        XCTAssertEqual(storageMock.invalidateCallCount, 0)
+    }
+
+    func testUnregisterLastTargetLeavesEmptyKey() async throws {
+        provider.register(target: "user1")
+        provider.unregister(target: "user1")
+        fetcherMock.credentialToReturn = makeCredential()
+
+        try await provider.getCredential()
+
+        XCTAssertEqual(storageMock.lastTargetSave, "")
     }
 
     func testRegisterSameTargetTwiceDoesNotInvalidate() {
