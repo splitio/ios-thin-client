@@ -114,7 +114,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
             )
         }
 
-        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, streamingManager: streamingComponents.manager, evaluationStorage: evaluationStorage, splitManager: splitManager, factoryObserver: resolvedObserver)
+        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, streamingManager: streamingComponents.manager, evaluationStorage: evaluationStorage, coreDataStorage: coreDataStorage, splitManager: splitManager, factoryObserver: resolvedObserver)
     }
 
     private func configureLogger() {

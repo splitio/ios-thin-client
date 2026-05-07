@@ -103,15 +103,16 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         XCTAssertTrue(userIdx < withConfigIdx, "user should come before withConfig")
     }
 
-    func testFetchEvaluationsSendsEmptyBodyWhenNoAttributes() async throws {
+    func testFetchEvaluationsSendsEmptyAttributesWhenNoAttributes() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
         let target = Target(matchingKey: "user1")
 
         try await client.fetchEvaluations(target: target)
 
-        let body = retryableHttpMock.executeCalls[0].body
-        XCTAssertEqual(body, "{}".data(using: .utf8))
+        let body = retryableHttpMock.executeCalls[0].body!
+        let parsed = try JSONSerialization.jsonObject(with: body) as! [String: Any]
+        XCTAssertTrue(parsed["attributes"] is NSNull)
     }
 
     func testFetchEvaluationsSendsAttributesInBody() async throws {
@@ -123,8 +124,9 @@ final class DefaultSecureHttpClientTest: XCTestCase {
 
         let body = retryableHttpMock.executeCalls[0].body!
         let parsed = try JSONSerialization.jsonObject(with: body) as! [String: Any]
-        XCTAssertEqual(parsed["plan"] as? String, "enterprise")
-        XCTAssertEqual(parsed["role"] as? String, "admin")
+        let attributes = parsed["attributes"] as! [String: String]
+        XCTAssertEqual(attributes["plan"], "enterprise")
+        XCTAssertEqual(attributes["role"], "admin")
     }
 
     func testFetchEvaluationsIncludesContentDigestHeader() async throws {

@@ -157,4 +157,28 @@ final class ParsingTest: XCTestCase {
 
         XCTAssertThrowsError(try Json.decode(from: json, to: EvaluationsResult.self))
     }
+
+    // MARK: - EventEntity (encoding)
+
+    func testEventEntityEncodesAllFields() throws {
+        let timestamp = Date(timeIntervalSince1970: 1000)
+        let event = EventEntity(trafficType: "user", eventType: "purchase", value: 12.5, properties: ["plan": "pro"], timestamp: timestamp)
+
+        let dict = event.toJsonObject() as! [String: Any]
+
+        XCTAssertEqual(dict["eventTypeId"] as? String, "purchase")
+        XCTAssertEqual(dict["trafficTypeName"] as? String, "user")
+        XCTAssertEqual(dict["value"] as? Double, 12.5)
+        XCTAssertEqual(dict["timestamp"] as? Int64, 1_000_000)
+        XCTAssertEqual(dict["properties"] as? [String: String], ["plan": "pro"])
+    }
+
+    func testEventEntityOmitsNilValueAndProperties() throws {
+        let event = EventEntity(trafficType: "user", eventType: "click")
+
+        let dict = event.toJsonObject() as! [String: Any]
+
+        XCTAssertNil(dict["value"])
+        XCTAssertNil(dict["properties"])
+    }
 }

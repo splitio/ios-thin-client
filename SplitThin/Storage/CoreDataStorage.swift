@@ -13,6 +13,7 @@ final class CoreDataStorage: @unchecked Sendable {
 
     private static let clientSessionEntity = "ClientSession"
     private static let evaluationEntity = "Evaluation"
+    private static let eventEntity = "Event"
 
     private let container: NSPersistentContainer
 
@@ -172,10 +173,79 @@ final class CoreDataStorage: @unchecked Sendable {
         }) ?? []
     }
 
+    // MARK: - Event Operations
+
+    func addEvent(_ dto: EventDTO) async throws {
+        try await withContext { context in
+            guard let entity = NSEntityDescription.entity(forEntityName: Self.eventEntity, in: context) else {
+                throw StorageError.entityNotFound
+            }
+
+            let event = NSManagedObject(entity: entity, insertInto: context)
+            event.setValue(dto.id.uuidString, forKey: "id")
+            event.setValue(dto.trafficType, forKey: "trafficType")
+            event.setValue(dto.eventType, forKey: "eventType")
+            event.setValue(dto.value ?? 0, forKey: "value")
+            event.setValue(dto.value != nil, forKey: "hasValue")
+            event.setValue(dto.properties, forKey: "properties")
+            event.setValue(dto.timestamp, forKey: "timestamp")
+
+            try context.save()
+        }
+    }
+
+    func getEventBatch(size: Int) async -> [EventDTO] {
+        (try? await withContext { context in
+            let request = NSFetchRequest<NSManagedObject>(entityName: Self.eventEntity)
+            request.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
+            request.fetchLimit = size
+
+            return try context.fetch(request).compactMap { result -> EventDTO? in
+                guard let idString = result.value(forKey: "id") as? String, let id = UUID(uuidString: idString) else {
+                    return nil
+                }
+
+                let hasValue = result.value(forKey: "hasValue") as? Bool ?? false
+                return EventDTO(id: id, trafficType: result.value(forKey: "trafficType") as? String ?? "", eventType: result.value(forKey: "eventType") as? String ?? "", value: hasValue ? result.value(forKey: "value") as? Double : nil, properties: result.value(forKey: "properties") as? String, timestamp: result.value(forKey: "timestamp") as? Double ?? 0)
+            }
+        }) ?? []
+    }
+
+    func countEvents() async -> Int {
+        (try? await withContext { context in
+            let request = NSFetchRequest<NSManagedObject>(entityName: Self.eventEntity)
+            return try context.count(for: request)
+        }) ?? 0
+    }
+
+    func removeEvents(ids: [String]) async {
+        guard !ids.isEmpty else { return }
+
+        try? await withContext { context in
+            let request = NSFetchRequest<NSManagedObject>(entityName: Self.eventEntity)
+            request.predicate = NSPredicate(format: "id IN %@", ids)
+            for object in try context.fetch(request) {
+                context.delete(object)
+            }
+            try context.save()
+        }
+    }
+
+    func clearEvents() async {
+        try? await withContext { context in
+            let request = NSFetchRequest<NSManagedObject>(entityName: Self.eventEntity)
+            for object in try context.fetch(request) {
+                context.delete(object)
+            }
+            try context.save()
+        }
+    }
+
     // MARK: - Private Helpers
 
     private func encodeAttributes(_ attributes: [String: Any]?) -> String? {
         guard let attributes, !attributes.isEmpty else { return nil }
+        
         guard let data = try? JSONSerialization.data(withJSONObject: attributes),
               let json = String(data: data, encoding: .utf8) else {
             return nil
@@ -274,7 +344,49 @@ final class CoreDataStorage: @unchecked Sendable {
         ])
         evaluationEntity.indexes = [compoundIndex]
 
-        model.entities = [clientSessionEntity, evaluationEntity]
+        // Event entity
+        let eventEntity = NSEntityDescription()
+        eventEntity.name = Self.eventEntity
+        eventEntity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+
+        let eventIdAttr = NSAttributeDescription()
+        eventIdAttr.name = "id"
+        eventIdAttr.attributeType = .stringAttributeType
+
+        let eventTrafficTypeAttr = NSAttributeDescription()
+        eventTrafficTypeAttr.name = "trafficType"
+        eventTrafficTypeAttr.attributeType = .stringAttributeType
+
+        let eventEventTypeAttr = NSAttributeDescription()
+        eventEventTypeAttr.name = "eventType"
+        eventEventTypeAttr.attributeType = .stringAttributeType
+
+        let eventValueAttr = NSAttributeDescription()
+        eventValueAttr.name = "value"
+        eventValueAttr.attributeType = .doubleAttributeType
+        eventValueAttr.isOptional = true
+
+        let eventHasValueAttr = NSAttributeDescription()
+        eventHasValueAttr.name = "hasValue"
+        eventHasValueAttr.attributeType = .booleanAttributeType
+
+        let eventPropertiesAttr = NSAttributeDescription()
+        eventPropertiesAttr.name = "properties"
+        eventPropertiesAttr.attributeType = .stringAttributeType
+        eventPropertiesAttr.isOptional = true
+
+        let eventTimestampAttr = NSAttributeDescription()
+        eventTimestampAttr.name = "timestamp"
+        eventTimestampAttr.attributeType = .doubleAttributeType
+
+        eventEntity.properties = [eventIdAttr, eventTrafficTypeAttr, eventEventTypeAttr, eventValueAttr, eventHasValueAttr, eventPropertiesAttr, eventTimestampAttr]
+
+        let eventTimestampIndex = NSFetchIndexDescription(name: "byTimestamp", elements: [
+            NSFetchIndexElementDescription(property: eventTimestampAttr, collationType: .binary)
+        ])
+        eventEntity.indexes = [eventTimestampIndex]
+
+        model.entities = [clientSessionEntity, evaluationEntity, eventEntity]
         return model
     }
 
