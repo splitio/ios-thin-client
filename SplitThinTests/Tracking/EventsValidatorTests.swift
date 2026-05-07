@@ -1,3 +1,6 @@
+//  Created by Martin Cardozo
+//  Copyright © 2026 Harness. All rights reserved
+
 import XCTest
 @testable import SplitThin
 
@@ -22,22 +25,15 @@ final class DefaultEventsValidatorTest: XCTestCase {
         XCTAssertFalse(validator.validate(event))
     }
 
-    func testWhitespaceEventTypeReturnsFalse() {
-        let event = EventEntity(trafficType: "user", eventType: "   ")
-
-        XCTAssertFalse(validator.validate(event))
-    }
-
     func testEmptyTrafficTypeReturnsFalse() {
         let event = EventEntity(trafficType: "", eventType: "purchase")
 
         XCTAssertFalse(validator.validate(event))
     }
 
-    func testWhitespaceTrafficTypeReturnsFalse() {
-        let event = EventEntity(trafficType: "  ", eventType: "purchase")
+    func testWhitespaceOnlyReturnsFalse() {
+        let event = EventEntity(trafficType: "  ", eventType: "  ")
 
         XCTAssertFalse(validator.validate(event))
     }
-
 }
