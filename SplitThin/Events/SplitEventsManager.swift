@@ -17,8 +17,8 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
 
     private var listeners = [SplitEventListener]()
 
-    private var sdkReadyFired = false
-    private var sdkReadyFromCacheFired = false
+    private var sdkReadyMetadata: SdkReadyMetadata?
+    private var sdkReadyFromCacheMetadata: SdkReadyFromCacheMetadata?
     private var sdkReadyTimedOutFired = false
 
     // Conditions that must be met before SDK_READY can fire.
@@ -55,7 +55,7 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
     }
 
     func isReady() -> Bool {
-        dataAccessQueue.sync { sdkReadyFired }
+        dataAccessQueue.sync { sdkReadyMetadata != nil }
     }
 
     // MARK: - Register/remove listener
@@ -63,6 +63,14 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
         processQueue.async { [weak self] in
             guard let self else { return }
             self.appendListener(listener)
+
+            // Sticky events: replay already-fired state to late subscribers
+            if let metadata = self.getReadyMetadata() {
+                DispatchQueue.main.async { listener.onReady(metadata) }
+            }
+            if let metadata = self.getCacheMetadata() {
+                DispatchQueue.main.async { listener.onReadyFromCache(metadata) }
+            }
         }
     }
 
@@ -123,7 +131,7 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
 
     private func triggerReady(_ metadata: SdkReadyMetadata) {
         guard !isSdkReadyFired() else { return }
-        setSdkReadyFired()
+        setReadyMetadata(metadata)
 
         getListeners().forEach { listener in 
             DispatchQueue.main.async {  listener.onReady(metadata) } 
@@ -132,7 +140,7 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
 
     private func triggerReadyFromCache(_ metadata: SdkReadyFromCacheMetadata) {
         guard !isSdkReadyFromCacheFired() else { return }
-        setSdkReadyFromCacheFired()
+        setCacheMetadata(metadata)
 
         getListeners().forEach { listener in 
             DispatchQueue.main.async {  listener.onReadyFromCache(metadata) } 
@@ -162,21 +170,29 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
     }
 
     private func isSdkReadyFired() -> Bool {
-        dataAccessQueue.sync { sdkReadyFired }
+        dataAccessQueue.sync { sdkReadyMetadata != nil }
     }
 
-    private func setSdkReadyFired() {
+    private func getReadyMetadata() -> SdkReadyMetadata? {
+        dataAccessQueue.sync { sdkReadyMetadata }
+    }
+
+    private func setReadyMetadata(_ metadata: SdkReadyMetadata) {
         Logger.d("Triggering SDK event SDK_READY")
-        dataAccessQueue.sync { sdkReadyFired = true }
+        dataAccessQueue.sync { sdkReadyMetadata = metadata }
     }
 
     private func isSdkReadyFromCacheFired() -> Bool {
-        dataAccessQueue.sync { sdkReadyFromCacheFired }
+        dataAccessQueue.sync { sdkReadyFromCacheMetadata != nil }
     }
 
-    private func setSdkReadyFromCacheFired() {
+    private func getCacheMetadata() -> SdkReadyFromCacheMetadata? {
+        dataAccessQueue.sync { sdkReadyFromCacheMetadata }
+    }
+
+    private func setCacheMetadata(_ metadata: SdkReadyFromCacheMetadata) {
         Logger.d("Triggering SDK event SDK_READY_FROM_CACHE")
-        dataAccessQueue.sync { sdkReadyFromCacheFired = true }
+        dataAccessQueue.sync { sdkReadyFromCacheMetadata = metadata }
     }
 
     private func isSdkReadyTimedOutFired() -> Bool {
