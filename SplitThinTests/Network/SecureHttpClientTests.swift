@@ -116,6 +116,31 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         XCTAssertEqual(retryableHttpMock.executeCalls[0].category, .evaluations)
     }
 
+    // MARK: - Configs enabled
+
+    func testIncludesWithConfigParamWhenEnabled() async throws {
+        retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
+        let configsClient = DefaultSecureHttpClient(retryableHttpClient: retryableHttpMock, authProvider: authProviderMock, serviceEndpoints: serviceEndpoints, configsEnabled: true)
+
+        let target = Target(matchingKey: "user1")
+
+        try await configsClient.fetchEvaluations(target: target)
+
+        let url = retryableHttpMock.executeCalls[0].endpoint.url.absoluteString
+        XCTAssertTrue(url.contains("withConfig=true"), "URL should contain withConfig param: \(url)")
+    }
+
+    func testExcludesWithConfigParamWhenDisabled() async throws {
+        retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
+
+        let target = Target(matchingKey: "user1")
+
+        try await client.fetchEvaluations(target: target)
+
+        let url = retryableHttpMock.executeCalls[0].endpoint.url.absoluteString
+        XCTAssertFalse(url.contains("withConfig"), "URL should not contain withConfig param: \(url)")
+    }
+
     // MARK: - 401 Retry Flow
 
     func testFetchEvaluationsRetriesOn401() async throws {

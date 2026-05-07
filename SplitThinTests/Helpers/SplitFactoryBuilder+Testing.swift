@@ -54,6 +54,13 @@ extension SplitClient {
     }
 }
 
+extension CredentialFetcher {
+    @discardableResult
+    func fetchCredential(for user: String) async throws -> JwtCredential {
+        try await fetchCredential(for: [user])
+    }
+}
+
 extension SecureHttpClient {
     @discardableResult
     func fetchEvaluations(target: Target) async throws -> HttpResponse {

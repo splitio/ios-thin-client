@@ -20,19 +20,26 @@ final class DefaultCredentialFetcher: CredentialFetcher, @unchecked Sendable {
     private let observer: Observer // For logging & telemetry
     private let authEndpoint: URL
     private let sdkKey: String
+    private let configsEnabled: Bool
 
-    init(retryableHttpClient: RetryableHttpClient, observer: Observer, authEndpoint: URL, sdkKey: String) {
+    init(retryableHttpClient: RetryableHttpClient, observer: Observer, authEndpoint: URL, sdkKey: String, configsEnabled: Bool = false) {
         self.retryableHttpClient = retryableHttpClient
         self.observer = observer
         self.authEndpoint = authEndpoint
         self.sdkKey = sdkKey
+        self.configsEnabled = configsEnabled
     }
 
     func fetchCredential(for users: [String]) async throws -> JwtCredential {
         observer.notify(event: .jwtFetchStarted)
 
         let usersParam = users.joined(separator: ",")
-        let endpoint = Endpoint.builder(baseUrl: authEndpoint, path: "auth/thin-client", defaultQueryString: "&users=\(usersParam)")
+        var queryString = "&users=\(usersParam)"
+        if configsEnabled {
+            queryString += "&configs=true"
+        }
+
+        let endpoint = Endpoint.builder(baseUrl: authEndpoint, path: "auth/thin-client", defaultQueryString: queryString)
                                .set(method: .get)
                                .add(header: "Authorization", withValue: "Bearer \(sdkKey)")
                                .add(header: "Content-Type", withValue: "application/json")

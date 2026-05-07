@@ -22,11 +22,13 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
     private let retryableHttpClient: RetryableHttpClient
     private let authProvider: AuthProvider
     private let serviceEndpoints: ServiceEndpoints
+    private let configsEnabled: Bool
 
-    init(retryableHttpClient: RetryableHttpClient, authProvider: AuthProvider, serviceEndpoints: ServiceEndpoints) {
+    init(retryableHttpClient: RetryableHttpClient, authProvider: AuthProvider, serviceEndpoints: ServiceEndpoints, configsEnabled: Bool = false) {
         self.retryableHttpClient = retryableHttpClient
         self.authProvider = authProvider
         self.serviceEndpoints = serviceEndpoints
+        self.configsEnabled = configsEnabled
     }
 
     func fetchEvaluations(target: Target, filters: EvaluationFilters?) async throws -> HttpResponse {
@@ -63,6 +65,9 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
 
     private func performEvaluationsRequest(target: Target, filters: EvaluationFilters?, token: String) async throws -> HttpResponse {
         var queryString = "&user=\(target.matchingKey)&since=-1"
+        if configsEnabled {
+            queryString += "&withConfig=true"
+        }
         if let flagNames = filters?.flagNames, !flagNames.isEmpty {
             queryString += "&names=\(flagNames.joined(separator: ","))"
         } else if let flagSets = filters?.flagSets, !flagSets.isEmpty {
