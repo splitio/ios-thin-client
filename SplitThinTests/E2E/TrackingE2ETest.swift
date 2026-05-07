@@ -93,6 +93,23 @@ final class TrackingE2ETest: XCTestCase {
         XCTAssertEqual(httpMock.postEventsCalls.count, 0)
     }
 
+    // MARK: - Traffic type
+
+    func testTrackUsesTargetTrafficType() async throws {
+        let customFactory = try buildFactory(httpClient: httpMock, target: Target(matchingKey: "user-123", trafficType: "account"))
+        waitUntilReady(customFactory)
+
+        customFactory.client.track(eventType: "upgrade", value: nil, properties: nil)
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        await customFactory.client.flush()
+
+        let payload = try JSONSerialization.jsonObject(with: httpMock.postEventsCalls[0]) as! [[String: Any]]
+        XCTAssertEqual(payload[0]["trafficTypeName"] as? String, "account")
+
+        await customFactory.destroy()
+    }
+
     // MARK: - Event field omission
 
     func testTrackEventWithoutValueOmitsValueInPayload() async throws {
@@ -110,10 +127,10 @@ final class TrackingE2ETest: XCTestCase {
 
     // MARK: - Helpers
 
-    private func waitUntilReady() {
+    private func waitUntilReady(_ customFactory: SplitFactory? = nil) {
         let sdkReady = expectation("SDK ready")
         let listener = TestEventListener(readyExpectation: sdkReady)
-        factory.client.addEventListener(listener)
+        (customFactory ?? factory).client.addEventListener(listener)
         waitFor(sdkReady)
     }
 }

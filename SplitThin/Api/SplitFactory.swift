@@ -3,6 +3,7 @@
 
 import Foundation
 import Logging
+import Tracker
 
 public protocol SplitFactory {
     var client: SplitClient { get }
@@ -129,16 +130,22 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
 
         // Tracking stack
         let eventsStorage = DefaultEventsStorage(storage: coreDataStorage)
-        let eventsValidator = DefaultEventsValidator()
         let eventSerializer = DefaultEventSerializer()
         let eventsSubmitter = DefaultHttpEventsSubmitter(secureHttpClient: secureHttpClient)
         let eventTask = DefaultEventTask(storage: eventsStorage, serializer: eventSerializer, submitter: eventsSubmitter, observer: eventDispatcher, target: target)
         let submissionCoordinator = DefaultEventSubmissionCoordinator(eventTask: eventTask, observer: eventDispatcher)
-        let eventsTracker = DefaultEventsTracker(validator: eventsValidator, storage: eventsStorage, coordinator: submissionCoordinator, observer: eventDispatcher)
+        let eventsTracker = DefaultEventsTracker(storage: eventsStorage, coordinator: submissionCoordinator, observer: eventDispatcher)
         let eventsScheduler = DefaultEventsPeriodicScheduler(coordinator: submissionCoordinator, intervalSeconds: config.pushRate)
 
+        // onEventPush bridges validated TrackerEvents into our storage+submission pipeline.
+        // It's set here because DefaultTracker only accepts it via constructor (private let).
+        let tracker = DefaultTracker(defaultTrafficType: target.trafficType ?? "user", initialEventSizeInBytes: 1024, eventValidator: ThinEventValidator(), propertyValidator: ThinPropertyValidator(), logger: ThinTrackerLogger(), onEventPush: { trackerEvent in
+            let event = EventEntity(trafficType: trackerEvent.trafficType, eventType: trackerEvent.eventType, value: trackerEvent.value, properties: trackerEvent.properties, timestamp: Date(timeIntervalSince1970: Double(trackerEvent.timestamp ?? 0) / 1000.0))
+            Task { await eventsTracker.track(event) }
+        })
+
         // 2. Create
-        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager, observer: eventDispatcher, syncManager: syncManager, eventsTracker: eventsTracker, eventsScheduler: eventsScheduler)
+        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager, observer: eventDispatcher, syncManager: syncManager, tracker: tracker, eventsTracker: eventsTracker, eventsScheduler: eventsScheduler)
 
         // 3. Register
         clients[target.key] = client

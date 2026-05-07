@@ -175,44 +175,38 @@ final class CoreDataStorage: @unchecked Sendable {
 
     // MARK: - Event Operations
 
-    func addEvent(id: UUID, trafficType: String, eventType: String, value: Double?, properties: String?, timestamp: Double) async throws {
+    func addEvent(_ dto: EventDTO) async throws {
         try await withContext { context in
             guard let entity = NSEntityDescription.entity(forEntityName: Self.eventEntity, in: context) else {
                 throw StorageError.entityNotFound
             }
-            
+
             let event = NSManagedObject(entity: entity, insertInto: context)
-            event.setValue(id.uuidString, forKey: "id")
-            event.setValue(trafficType, forKey: "trafficType")
-            event.setValue(eventType, forKey: "eventType")
-            event.setValue(value ?? 0, forKey: "value")
-            event.setValue(value != nil, forKey: "hasValue")
-            event.setValue(properties, forKey: "properties")
-            event.setValue(timestamp, forKey: "timestamp")
+            event.setValue(dto.id.uuidString, forKey: "id")
+            event.setValue(dto.trafficType, forKey: "trafficType")
+            event.setValue(dto.eventType, forKey: "eventType")
+            event.setValue(dto.value ?? 0, forKey: "value")
+            event.setValue(dto.value != nil, forKey: "hasValue")
+            event.setValue(dto.properties, forKey: "properties")
+            event.setValue(dto.timestamp, forKey: "timestamp")
 
             try context.save()
         }
     }
 
-    func getEventBatch(size: Int) async -> [(id: UUID, trafficType: String, eventType: String, value: Double?, properties: String?, timestamp: Double)] {
+    func getEventBatch(size: Int) async -> [EventDTO] {
         (try? await withContext { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.eventEntity)
             request.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
             request.fetchLimit = size
 
-            return try context.fetch(request).compactMap { result -> (UUID, String, String, Double?, String?, Double)? in
-                guard let idString = result.value(forKey: "id") as? String, let id = UUID(uuidString: idString) else { 
-                    return nil 
+            return try context.fetch(request).compactMap { result -> EventDTO? in
+                guard let idString = result.value(forKey: "id") as? String, let id = UUID(uuidString: idString) else {
+                    return nil
                 }
 
-                let trafficType = result.value(forKey: "trafficType") as? String ?? ""
-                let eventType = result.value(forKey: "eventType") as? String ?? ""
                 let hasValue = result.value(forKey: "hasValue") as? Bool ?? false
-                let value: Double? = hasValue ? result.value(forKey: "value") as? Double : nil
-                let properties = result.value(forKey: "properties") as? String
-                let timestamp = result.value(forKey: "timestamp") as? Double ?? 0
-
-                return (id, trafficType, eventType, value, properties, timestamp)
+                return EventDTO(id: id, trafficType: result.value(forKey: "trafficType") as? String ?? "", eventType: result.value(forKey: "eventType") as? String ?? "", value: hasValue ? result.value(forKey: "value") as? Double : nil, properties: result.value(forKey: "properties") as? String, timestamp: result.value(forKey: "timestamp") as? Double ?? 0)
             }
         }) ?? []
     }

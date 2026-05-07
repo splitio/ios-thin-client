@@ -3,7 +3,6 @@ import XCTest
 
 final class DefaultEventsTrackerTest: XCTestCase {
 
-    private var validator: EventsValidatorMock!
     private var storage: EventsStorageMock!
     private var coordinator: EventSubmissionCoordinatorMock!
     private var observer: ObserverSpy!
@@ -11,30 +10,19 @@ final class DefaultEventsTrackerTest: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        validator = EventsValidatorMock()
         storage = EventsStorageMock()
         coordinator = EventSubmissionCoordinatorMock()
         observer = ObserverSpy()
-        tracker = DefaultEventsTracker(validator: validator, storage: storage, coordinator: coordinator, observer: observer)
+        tracker = DefaultEventsTracker(storage: storage, coordinator: coordinator, observer: observer)
     }
 
-    func testTrackValidEventStoresIt() async {
+    func testTrackStoresEvent() async {
         let event = EventEntity(trafficType: "user", eventType: "purchase")
 
         await tracker.track(event)
 
         XCTAssertEqual(storage.addedEvents.count, 1)
         XCTAssertEqual(storage.addedEvents[0].eventType, "purchase")
-    }
-
-    func testTrackInvalidEventDropsIt() async {
-        validator.validateResult = false
-        let event = EventEntity(trafficType: "", eventType: "")
-
-        await tracker.track(event)
-
-        XCTAssertEqual(storage.addedEvents.count, 0)
-        XCTAssertTrue(observer.eventNames.contains("trackDropped"))
     }
 
     func testTrackTriggersQueueFlushWhenThresholdReached() async {

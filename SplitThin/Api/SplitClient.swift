@@ -3,6 +3,7 @@
 
 import Foundation
 import Logging
+import Tracker
 
 public protocol SplitClient: AnyObject {
     var target: Target { get }
@@ -12,7 +13,8 @@ public protocol SplitClient: AnyObject {
     func setTarget(target: Target)
     func addEventListener(_ listener: SplitEventListener)
     func removeEventListener(_ listener: SplitEventListener)
-    func track(eventType: String, value: Double?, properties: EventProperties?)
+    @discardableResult
+    func track(eventType: String, value: Double?, properties: EventProperties?) -> Bool
     func destroy() async
     func flush() async
 }
@@ -24,17 +26,19 @@ final class DefaultSplitClient: SplitClient {
     private let eventsManager: SplitEventsManager
     private let observer: Observer // For SDK events & logging
     private let syncManager: SyncManager
+    private let tracker: Tracker
     private let eventsTracker: EventsTracker
     private let eventsScheduler: EventsPeriodicScheduler
     private var clientListeners = [SplitEventListener]()
     private var isDestroyed = false
 
-    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, observer: Observer, syncManager: SyncManager, eventsTracker: EventsTracker, eventsScheduler: EventsPeriodicScheduler) {
+    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, observer: Observer, syncManager: SyncManager, tracker: Tracker, eventsTracker: EventsTracker, eventsScheduler: EventsPeriodicScheduler) {
         self.target = target
         self.treatmentsManager = treatmentsManager
         self.eventsManager = eventsManager
         self.observer = observer
         self.syncManager = syncManager
+        self.tracker = tracker
         self.eventsTracker = eventsTracker
         self.eventsScheduler = eventsScheduler
     }
@@ -78,15 +82,15 @@ final class DefaultSplitClient: SplitClient {
 
     // MARK: - Tracking
 
-    func track(eventType: String, value: Double?, properties: EventProperties?) {
+    @discardableResult
+    func track(eventType: String, value: Double?, properties: EventProperties?) -> Bool {
         guard !isDestroyed else {
             observer.notify(event: .trackDropped(reason: .destroyed))
-            return
+            return false
         }
 
         observer.notify(event: .trackCalled)
-        let event = EventEntity(trafficType: "user", eventType: eventType, value: value, properties: properties)
-        Task { await eventsTracker.track(event) }
+        return tracker.track(eventType: eventType, trafficType: target.trafficType, value: value, properties: properties, matchingKey: target.matchingKey, isSdkReady: true)
     }
 
     // MARK: - Lifecycle
