@@ -53,17 +53,17 @@ final class DefaultEventsStorage: EventsReadStorage, EventsWriteStorage, Sendabl
 
     // MARK: - Private
 
-    private func encodeProperties(_ properties: [String: String]?) -> String? {
+    private func encodeProperties(_ properties: [String: Any]?) -> String? {
         guard let properties, !properties.isEmpty else { return nil }
-        
+
         guard let data = try? JSONSerialization.data(withJSONObject: properties),
               let json = String(data: data, encoding: .utf8) else { return nil }
         return json
     }
 
-    private func decodeProperties(_ json: String?) -> [String: String]? {
+    private func decodeProperties(_ json: String?) -> [String: Any]? {
         guard let json, let data = json.data(using: .utf8),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String] else { return nil }
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         return dict
     }
 }

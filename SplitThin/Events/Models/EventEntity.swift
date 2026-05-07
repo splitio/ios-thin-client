@@ -3,15 +3,15 @@
 
 import Foundation
 
-public struct EventEntity: Sendable, DynamicEncodable {
+public struct EventEntity: DynamicEncodable, @unchecked Sendable {
     let id: UUID
     let trafficType: String
     let eventType: String
     let value: Double?
-    let properties: [String: String]?
+    let properties: [String: Any]?
     let timestamp: Date
 
-    init(id: UUID = UUID(), trafficType: String, eventType: String, value: Double? = nil, properties: [String: String]? = nil, timestamp: Date = Date()) {
+    init(id: UUID = UUID(), trafficType: String, eventType: String, value: Double? = nil, properties: [String: Any]? = nil, timestamp: Date = Date()) {
         self.id = id
         self.trafficType = trafficType
         self.eventType = eventType
