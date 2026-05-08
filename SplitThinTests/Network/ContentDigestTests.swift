@@ -95,6 +95,18 @@ final class ContentDigestTest: XCTestCase {
         XCTAssertEqual(digest, "2YsSrtAzlcI")
     }
 
+    func testMatchesTeammateExpectedValue() {
+        let target = Target(matchingKey: "c888aaac-d2c7-40f0-8687-d5a3a50af72c", bucketingKey: "sanz", attributes: ["age": 150, "city": "gualeguaychu", "colors": ["blue", "red"] as [Any], "version": "1.0.0"])
+
+        let input = ContentDigest.buildHashInput(for: target)
+        print("Hash input: \(input)")
+
+        let digest = ContentDigest.compute(for: target)
+        print("Digest: \(digest)")
+
+        XCTAssertEqual(digest, "ZiViht6x9uE")
+    }
+
     func testIsDeterministic() {
         let target = Target(matchingKey: "Mauro", attributes: ["city": "mdp", "age": 150])
 

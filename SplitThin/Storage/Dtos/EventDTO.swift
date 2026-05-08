@@ -5,6 +5,7 @@ import Foundation
 
 struct EventDTO: Sendable {
     let id: UUID
+    let key: String
     let trafficType: String
     let eventType: String
     let value: Double?

@@ -24,12 +24,14 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
     private let authProvider: AuthProvider
     private let serviceEndpoints: ServiceEndpoints
     private let configsEnabled: Bool
+    private let apiKey: String
 
-    init(retryableHttpClient: RetryableHttpClient, authProvider: AuthProvider, serviceEndpoints: ServiceEndpoints, configsEnabled: Bool = false) {
+    init(retryableHttpClient: RetryableHttpClient, authProvider: AuthProvider, serviceEndpoints: ServiceEndpoints, configsEnabled: Bool = false, apiKey: String) {
         self.retryableHttpClient = retryableHttpClient
         self.authProvider = authProvider
         self.serviceEndpoints = serviceEndpoints
         self.configsEnabled = configsEnabled
+        self.apiKey = apiKey
     }
 
     func fetchEvaluations(target: Target, filters: EvaluationFilters?) async throws -> HttpResponse {
@@ -50,6 +52,7 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
         let endpoint = Endpoint.builder(baseUrl: serviceEndpoints.eventsEndpoint, path: "events/bulk")
                                .set(method: .post)
                                .add(header: "Content-Type", withValue: "application/json")
+                               .add(header: "Authorization", withValue: "Bearer \(apiKey)")
                                .build()
 
         return try await retryableHttpClient.execute(endpoint, category: .events, body: payload)

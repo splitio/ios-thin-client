@@ -183,6 +183,7 @@ final class CoreDataStorage: @unchecked Sendable {
 
             let event = NSManagedObject(entity: entity, insertInto: context)
             event.setValue(dto.id.uuidString, forKey: "id")
+            event.setValue(dto.key, forKey: "key")
             event.setValue(dto.trafficType, forKey: "trafficType")
             event.setValue(dto.eventType, forKey: "eventType")
             event.setValue(dto.value ?? 0, forKey: "value")
@@ -206,7 +207,7 @@ final class CoreDataStorage: @unchecked Sendable {
                 }
 
                 let hasValue = result.value(forKey: "hasValue") as? Bool ?? false
-                return EventDTO(id: id, trafficType: result.value(forKey: "trafficType") as? String ?? "", eventType: result.value(forKey: "eventType") as? String ?? "", value: hasValue ? result.value(forKey: "value") as? Double : nil, properties: result.value(forKey: "properties") as? String, timestamp: result.value(forKey: "timestamp") as? Double ?? 0)
+                return EventDTO(id: id, key: result.value(forKey: "key") as? String ?? "", trafficType: result.value(forKey: "trafficType") as? String ?? "", eventType: result.value(forKey: "eventType") as? String ?? "", value: hasValue ? result.value(forKey: "value") as? Double : nil, properties: result.value(forKey: "properties") as? String, timestamp: result.value(forKey: "timestamp") as? Double ?? 0)
             }
         }) ?? []
     }
@@ -370,6 +371,10 @@ final class CoreDataStorage: @unchecked Sendable {
         eventHasValueAttr.name = "hasValue"
         eventHasValueAttr.attributeType = .booleanAttributeType
 
+        let eventKeyAttr = NSAttributeDescription()
+        eventKeyAttr.name = "key"
+        eventKeyAttr.attributeType = .stringAttributeType
+
         let eventPropertiesAttr = NSAttributeDescription()
         eventPropertiesAttr.name = "properties"
         eventPropertiesAttr.attributeType = .stringAttributeType
@@ -379,7 +384,7 @@ final class CoreDataStorage: @unchecked Sendable {
         eventTimestampAttr.name = "timestamp"
         eventTimestampAttr.attributeType = .doubleAttributeType
 
-        eventEntity.properties = [eventIdAttr, eventTrafficTypeAttr, eventEventTypeAttr, eventValueAttr, eventHasValueAttr, eventPropertiesAttr, eventTimestampAttr]
+        eventEntity.properties = [eventIdAttr, eventKeyAttr, eventTrafficTypeAttr, eventEventTypeAttr, eventValueAttr, eventHasValueAttr, eventPropertiesAttr, eventTimestampAttr]
 
         let eventTimestampIndex = NSFetchIndexDescription(name: "byTimestamp", elements: [
             NSFetchIndexElementDescription(property: eventTimestampAttr, collationType: .binary)
