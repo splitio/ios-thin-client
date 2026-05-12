@@ -60,7 +60,7 @@ final class DefaultCredentialFetcher: CredentialFetcher, @unchecked Sendable {
         let expiresAt = try extractExpiration(from: authResponse.token)
 
         observer.notify(event: .jwtFetchSucceeded(expiresAt: Int64(expiresAt.timeIntervalSince1970), pushEnabled: authResponse.pushEnabled))
-        return JwtCredential(token: authResponse.token, expiresAt: expiresAt, pushEnabled: authResponse.pushEnabled)
+        return JwtCredential(token: authResponse.token, expiresAt: expiresAt, pushEnabled: authResponse.pushEnabled, connDelay: authResponse.connDelay)
     }
 
     private func extractExpiration(from jwt: String) throws -> Date {

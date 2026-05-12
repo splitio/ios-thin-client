@@ -76,7 +76,7 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
     }
 
     func testSetStreamingConnectionManagerFactoryIsUsed() async throws {
-        let connectionManagerMock = StreamingConnectionManagerMock()
+        let connectionManagerMock = StreamingMock()
         let httpMock = SecureHttpClientMock()
         httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: []))
 

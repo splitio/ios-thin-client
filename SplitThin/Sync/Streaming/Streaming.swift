@@ -7,15 +7,15 @@ import Http
 import Streaming
 import BackoffCounter
 
-protocol StreamingConnectionManager {
+protocol Streaming {
     func start()
-    func stop()
+    func stop() async
     func pause()
     func resume()
     func handleNotification(_ notification: ThinNotification)
 }
 
-final class DefaultStreamingConnectionManager: StreamingConnectionManager, SseHandler, @unchecked Sendable {
+final class DefaultStreaming: Streaming, SseHandler, @unchecked Sendable {
 
     private enum State { case stopped, started, paused }
 
@@ -133,7 +133,7 @@ final class DefaultStreamingConnectionManager: StreamingConnectionManager, SseHa
     }
 
     func reportError(isRetryable: Bool) {
-        Logger.w("StreamingConnectionManager: SSE error, retryable=\(isRetryable)")
+        Logger.w("StreamingConnection: SSE error, retryable=\(isRetryable)")
         guard isRetryable else {
             withLock(stateLock) { state = .stopped }
             return
@@ -149,18 +149,29 @@ final class DefaultStreamingConnectionManager: StreamingConnectionManager, SseHa
 
     // MARK: - Private
 
+    private var isStopped: Bool {
+        withLock(stateLock) { state == .stopped }
+    }
+
     private func connectSse() async {
         guard let authProvider, let jwtParser, let streamingEndpoint, let httpClient else { return }
-        guard !withLock(stateLock, { state == .stopped }) else { return }
+        guard !isStopped else { return }
 
         do {
             let credential = try await authProvider.getCredential(for: target.matchingKey)
             guard credential.pushEnabled else {
-                Logger.d("StreamingConnectionManager: push not enabled")
+                Logger.d("StreamingConnection: push not enabled")
                 return
             }
+
+            if let delay = credential.connDelay, delay > 0 {
+                Logger.d("StreamingConnection: delaying connection by \(delay)s")
+                try? await Task.sleep(nanoseconds: UInt64(delay) * 1_000_000_000)
+                guard !isStopped else { return }
+            }
+
             guard let channels = jwtParser.extractChannels(from: credential.token), !channels.isEmpty else {
-                Logger.w("StreamingConnectionManager: no channels in JWT")
+                Logger.w("StreamingConnection: no channels in JWT")
                 return
             }
 
@@ -178,15 +189,15 @@ final class DefaultStreamingConnectionManager: StreamingConnectionManager, SseHa
                 if success {
                     self?.backoffCounter?.resetCounter()
                     self?.onConnect?()
-                    Logger.d("StreamingConnectionManager: SSE connected")
+                    Logger.d("StreamingConnection: SSE connected")
                     Task { [weak self] in await self?.fetchCoordinator.refetchAll(notification: nil) }
                 } else {
-                    Logger.w("StreamingConnectionManager: SSE connection failed")
+                    Logger.w("StreamingConnection: SSE connection failed")
                     self?.reportError(isRetryable: true)
                 }
             }
         } catch {
-            Logger.e("StreamingConnectionManager: failed to get credential: \(error)")
+            Logger.e("StreamingConnection: failed to get credential: \(error)")
             reportError(isRetryable: true)
         }
     }
@@ -196,14 +207,14 @@ final class DefaultStreamingConnectionManager: StreamingConnectionManager, SseHa
 
         switch notification.controlType {
             case .streamingPaused:
-                Logger.d("StreamingConnectionManager: streaming paused by server")
+                Logger.d("StreamingConnection: streaming paused by server")
             case .streamingResumed:
-                Logger.d("StreamingConnectionManager: streaming resumed by server")
+                Logger.d("StreamingConnection: streaming resumed by server")
             case .streamingDisabled:
-                Logger.d("StreamingConnectionManager: streaming disabled by server")
+                Logger.d("StreamingConnection: streaming disabled by server")
                 stop()
             case .streamingReset:
-                Logger.d("StreamingConnectionManager: streaming reset by server")
+                Logger.d("StreamingConnection: streaming reset by server")
                 stop()
                 Task { [weak self] in
                     guard let self else { return }

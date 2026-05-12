@@ -4,6 +4,7 @@
 import Foundation
 import Logging
 import Http
+import BackoffCounter
 
 public protocol SplitFactoryBuilder {
     @discardableResult
@@ -29,7 +30,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
     // Internals for testing
     var secureHttpClient: SecureHttpClient?
     var retryableHttpClient: RetryableHttpClient?
-    var connectionManagerFactory: ((EvaluationFetchCoordinator) -> StreamingConnectionManager)?
+    var connectionFactory: ((EvaluationFetchCoordinator) -> Streaming)?
     var observer: Observer?
 
     public override init() {
@@ -100,21 +101,22 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         let evaluationRepository = DefaultEvaluationRepository(fetchCoordinator: fetchCoordinator, evaluationFilters: evaluationFilters)
         let splitManager = DefaultSplitManager(evaluationRepository: evaluationRepository, target: target)
 
-        let streamingComponents: StreamingComponents
-        if let factory = connectionManagerFactory {
-            streamingComponents = StreamingComponents(manager: DefaultStreamingManager(connectionManagerFactory: { factory(fetchCoordinator) }))
+        // Streaming
+        let streaming: Streaming
+        if let streamingFactory = connectionFactory {
+            streaming = streamingFactory(fetchCoordinator)  // Just for testing
         } else {
-            let http = httpClient ?? DefaultHttpClient.shared
-            streamingComponents = createStreamingComponents(
-                target: target,
-                authProvider: builtAuthProvider,
-                streamingEndpoint: serviceEndpoints.streamingServiceEndpoint,
-                httpClient: http,
-                fetchCoordinator: fetchCoordinator
-            )
+            streaming = DefaultStreaming(target: target, 
+                                         authProvider: builtAuthProvider, 
+                                         streamingEndpoint: serviceEndpoints.streamingServiceEndpoint, 
+                                         httpClient: httpClient ?? DefaultHttpClient.shared, 
+                                         fetchCoordinator: fetchCoordinator, 
+                                         notificationParser: DefaultThinNotificationParser(), 
+                                         jwtParser: DefaultSseJwtParser(), 
+                                         backoffCounter: DefaultBackoffCounter(backoffBase: 1))
         }
 
-        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, streamingManager: streamingComponents.manager, evaluationStorage: evaluationStorage, coreDataStorage: coreDataStorage, splitManager: splitManager, factoryObserver: resolvedObserver)
+        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, streaming: streaming, evaluationStorage: evaluationStorage, coreDataStorage: coreDataStorage, splitManager: splitManager, factoryObserver: resolvedObserver)
     }
 
     private func configureLogger() {

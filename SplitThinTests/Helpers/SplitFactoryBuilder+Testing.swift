@@ -20,8 +20,8 @@ extension DefaultSplitFactoryBuilder {
     }
 
     @discardableResult
-    func setStreamingConnectionManagerFactory(_ factory: @escaping (EvaluationFetchCoordinator) -> StreamingConnectionManager) -> DefaultSplitFactoryBuilder {
-        self.connectionManagerFactory = factory
+    func setStreamingConnectionManagerFactory(_ factory: @escaping (EvaluationFetchCoordinator) -> Streaming) -> DefaultSplitFactoryBuilder {
+        self.connectionFactory = factory
         return self
     }
 
