@@ -26,6 +26,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     private let observer: Observer // For factory lifecycle logging & telemetry
     private let evaluationStorage: EvaluationReadStorage
     private let coreDataStorage: CoreDataStorage
+    private let telemetryStorage: TelemetryReadStorage & TelemetryWriteStorage
 
     private var splitManager: DefaultSplitManager?
     private var clients = [Key: SplitClient]()
@@ -46,7 +47,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         syncManagers[defaultKey]
     }
 
-    init(sdkKey: SdkKey, target: Target, config: SplitClientConfig, evaluationFilters: EvaluationFilters?, secureHttpClient: SecureHttpClient, evaluationRepository: EvaluationRepository, fetchCoordinator: EvaluationFetchCoordinator, streamingManager: StreamingManager, evaluationStorage: EvaluationReadStorage, coreDataStorage: CoreDataStorage, splitManager: DefaultSplitManager, factoryObserver: Observer) {
+    init(sdkKey: SdkKey, target: Target, config: SplitClientConfig, evaluationFilters: EvaluationFilters?, secureHttpClient: SecureHttpClient, evaluationRepository: EvaluationRepository, fetchCoordinator: EvaluationFetchCoordinator, streamingManager: StreamingManager, evaluationStorage: EvaluationReadStorage, coreDataStorage: CoreDataStorage, splitManager: DefaultSplitManager, factoryObserver: Observer, telemetryStorage: TelemetryReadStorage & TelemetryWriteStorage) {
         self.sdkKey = sdkKey
         self.defaultTarget = target
         self.defaultKey = target.key
@@ -60,6 +61,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         self.coreDataStorage = coreDataStorage
         self.splitManager = splitManager
         self.observer = factoryObserver
+        self.telemetryStorage = telemetryStorage
 
         observer.notify(event: .factoryInitStarted)
         createClient(target: target)
@@ -115,6 +117,11 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         eventDispatcher.register(eventsManager)
         eventDispatcher.register(LoggingObserver())
 
+        // Telemetry
+        let telemetryObserver = TelemetryObserver(storage: telemetryStorage, sessionId: UUID().uuidString, config: config)
+        eventDispatcher.register(telemetryObserver)
+        let telemetrySubmitter = DefaultTelemetrySubmitter(storage: telemetryStorage, secureHttpClient: secureHttpClient, observer: eventDispatcher, activeSessionId: telemetryObserver.sessionId)
+
         // Connect FetchCoordinator (that is factory wide) with per-client eventsManager to fire updates events
         (fetchCoordinator as? DefaultEvaluationFetchCoordinator)?.registerOnUpdateAction(for: target.key) { [weak eventDispatcher, evaluationRepository, target] fetchResult in
             guard let eventDispatcher else { return }
@@ -145,7 +152,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         })
 
         // 2. Create
-        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager, observer: eventDispatcher, syncManager: syncManager, tracker: tracker, eventsTracker: eventsTracker, eventsScheduler: eventsScheduler)
+        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager, observer: eventDispatcher, syncManager: syncManager, tracker: tracker, eventsTracker: eventsTracker, eventsScheduler: eventsScheduler, telemetryObserver: telemetryObserver, telemetrySubmitter: telemetrySubmitter)
 
         // 3. Register
         clients[target.key] = client

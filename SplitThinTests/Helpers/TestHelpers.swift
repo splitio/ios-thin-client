@@ -38,7 +38,7 @@ private func buildFactoryCore(httpClient: SecureHttpClient, syncMode: SyncMode, 
     return factory
 }
 
-func buildClient(target: String = "user-123", treatmentsManager: TreatmentsManager? = nil, eventsManager: SplitEventsManager? = nil, observer: Observer? = nil, syncManager: SyncManager? = nil, tracker: Tracker? = nil, eventsTracker: EventsTracker? = nil, eventsScheduler: EventsPeriodicScheduler? = nil) -> DefaultSplitClient {
+func buildClient(target: String = "user-123", treatmentsManager: TreatmentsManager? = nil, eventsManager: SplitEventsManager? = nil, observer: Observer? = nil, syncManager: SyncManager? = nil, tracker: Tracker? = nil, eventsTracker: EventsTracker? = nil, eventsScheduler: EventsPeriodicScheduler? = nil, telemetryObserver: TelemetryObserver? = nil, telemetrySubmitter: TelemetrySubmitter? = nil) -> DefaultSplitClient {
     DefaultSplitClient(target: Target(matchingKey: target),
                        treatmentsManager: treatmentsManager ?? TreatmentsManagerMock(),
                        eventsManager: eventsManager ?? SplitEventsManagerMock(),
@@ -46,7 +46,9 @@ func buildClient(target: String = "user-123", treatmentsManager: TreatmentsManag
                        syncManager: syncManager ?? SyncManagerMock(),
                        tracker: tracker ?? TrackerMock(),
                        eventsTracker: eventsTracker ?? EventsTrackerMock(),
-                       eventsScheduler: eventsScheduler ?? EventsPeriodicSchedulerMock())
+                       eventsScheduler: eventsScheduler ?? EventsPeriodicSchedulerMock(),
+                       telemetryObserver: telemetryObserver ?? TelemetryObserver(storage: TelemetryStorageMock(), sessionId: "test", metrics: SessionMetrics(sessionId: "test", config: .init(syncMode: "streaming", pushRate: 60, evaluationRefreshRate: 300), runtime: .init(), platform: .init())),
+                       telemetrySubmitter: telemetrySubmitter ?? TelemetrySubmitterMock())
 }
 
 func mockEvaluationsData(flags: [String], treatment: String = "on") -> Data {
