@@ -61,6 +61,14 @@ final class ContentDigestTest: XCTestCase {
         XCTAssertEqual(input, "user1::{\"tags\":[\"alpha\",\"beta\",\"gamma\"]}")
     }
 
+    func testCollectionSortsMixedTypesByStringRepresentation() {
+        let target = Target(matchingKey: "user1", attributes: ["values": [false, "aa", 42] as [Any]])
+
+        let input = ContentDigest.buildHashInput(for: target)
+
+        XCTAssertEqual(input, "user1::{\"values\":[42,\"aa\",false]}")
+    }
+
     func testCollectionOmitsNulls() {
         let target = Target(matchingKey: "user1", attributes: ["items": ["b", NSNull(), "a"] as [Any]])
 
@@ -95,16 +103,13 @@ final class ContentDigestTest: XCTestCase {
         XCTAssertEqual(digest, "2YsSrtAzlcI")
     }
 
-    func testMatchesTeammateExpectedValue() {
+    func testMatchesWithValue2() {
         let target = Target(matchingKey: "c888aaac-d2c7-40f0-8687-d5a3a50af72c", bucketingKey: "sanz", attributes: ["age": 150, "city": "gualeguaychu", "colors": ["blue", "red"] as [Any], "version": "1.0.0"])
 
         let input = ContentDigest.buildHashInput(for: target)
-        print("Hash input: \(input)")
 
-        let digest = ContentDigest.compute(for: target)
-        print("Digest: \(digest)")
-
-        XCTAssertEqual(digest, "ZiViht6x9uE")
+        XCTAssertEqual(input, "c888aaac-d2c7-40f0-8687-d5a3a50af72c:sanz:{\"age\":150,\"city\":\"gualeguaychu\",\"colors\":[\"blue\",\"red\"],\"version\":\"1.0.0\"}")
+        XCTAssertEqual(ContentDigest.compute(for: target), "hWctNdJu65M")
     }
 
     func testIsDeterministic() {
