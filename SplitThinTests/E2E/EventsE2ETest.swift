@@ -150,7 +150,7 @@ final class EventsE2ETest: XCTestCase {
         let listener1 = TestEventListener(timeoutExpectation: timedOut1)
         let listener2 = TestEventListener(readyExpectation: ready2)
 
-        factory = try buildFactory(httpClient: httpMock, timeout: 1, target: "user-A")
+        factory = try buildFactory(httpClient: httpMock, timeout: 1, target: Target(matchingKey: "user-A"))
         let client2 = factory.getClient("user-B")
 
         factory.client.addEventListener(listener1)

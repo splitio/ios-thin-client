@@ -6,20 +6,15 @@ final class TelemetrySubmitterTests: XCTestCase {
 
     private var storage: TelemetryStorageMock!
     private var httpClient: SecureHttpClientMock!
-    private var observer: ObserverSpy!
     private var sut: DefaultTelemetrySubmitter!
 
     override func setUp() {
         super.setUp()
         storage = TelemetryStorageMock()
         httpClient = SecureHttpClientMock()
-        observer = ObserverSpy()
-        sut = DefaultTelemetrySubmitter(
-            storage: storage,
-            secureHttpClient: httpClient,
-            observer: observer,
-            activeSessionId: "active-session"
-        )
+        sut = DefaultTelemetrySubmitter(storage: storage,
+                                        secureHttpClient: httpClient,
+                                        activeSessionId: "active-session")
     }
 
     // MARK: - Successful flush
@@ -35,7 +30,6 @@ final class TelemetrySubmitterTests: XCTestCase {
         XCTAssertEqual(storage.removedSessionIds.count, 1)
         XCTAssertEqual(storage.removedSessionIds.first, ["s1", "s2"])
         XCTAssertEqual(storage.getNonActiveCalledWith, "active-session")
-        XCTAssertTrue(observer.eventNames.contains("flushCompleted"))
     }
 
     func testFlushWithCountLimitsSessionsSent() async {
@@ -55,7 +49,6 @@ final class TelemetrySubmitterTests: XCTestCase {
 
         XCTAssertTrue(httpClient.postTelemetryCalls.isEmpty)
         XCTAssertTrue(storage.removedSessionIds.isEmpty)
-        XCTAssertTrue(observer.notifiedEvents.isEmpty)
     }
 
     // MARK: - HTTP failure
@@ -67,7 +60,6 @@ final class TelemetrySubmitterTests: XCTestCase {
         await sut.flush(count: nil)
 
         XCTAssertTrue(storage.removedSessionIds.isEmpty)
-        XCTAssertTrue(observer.eventNames.contains("flushFailed"))
     }
 
     // MARK: - Payload verification
@@ -87,15 +79,11 @@ final class TelemetrySubmitterTests: XCTestCase {
     // MARK: - Helpers
 
     private func makeRecord(sessionId: String) -> TelemetrySessionRecord {
-        TelemetrySessionRecord(
-            sessionId: sessionId,
-            metrics: SessionMetrics(
-                sessionId: sessionId,
-                config: .init(syncMode: "streaming", pushRate: 60, evaluationRefreshRate: 300),
-                runtime: .init(),
-                platform: .init()
-            ),
-            lastUpdateTimestamp: Date()
-        )
+        TelemetrySessionRecord(sessionId: sessionId,
+                               metrics: SessionMetricsDTO(sessionId: sessionId,
+                                                          config: .init(syncMode: "streaming", pushRate: 60, evaluationRefreshRate: 300),
+                                                          runtime: .init(),
+                                                          platform: .init()),
+                                                          lastUpdateTimestamp: Date())
     }
 }

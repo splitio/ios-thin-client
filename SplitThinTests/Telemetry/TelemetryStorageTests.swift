@@ -104,12 +104,10 @@ final class TelemetryStorageTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func makeMetrics(sessionId: String) -> SessionMetrics {
-        SessionMetrics(
-            sessionId: sessionId,
-            config: .init(syncMode: "streaming", pushRate: 60, evaluationRefreshRate: 300),
-            runtime: .init(),
-            platform: .init()
-        )
+    private func makeMetrics(sessionId: String) -> SessionMetricsDTO {
+        SessionMetricsDTO(sessionId: sessionId,
+                          config: .init(syncMode: "streaming", pushRate: 60, evaluationRefreshRate: 300),
+                          runtime: .init(),
+                          platform: .init())
     }
 }

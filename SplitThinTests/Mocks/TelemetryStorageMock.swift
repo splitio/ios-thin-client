@@ -3,7 +3,7 @@ import Foundation
 
 final class TelemetryStorageMock: TelemetryReadStorage, TelemetryWriteStorage, @unchecked Sendable {
 
-    var savedSessions = [(sessionId: String, metrics: SessionMetrics)]()
+    var savedSessions = [(sessionId: String, metrics: SessionMetricsDTO)]()
     var removedSessionIds = [[String]]()
     var allRecords = [TelemetrySessionRecord]()
     var nonActiveRecords = [TelemetrySessionRecord]()
@@ -11,7 +11,7 @@ final class TelemetryStorageMock: TelemetryReadStorage, TelemetryWriteStorage, @
 
     private let lock = NSLock()
 
-    func save(sessionId: String, metrics: SessionMetrics) async {
+    func save(sessionId: String, metrics: SessionMetricsDTO) async {
         withLock(lock) {
             savedSessions.append((sessionId, metrics))
         }

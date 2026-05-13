@@ -3,7 +3,7 @@
 
 import Foundation
 
-struct SessionMetrics: DynamicCodable, Sendable {
+struct SessionMetricsDTO: DynamicCodable, Sendable {
     let sessionId: String
     var config: ConfigMetrics
     var runtime: RuntimeMetrics
@@ -42,7 +42,7 @@ struct SessionMetrics: DynamicCodable, Sendable {
     }
 }
 
-extension SessionMetrics {
+extension SessionMetricsDTO {
     struct ConfigMetrics: DynamicCodable, Sendable {
         let syncMode: String
         let pushRate: Int

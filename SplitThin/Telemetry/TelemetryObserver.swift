@@ -8,7 +8,7 @@ final class TelemetryObserver: Observer, @unchecked Sendable {
     static let debounceInterval: TimeInterval = 10
 
     let sessionId: String
-    private var metrics: SessionMetrics
+    private var metrics: SessionMetricsDTO
     private let storage: TelemetryWriteStorage
     private let lock = NSLock()
     private var debounceTask: Task<Void, Never>?
@@ -16,7 +16,7 @@ final class TelemetryObserver: Observer, @unchecked Sendable {
     init(storage: TelemetryWriteStorage, sessionId: String, config: SplitClientConfig) {
         self.storage = storage
         self.sessionId = sessionId
-        self.metrics = SessionMetrics(
+        self.metrics = SessionMetricsDTO(
             sessionId: sessionId,
             config: .init(
                 syncMode: String(describing: config.syncMode),
@@ -28,13 +28,6 @@ final class TelemetryObserver: Observer, @unchecked Sendable {
         )
     }
 
-    // Test-only initializer
-    init(storage: TelemetryWriteStorage, sessionId: String, metrics: SessionMetrics) {
-        self.storage = storage
-        self.sessionId = sessionId
-        self.metrics = metrics
-    }
-
     func notify(event: ObservableEvent) {
         let didUpdate = withLock(lock) { updateMetrics(for: event) }
         if didUpdate {
@@ -43,7 +36,7 @@ final class TelemetryObserver: Observer, @unchecked Sendable {
     }
 
     func persistNow() async {
-        let snapshot: SessionMetrics = withLock(lock) {
+        let snapshot: SessionMetricsDTO = withLock(lock) {
             debounceTask?.cancel()
             debounceTask = nil
             return metrics

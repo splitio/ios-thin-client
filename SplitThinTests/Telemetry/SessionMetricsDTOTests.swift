@@ -1,20 +1,18 @@
 import XCTest
 @testable import SplitThin
 
-final class SessionMetricsTests: XCTestCase {
+final class SessionMetricsDTOTest: XCTestCase {
 
     // MARK: - Round-trip
 
     func testRoundTripWithAllFields() throws {
-        let metrics = SessionMetrics(
-            sessionId: "abc-123",
-            config: .init(syncMode: "streaming", pushRate: 60, evaluationRefreshRate: 300),
-            runtime: .init(lastEvaluationsSync: 1_715_000_000_000, successfulJwtFetches: 5, evaluationCount: 42),
-            platform: .init(name: "ios-thin", version: "0.1.0")
-        )
+        let metrics = SessionMetricsDTO(sessionId: "abc-123",
+                                        config: .init(syncMode: "streaming", pushRate: 60, evaluationRefreshRate: 300),
+                                        runtime: .init(lastEvaluationsSync: 1_715_000_000_000, successfulJwtFetches: 5, evaluationCount: 42),
+                                        platform: .init(name: "ios-thin", version: "0.1.0"))
 
         let data = try Json.encode(metrics)
-        let decoded = try Json.decode(from: data, to: SessionMetrics.self)
+        let decoded = try Json.decode(from: data, to: SessionMetricsDTO.self)
 
         XCTAssertEqual(decoded.sessionId, "abc-123")
         XCTAssertEqual(decoded.config.syncMode, "streaming")
@@ -28,15 +26,13 @@ final class SessionMetricsTests: XCTestCase {
     }
 
     func testRoundTripWithNilLastEvaluationsSync() throws {
-        let metrics = SessionMetrics(
-            sessionId: "def-456",
-            config: .init(syncMode: "polling", pushRate: 30, evaluationRefreshRate: 120),
-            runtime: .init(lastEvaluationsSync: nil, successfulJwtFetches: 0, evaluationCount: 0),
-            platform: .init(name: "ios-thin", version: "0.1.0")
-        )
+        let metrics = SessionMetricsDTO(sessionId: "def-456",
+                                        config: .init(syncMode: "polling", pushRate: 30, evaluationRefreshRate: 120),
+                                        runtime: .init(lastEvaluationsSync: nil, successfulJwtFetches: 0, evaluationCount: 0),
+                                        platform: .init(name: "ios-thin", version: "0.1.0"))
 
         let data = try Json.encode(metrics)
-        let decoded = try Json.decode(from: data, to: SessionMetrics.self)
+        let decoded = try Json.decode(from: data, to: SessionMetricsDTO.self)
 
         XCTAssertEqual(decoded.sessionId, "def-456")
         XCTAssertNil(decoded.runtime.lastEvaluationsSync)
@@ -56,7 +52,7 @@ final class SessionMetricsTests: XCTestCase {
         }
         """.data(using: .utf8)!
 
-        let decoded = try Json.decode(from: json, to: SessionMetrics.self)
+        let decoded = try Json.decode(from: json, to: SessionMetricsDTO.self)
 
         XCTAssertEqual(decoded.sessionId, "sess-1")
         XCTAssertEqual(decoded.config.syncMode, "streaming")
@@ -77,7 +73,7 @@ final class SessionMetricsTests: XCTestCase {
         }
         """.data(using: .utf8)!
 
-        XCTAssertThrowsError(try Json.decode(from: json, to: SessionMetrics.self))
+        XCTAssertThrowsError(try Json.decode(from: json, to: SessionMetricsDTO.self))
     }
 
     func testThrowsOnMissingConfig() {
@@ -89,7 +85,7 @@ final class SessionMetricsTests: XCTestCase {
         }
         """.data(using: .utf8)!
 
-        XCTAssertThrowsError(try Json.decode(from: json, to: SessionMetrics.self))
+        XCTAssertThrowsError(try Json.decode(from: json, to: SessionMetricsDTO.self))
     }
 
     func testThrowsOnMissingRuntime() {
@@ -101,7 +97,7 @@ final class SessionMetricsTests: XCTestCase {
         }
         """.data(using: .utf8)!
 
-        XCTAssertThrowsError(try Json.decode(from: json, to: SessionMetrics.self))
+        XCTAssertThrowsError(try Json.decode(from: json, to: SessionMetricsDTO.self))
     }
 
     func testThrowsOnMissingPlatform() {
@@ -113,19 +109,19 @@ final class SessionMetricsTests: XCTestCase {
         }
         """.data(using: .utf8)!
 
-        XCTAssertThrowsError(try Json.decode(from: json, to: SessionMetrics.self))
+        XCTAssertThrowsError(try Json.decode(from: json, to: SessionMetricsDTO.self))
     }
 
     func testThrowsOnInvalidJson() {
         let json = "not valid json".data(using: .utf8)!
 
-        XCTAssertThrowsError(try Json.decode(from: json, to: SessionMetrics.self))
+        XCTAssertThrowsError(try Json.decode(from: json, to: SessionMetricsDTO.self))
     }
 
     func testThrowsOnNonDictRoot() {
         let json = "[1,2,3]".data(using: .utf8)!
 
-        XCTAssertThrowsError(try Json.decode(from: json, to: SessionMetrics.self))
+        XCTAssertThrowsError(try Json.decode(from: json, to: SessionMetricsDTO.self))
     }
 
     // MARK: - Nested struct errors
@@ -140,7 +136,7 @@ final class SessionMetricsTests: XCTestCase {
         }
         """.data(using: .utf8)!
 
-        XCTAssertThrowsError(try Json.decode(from: json, to: SessionMetrics.self))
+        XCTAssertThrowsError(try Json.decode(from: json, to: SessionMetricsDTO.self))
     }
 
     func testThrowsOnInvalidRuntimeFields() {
@@ -153,7 +149,7 @@ final class SessionMetricsTests: XCTestCase {
         }
         """.data(using: .utf8)!
 
-        XCTAssertThrowsError(try Json.decode(from: json, to: SessionMetrics.self))
+        XCTAssertThrowsError(try Json.decode(from: json, to: SessionMetricsDTO.self))
     }
 
     func testThrowsOnInvalidPlatformFields() {
@@ -166,13 +162,13 @@ final class SessionMetricsTests: XCTestCase {
         }
         """.data(using: .utf8)!
 
-        XCTAssertThrowsError(try Json.decode(from: json, to: SessionMetrics.self))
+        XCTAssertThrowsError(try Json.decode(from: json, to: SessionMetricsDTO.self))
     }
 
     // MARK: - Encoding
 
     func testEncodeOmitsNilLastEvaluationsSync() throws {
-        let metrics = SessionMetrics(
+        let metrics = SessionMetricsDTO(
             sessionId: "sess-1",
             config: .init(syncMode: "streaming", pushRate: 60, evaluationRefreshRate: 300),
             runtime: .init(lastEvaluationsSync: nil, successfulJwtFetches: 0, evaluationCount: 0),
@@ -186,7 +182,7 @@ final class SessionMetricsTests: XCTestCase {
     }
 
     func testEncodeIncludesLastEvaluationsSyncWhenPresent() throws {
-        let metrics = SessionMetrics(
+        let metrics = SessionMetricsDTO(
             sessionId: "sess-1",
             config: .init(syncMode: "streaming", pushRate: 60, evaluationRefreshRate: 300),
             runtime: .init(lastEvaluationsSync: 12345, successfulJwtFetches: 1, evaluationCount: 2),
@@ -202,7 +198,7 @@ final class SessionMetricsTests: XCTestCase {
     // MARK: - PlatformMetrics defaults
 
     func testPlatformMetricsDefaultValues() {
-        let platform = SessionMetrics.PlatformMetrics()
+        let platform = SessionMetricsDTO.PlatformMetrics()
 
         XCTAssertEqual(platform.name, "ios-thin")
         XCTAssertEqual(platform.version, Version.semantic)

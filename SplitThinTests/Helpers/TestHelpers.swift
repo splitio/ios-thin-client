@@ -3,7 +3,7 @@ import Http
 import Tracker
 @testable import SplitThin
 
-private func buildFactoryCore(httpClient: SecureHttpClient, syncMode: SyncMode, refreshRate: Int, timeout: Int, target: Target, fallbackTreatments: FallbackTreatmentsConfig?, observer: Observer?) throws -> SplitFactory {
+func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync, refreshRate: Int = 1, timeout: Int = -1, target: Target = Target(matchingKey: "user-123"), fallbackTreatments: FallbackTreatmentsConfig? = nil, observer: Observer? = nil) throws -> SplitFactory {
 
     var configBuilder = SplitClientConfig.builder()
                                          .setMinEvaluationRefreshRate(1)
@@ -28,10 +28,7 @@ private func buildFactoryCore(httpClient: SecureHttpClient, syncMode: SyncMode, 
         builder.setFactoryObserver(observer)
     }
 
-    guard let factory = builder.setSdkKey("test-sdk-key")
-                               .setTarget(target)
-                               .setConfig(config)
-                               .build() else {
+    guard let factory = builder.setSdkKey("test-sdk-key").setTarget(target).setConfig(config).build() else {
         throw NSError(domain: "E2ETest", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to build factory"])
     }
 
@@ -47,7 +44,7 @@ func buildClient(target: String = "user-123", treatmentsManager: TreatmentsManag
                        tracker: tracker ?? TrackerMock(),
                        eventsTracker: eventsTracker ?? EventsTrackerMock(),
                        eventsScheduler: eventsScheduler ?? EventsPeriodicSchedulerMock(),
-                       telemetryObserver: telemetryObserver ?? TelemetryObserver(storage: TelemetryStorageMock(), sessionId: "test", metrics: SessionMetrics(sessionId: "test", config: .init(syncMode: "streaming", pushRate: 60, evaluationRefreshRate: 300), runtime: .init(), platform: .init())),
+                       telemetryObserver: telemetryObserver ?? TelemetryObserver(storage: TelemetryStorageMock(), sessionId: "test", config: SplitClientConfig.builder().build()),
                        telemetrySubmitter: telemetrySubmitter ?? TelemetrySubmitterMock())
 }
 
@@ -73,10 +70,7 @@ func mockEvaluationsData(flags: [String], treatment: String = "on") -> Data {
     """.data(using: .utf8)!
 }
 
-func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync, refreshRate: Int = 1, timeout: Int = -1, target: Target, fallbackTreatments: FallbackTreatmentsConfig? = nil, observer: Observer? = nil) throws -> SplitFactory {
-    try buildFactoryCore(httpClient: httpClient, syncMode: syncMode, refreshRate: refreshRate, timeout: timeout, target: target, fallbackTreatments: fallbackTreatments, observer: observer)
-}
-
-func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync, refreshRate: Int = 1, timeout: Int = -1, target: String = "user-123", fallbackTreatments: FallbackTreatmentsConfig? = nil, observer: Observer? = nil) throws -> SplitFactory {
-    try buildFactoryCore(httpClient: httpClient, syncMode: syncMode, refreshRate: refreshRate, timeout: timeout, target: Target(matchingKey: target), fallbackTreatments: fallbackTreatments, observer: observer)
+// Convenience init for some tests
+func buildFactory(httpClient: SecureHttpClient, target: String = "user-123") throws -> SplitFactory {
+    try buildFactory(httpClient: httpClient, target: Target(matchingKey: target))
 }

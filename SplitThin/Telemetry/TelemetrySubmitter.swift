@@ -12,16 +12,14 @@ final class DefaultTelemetrySubmitter: TelemetrySubmitter, @unchecked Sendable {
 
     private let storage: TelemetryReadStorage & TelemetryWriteStorage
     private let secureHttpClient: SecureHttpClient
-    private let observer: Observer
     private let activeSessionId: String
 
     private var isSubmitting = false
     private let lock = NSLock()
 
-    init(storage: TelemetryReadStorage & TelemetryWriteStorage, secureHttpClient: SecureHttpClient, observer: Observer, activeSessionId: String) {
+    init(storage: TelemetryReadStorage & TelemetryWriteStorage, secureHttpClient: SecureHttpClient, activeSessionId: String) {
         self.storage = storage
         self.secureHttpClient = secureHttpClient
-        self.observer = observer
         self.activeSessionId = activeSessionId
     }
 
@@ -51,10 +49,8 @@ final class DefaultTelemetrySubmitter: TelemetrySubmitter, @unchecked Sendable {
             let payload = try JSONSerialization.data(withJSONObject: metricsArray)
             _ = try await secureHttpClient.postTelemetry(payload: payload)
             await storage.remove(sessionIds: toSend.map { $0.sessionId })
-            observer.notify(event: .flushCompleted(.telemetry))
         } catch {
             Logger.e("DefaultTelemetrySubmitter: Failed to submit telemetry: \(error)")
-            observer.notify(event: .flushFailed(.telemetry))
         }
     }
 }

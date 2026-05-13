@@ -127,6 +127,7 @@ final class DefaultSplitClient: SplitClient {
 
         observer.notify(event: .flushStarted(.telemetry))
         await telemetrySubmitter.flush(count: nil)
+        observer.notify(event: .flushCompleted(.telemetry))
     }
 }
 

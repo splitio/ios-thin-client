@@ -120,7 +120,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         // Telemetry
         let telemetryObserver = TelemetryObserver(storage: telemetryStorage, sessionId: UUID().uuidString, config: config)
         eventDispatcher.register(telemetryObserver)
-        let telemetrySubmitter = DefaultTelemetrySubmitter(storage: telemetryStorage, secureHttpClient: secureHttpClient, observer: eventDispatcher, activeSessionId: telemetryObserver.sessionId)
+        let telemetrySubmitter = DefaultTelemetrySubmitter(storage: telemetryStorage, secureHttpClient: secureHttpClient, activeSessionId: telemetryObserver.sessionId)
 
         // Connect FetchCoordinator (that is factory wide) with per-client eventsManager to fire updates events
         (fetchCoordinator as? DefaultEvaluationFetchCoordinator)?.registerOnUpdateAction(for: target.key) { [weak eventDispatcher, evaluationRepository, target] fetchResult in

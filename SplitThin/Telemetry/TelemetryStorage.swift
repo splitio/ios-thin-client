@@ -6,7 +6,7 @@ import Logging
 
 struct TelemetrySessionRecord: Sendable {
     let sessionId: String
-    let metrics: SessionMetrics
+    let metrics: SessionMetricsDTO
     let lastUpdateTimestamp: Date
 }
 
@@ -16,7 +16,7 @@ protocol TelemetryReadStorage: Sendable {
 }
 
 protocol TelemetryWriteStorage: Sendable {
-    func save(sessionId: String, metrics: SessionMetrics) async
+    func save(sessionId: String, metrics: SessionMetricsDTO) async
     func remove(sessionIds: [String]) async
 }
 
@@ -32,10 +32,10 @@ final class DefaultTelemetryStorage: TelemetryReadStorage, TelemetryWriteStorage
 
     // MARK: - TelemetryWriteStorage
 
-    func save(sessionId: String, metrics: SessionMetrics) async {
+    func save(sessionId: String, metrics: SessionMetricsDTO) async {
         guard let data = try? Json.encode(metrics),
               let json = String(data: data, encoding: .utf8) else {
-            Logger.e("DefaultTelemetryStorage: Failed to serialize SessionMetrics")
+            Logger.e("DefaultTelemetryStorage: Failed to serialize SessionMetricsDTO")
             return
         }
 
@@ -68,8 +68,8 @@ final class DefaultTelemetryStorage: TelemetryReadStorage, TelemetryWriteStorage
 
     private func deserialize(sessionId: String, json: String, timestamp: Double) -> TelemetrySessionRecord? {
         guard let data = json.data(using: .utf8),
-              let metrics = try? Json.decode(from: data, to: SessionMetrics.self) else {
-            Logger.e("DefaultTelemetryStorage: Failed to deserialize SessionMetrics for session \(sessionId)")
+              let metrics = try? Json.decode(from: data, to: SessionMetricsDTO.self) else {
+            Logger.e("DefaultTelemetryStorage: Failed to deserialize SessionMetricsDTO for session \(sessionId)")
             return nil
         }
         return TelemetrySessionRecord(sessionId: sessionId, metrics: metrics, lastUpdateTimestamp: Date(timeIntervalSince1970: timestamp))

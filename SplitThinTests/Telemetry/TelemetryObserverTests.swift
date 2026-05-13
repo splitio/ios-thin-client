@@ -9,16 +9,9 @@ final class TelemetryObserverTests: XCTestCase {
     override func setUp() {
         super.setUp()
         storage = TelemetryStorageMock()
-        sut = TelemetryObserver(
-            storage: storage,
-            sessionId: "test-session",
-            metrics: SessionMetrics(
-                sessionId: "test-session",
-                config: .init(syncMode: "streaming", pushRate: 60, evaluationRefreshRate: 300),
-                runtime: .init(),
-                platform: .init()
-            )
-        )
+        sut = TelemetryObserver(storage: storage,
+                                sessionId: "test-session",
+                                config: SplitClientConfig.builder().build())
     }
 
     // MARK: - Metrics updates
