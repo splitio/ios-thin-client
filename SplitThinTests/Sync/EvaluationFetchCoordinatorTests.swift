@@ -88,7 +88,7 @@ final class DefaultEvaluationFetchCoordinatorTest: XCTestCase {
     func testRefetchAllWithNoFetchedKeysDoesNothing() async {
         provider.resultToReturn = EvaluationsResult(evaluations: [], till: 1)
 
-        await coordinator.refetchAll(notification: nil)
+        await coordinator.refetchAll(delay: .none)
 
         XCTAssertEqual(provider.fetchCalls.count, 0)
     }
@@ -98,7 +98,7 @@ final class DefaultEvaluationFetchCoordinatorTest: XCTestCase {
         provider.resultToReturn = EvaluationsResult(evaluations: evaluations, till: 1)
 
         _ = try await coordinator.fetchIfNeeded(target: target, filters: filters, reason: .initialization)
-        await coordinator.refetchAll(notification: nil)
+        await coordinator.refetchAll(delay: .none)
 
         XCTAssertEqual(provider.fetchCalls.count, 2)
         XCTAssertEqual(provider.fetchCalls.last?.1, filters)
@@ -111,26 +111,45 @@ final class DefaultEvaluationFetchCoordinatorTest: XCTestCase {
 
         _ = try await coordinator.fetchIfNeeded(target: target, filters: filters, reason: .initialization)
         _ = try await coordinator.fetchIfNeeded(target: target2, filters: filters, reason: .initialization)
-        await coordinator.refetchAll(notification: nil)
+        await coordinator.refetchAll(delay: .none)
 
         XCTAssertEqual(provider.fetchCalls.count, 4)
     }
 
-    func testRefetchAllPassesNotificationAndKeyToDelayProvider() async throws {
-        var delayProviderCalls: [(EvaluationUpdateNotification?, String)] = []
-        let notification = EvaluationUpdateNotification(channel: nil, timestamp: 0, changeNumber: 1,
-                                                        algorithmSeed: 42, updateIntervalMs: 5000)
-        coordinator = DefaultEvaluationFetchCoordinator(provider: provider, observer: ObserverSpy()) { notif, key in
-            delayProviderCalls.append((notif, key))
-            return 0
-        }
+    // MARK: - refetchKeys
+
+    func testRefetchKeysOnlyFetchesMatchingKeys() async throws {
+        let target2 = Target(matchingKey: "user2")
         provider.resultToReturn = EvaluationsResult(evaluations: [], till: 1)
 
         _ = try await coordinator.fetchIfNeeded(target: target, filters: filters, reason: .initialization)
-        await coordinator.refetchAll(notification: notification)
+        _ = try await coordinator.fetchIfNeeded(target: target2, filters: filters, reason: .initialization)
+        await coordinator.refetchKeys(["user1"], delay: .none)
 
-        XCTAssertEqual(delayProviderCalls.count, 1)
-        XCTAssertEqual(delayProviderCalls.first?.0?.changeNumber, 1)
-        XCTAssertEqual(delayProviderCalls.first?.1, target.matchingKey)
+        // 2 initial + 1 refetch (only user1)
+        XCTAssertEqual(provider.fetchCalls.count, 3)
+        XCTAssertEqual(provider.fetchCalls.last?.0.matchingKey, "user1")
+    }
+
+    func testRefetchKeysWithEmptySetDoesNothing() async throws {
+        provider.resultToReturn = EvaluationsResult(evaluations: [], till: 1)
+
+        _ = try await coordinator.fetchIfNeeded(target: target, filters: filters, reason: .initialization)
+        await coordinator.refetchKeys([], delay: .none)
+
+        XCTAssertEqual(provider.fetchCalls.count, 1)
+    }
+
+    // MARK: - Unregister
+
+    func testUnregisterRemovesTargetFromRefetchAll() async throws {
+        provider.resultToReturn = EvaluationsResult(evaluations: [], till: 1)
+
+        _ = try await coordinator.fetchIfNeeded(target: target, filters: filters, reason: .initialization)
+        coordinator.unregister(target: target)
+        await coordinator.refetchAll(delay: .none)
+
+        // Only the initial fetch, no refetch after unregister
+        XCTAssertEqual(provider.fetchCalls.count, 1)
     }
 }
