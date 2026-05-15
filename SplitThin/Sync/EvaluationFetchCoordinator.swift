@@ -30,6 +30,9 @@ protocol EvaluationFetchCoordinator: Sendable {
     func refetchAll(delay: RefetchDelay) async
     func refetchKeys(_ matchingKeys: Set<String>, delay: RefetchDelay) async
     func unregister(target: Target)
+
+    /// The matching keys that have been registered via fetchIfNeeded (and not unregistered).
+    var registeredMatchingKeys: [String] { get }
 }
 
 final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unchecked Sendable {
@@ -65,6 +68,10 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
             fetchedKeys = fetchedKeys.filter { $0.target != target }
             onUpdateActions.removeValue(forKey: target.key)
         }
+    }
+
+    var registeredMatchingKeys: [String] {
+        withLock(lock) { fetchedKeys.map { $0.target.matchingKey } }
     }
 
     @discardableResult
