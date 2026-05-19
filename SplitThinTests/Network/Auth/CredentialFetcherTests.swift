@@ -63,15 +63,29 @@ final class DefaultCredentialFetcherTest: XCTestCase {
         XCTAssertTrue(url.contains("users=user1,user2"))
     }
 
-    func testFetchCredentialThrowsOnNon200() async throws {
+    func testThrowsUnauthorizedOn401() async throws {
         httpClientMock.responses = [HttpResponse(code: 401, data: nil)]
 
         do {
             try await fetcher.fetchCredential(for: "user1")
-            XCTFail("Expected error")
-        } catch is CredentialFetcherError {
+            XCTFail("Expected unauthorized error")
+        } catch CredentialFetcherError.unauthorized {
+            // Expected
         } catch {
-            XCTFail("Unexpected error type: \(error)")
+            XCTFail("Expected .unauthorized, got: \(error)")
+        }
+    }
+
+    func testThrowsInvalidAuthResponseOnNon200() async throws {
+        httpClientMock.responses = [HttpResponse(code: 500, data: nil)]
+
+        do {
+            try await fetcher.fetchCredential(for: "user1")
+            XCTFail("Expected error")
+        } catch CredentialFetcherError.invalidAuthResponse {
+            // Expected
+        } catch {
+            XCTFail("Expected .invalidAuthResponse, got: \(error)")
         }
     }
 

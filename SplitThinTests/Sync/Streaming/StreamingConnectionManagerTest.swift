@@ -30,7 +30,6 @@ class StreamingConnectionManagerTest: XCTestCase {
 
         await fulfillment(of: [refetched], timeout: 2)
         XCTAssertEqual(fetchCoordinatorMock.refetchAllCalls.count, 1)
-        XCTAssertEqual(fetchCoordinatorMock.refetchAllCalls.first??.changeNumber, 99)
         XCTAssertEqual(fetchCoordinatorMock.fetchCalls.count, 0)
     }
 
@@ -188,5 +187,101 @@ class StreamingConnectionManagerTest: XCTestCase {
         // State should be stopped — verify start can be called again
         manager.start()
         XCTAssertEqual(fetchCoordinatorMock.fetchCalls.count, 0)
+    }
+
+    // MARK: - Update strategies
+
+    func testBoundedOnlyRefetchesAffectedKeys() async {
+        let decoderMock = PayloadDecoderMock()
+        decoderMock.bitmapKeys = [Murmur64x128.hashKey("user1")]
+        fetchCoordinatorMock.registeredMatchingKeys = ["user1", "user2"]
+
+        manager = DefaultStreamingConnectionManager(target: target, fetchCoordinator: fetchCoordinatorMock, notificationParser: DefaultThinNotificationParser(), payloadDecoder: decoderMock)
+
+        let called = expectation(description: "refetchKeys called")
+        fetchCoordinatorMock.onRefetchAllCallback = { called.fulfill() }
+
+        let notification = EvaluationUpdateNotification(channel: "ch1", timestamp: 1000, changeNumber: 2, updateStrategy: .boundedFetchRequest, compressionType: .gzip, payload: "some-payload")
+        manager.handleNotification(notification)
+
+        await fulfillment(of: [called], timeout: 2)
+        XCTAssertEqual(fetchCoordinatorMock.refetchKeysCalls.count, 1)
+        XCTAssertEqual(fetchCoordinatorMock.refetchKeysCalls.first?.matchingKeys, ["user1"])
+    }
+
+    func testBoundedFallsBackToRefetchAllOnDecodingError() async {
+        let decoderMock = PayloadDecoderMock()
+        decoderMock.errorToThrow = PayloadDecodingError.base64DecodingFailed
+        fetchCoordinatorMock.registeredMatchingKeys = ["user1"]
+
+        manager = DefaultStreamingConnectionManager(target: target, fetchCoordinator: fetchCoordinatorMock, notificationParser: DefaultThinNotificationParser(), payloadDecoder: decoderMock)
+
+        let called = expectation(description: "refetchAll fallback called")
+        fetchCoordinatorMock.onRefetchAllCallback = { called.fulfill() }
+
+        let notification = EvaluationUpdateNotification(channel: "ch1", timestamp: 1000, changeNumber: 2, updateStrategy: .boundedFetchRequest, compressionType: .gzip, payload: "bad")
+        manager.handleNotification(notification)
+
+        await fulfillment(of: [called], timeout: 2)
+        XCTAssertEqual(fetchCoordinatorMock.refetchAllCalls.count, 1)
+    }
+
+    func testBoundedFallsBackToRefetchAllOnMissingPayload() async {
+        fetchCoordinatorMock.registeredMatchingKeys = ["user1"]
+
+        let called = expectation(description: "refetchAll fallback called")
+        fetchCoordinatorMock.onRefetchAllCallback = { called.fulfill() }
+
+        let notification = EvaluationUpdateNotification(channel: "ch1", timestamp: 1000, changeNumber: 2, updateStrategy: .boundedFetchRequest, compressionType: .gzip, payload: nil)
+        manager.handleNotification(notification)
+
+        await fulfillment(of: [called], timeout: 2)
+        XCTAssertEqual(fetchCoordinatorMock.refetchAllCalls.count, 1)
+    }
+
+    func testKeyListOnlyRefetchesAffectedKeys() async {
+        let decoderMock = PayloadDecoderMock()
+        decoderMock.keyListResult = KeyList(added: [Murmur64x128.hashKey("user2")], removed: [])
+        fetchCoordinatorMock.registeredMatchingKeys = ["user1", "user2"]
+
+        manager = DefaultStreamingConnectionManager(target: target, fetchCoordinator: fetchCoordinatorMock, notificationParser: DefaultThinNotificationParser(), payloadDecoder: decoderMock)
+
+        let called = expectation(description: "refetchKeys called")
+        fetchCoordinatorMock.onRefetchAllCallback = { called.fulfill() }
+
+        let notification = EvaluationUpdateNotification(channel: "ch1", timestamp: 1000, changeNumber: 2, updateStrategy: .keyList, compressionType: .gzip, payload: "some-payload")
+        manager.handleNotification(notification)
+
+        await fulfillment(of: [called], timeout: 2)
+        XCTAssertEqual(fetchCoordinatorMock.refetchKeysCalls.count, 1)
+        XCTAssertEqual(fetchCoordinatorMock.refetchKeysCalls.first?.matchingKeys, ["user2"])
+    }
+
+    func testKeyListFallsBackToRefetchAllOnError() async {
+        let decoderMock = PayloadDecoderMock()
+        decoderMock.errorToThrow = PayloadDecodingError.base64DecodingFailed
+        fetchCoordinatorMock.registeredMatchingKeys = ["user1"]
+
+        manager = DefaultStreamingConnectionManager(target: target, fetchCoordinator: fetchCoordinatorMock, notificationParser: DefaultThinNotificationParser(), payloadDecoder: decoderMock)
+
+        let called = expectation(description: "refetchAll fallback called")
+        fetchCoordinatorMock.onRefetchAllCallback = { called.fulfill() }
+
+        let notification = EvaluationUpdateNotification(channel: "ch1", timestamp: 1000, changeNumber: 2, updateStrategy: .keyList, compressionType: .gzip, payload: "bad")
+        manager.handleNotification(notification)
+
+        await fulfillment(of: [called], timeout: 2)
+        XCTAssertEqual(fetchCoordinatorMock.refetchAllCalls.count, 1)
+    }
+
+    func testFetchAllStrategyCallsRefetchAll() async {
+        let called = expectation(description: "refetchAll called")
+        fetchCoordinatorMock.onRefetchAllCallback = { called.fulfill() }
+
+        let notification = EvaluationUpdateNotification(channel: "ch1", timestamp: 1000, changeNumber: 2, updateStrategy: .fetchAll)
+        manager.handleNotification(notification)
+
+        await fulfillment(of: [called], timeout: 2)
+        XCTAssertEqual(fetchCoordinatorMock.refetchAllCalls.count, 1)
     }
 }

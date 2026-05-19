@@ -61,6 +61,26 @@ final class AuthE2ETest: XCTestCase {
         XCTAssertEqual(treatment, "control", "Should return control when auth fails")
     }
 
+    func testAuth401DoesNotStartPolling() async throws {
+        httpMock.responses = [
+            HttpResponse(code: 401, data: nil)
+        ]
+
+        let sdkTimedOut = expectation("SDK timed out")
+        let listener = TestEventListener(timeoutExpectation: sdkTimedOut)
+        factory = try buildFactory(syncMode: .polling, refreshRate: 1, timeout: 1)
+        factory.client.addEventListener(listener)
+
+        waitFor(sdkTimedOut)
+
+        let callCountAfterTimeout = httpMock.executeCalls.count
+
+        sleep(seconds: 1.5)
+
+        let callCountLater = httpMock.executeCalls.count
+        XCTAssertEqual(callCountAfterTimeout, callCountLater, "No polling should occur after auth 401")
+    }
+
     func testAuthInvalidJsonReturnsControlTreatment() async throws {
         let invalidJson = "{ invalid json }".data(using: .utf8)
         httpMock.responses = [

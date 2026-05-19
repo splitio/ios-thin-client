@@ -140,7 +140,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         // onEventPush bridges validated TrackerEvents into our storage+submission pipeline.
         // It's set here because DefaultTracker only accepts it via constructor (private let).
         let tracker = DefaultTracker(defaultTrafficType: target.trafficType ?? "user", initialEventSizeInBytes: 1024, eventValidator: ThinEventValidator(), propertyValidator: ThinPropertyValidator(), logger: ThinTrackerLogger(), onEventPush: { trackerEvent in
-            let event = EventEntity(trafficType: trackerEvent.trafficType, eventType: trackerEvent.eventType, value: trackerEvent.value, properties: trackerEvent.properties, timestamp: Date(timeIntervalSince1970: Double(trackerEvent.timestamp ?? 0) / 1000.0))
+            let event = EventEntity(key: trackerEvent.key ?? "", trafficType: trackerEvent.trafficType, eventType: trackerEvent.eventType, value: trackerEvent.value, properties: trackerEvent.properties, timestamp: Date(timeIntervalSince1970: Double(trackerEvent.timestamp ?? 0) / 1000.0))
             Task { await eventsTracker.track(event) }
         })
 

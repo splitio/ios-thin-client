@@ -27,6 +27,7 @@ final class DefaultStreamingConnectionManager: StreamingConnectionManager, SseHa
     private let notificationParser: ThinNotificationParser
     private let jwtParser: SseJwtParser?
     private let backoffCounter: BackoffCounter?
+    private let payloadDecoder: PayloadDecoder
     private let onConnect: (() -> Void)?
     private let onPushDisabled: (() -> Void)?
 
@@ -34,7 +35,7 @@ final class DefaultStreamingConnectionManager: StreamingConnectionManager, SseHa
     private let stateLock = NSLock()
     private var activeConnectionHandler: SseConnectionHandler?
 
-    init(target: Target, authProvider: AuthProvider, streamingEndpoint: URL, httpClient: HttpClient, fetchCoordinator: EvaluationFetchCoordinator, notificationParser: ThinNotificationParser, jwtParser: SseJwtParser, backoffCounter: BackoffCounter, onConnect: (() -> Void)? = nil) {
+    init(target: Target, authProvider: AuthProvider, streamingEndpoint: URL, httpClient: HttpClient, fetchCoordinator: EvaluationFetchCoordinator, notificationParser: ThinNotificationParser, jwtParser: SseJwtParser, backoffCounter: BackoffCounter, payloadDecoder: PayloadDecoder = DefaultPayloadDecoder(), onConnect: (() -> Void)? = nil) {
         self.target = target
         self.authProvider = authProvider
         self.streamingEndpoint = streamingEndpoint
@@ -43,16 +44,18 @@ final class DefaultStreamingConnectionManager: StreamingConnectionManager, SseHa
         self.notificationParser = notificationParser
         self.jwtParser = jwtParser
         self.backoffCounter = backoffCounter
+        self.payloadDecoder = payloadDecoder
         self.onConnect = onConnect
         self.onPushDisabled = nil
     }
 
     // MARK: Init for testing (doesn't need connection)
     #if DEBUG
-    init(target: Target, fetchCoordinator: EvaluationFetchCoordinator, notificationParser: ThinNotificationParser, onPushDisabled: (() -> Void)? = nil) {
+    init(target: Target, fetchCoordinator: EvaluationFetchCoordinator, notificationParser: ThinNotificationParser, payloadDecoder: PayloadDecoder = DefaultPayloadDecoder(), onPushDisabled: (() -> Void)? = nil) {
         self.target = target
         self.fetchCoordinator = fetchCoordinator
         self.notificationParser = notificationParser
+        self.payloadDecoder = payloadDecoder
         self.onPushDisabled = onPushDisabled
 
         // All nil
@@ -98,10 +101,11 @@ final class DefaultStreamingConnectionManager: StreamingConnectionManager, SseHa
     func handleNotification(_ notification: ThinNotification) {
         switch notification.type {
             case .evaluationUpdate:
-                let evalNotification = notification as? EvaluationUpdateNotification
-                Task { [weak self] in
-                    guard let self else { return }
-                    await self.fetchCoordinator.refetchAll(notification: evalNotification)
+                if let evalNotification = notification as? EvaluationUpdateNotification {
+                    Task { [weak self] in
+                        guard let self else { return }
+                        await self.handleEvaluationUpdate(evalNotification)
+                    }
                 }
             case .control:
                 handleControl(notification as? ThinControlNotification)
@@ -147,6 +151,68 @@ final class DefaultStreamingConnectionManager: StreamingConnectionManager, SseHa
         }
     }
 
+    // MARK: - Evaluation update strategies
+
+    private func handleEvaluationUpdate(_ notification: EvaluationUpdateNotification) async {
+        let delay = refetchDelay(from: notification)
+
+        switch notification.updateStrategy {
+            case .boundedFetchRequest:
+                await handleBounded(notification, delay: delay)
+            case .keyList:
+                await handleKeyList(notification, delay: delay)
+            default:
+                await fetchCoordinator.refetchAll(delay: delay)
+        }
+    }
+
+    private func handleBounded(_ notification: EvaluationUpdateNotification, delay: RefetchDelay) async {
+        guard let payload = notification.payload else {
+            Logger.w("StreamingConnectionManager: bounded notification missing payload, falling back to fetchAll")
+            await fetchCoordinator.refetchAll(delay: delay)
+            return
+        }
+
+        do {
+            let keyMap = try payloadDecoder.decodeAsBytes(payload: payload, compressionType: notification.compressionType)
+            let affectedKeys = fetchCoordinator.registeredMatchingKeys.filter { key in
+                payloadDecoder.isKeyInBitmap(keyMap: keyMap, hashedKey: payloadDecoder.hashKey(key))
+            }
+            await fetchCoordinator.refetchKeys(Set(affectedKeys), delay: delay)
+        } catch {
+            Logger.e("StreamingConnectionManager: error decoding bounded payload: \(error). Falling back to fetchAll")
+            await fetchCoordinator.refetchAll(delay: delay)
+        }
+    }
+
+    private func handleKeyList(_ notification: EvaluationUpdateNotification, delay: RefetchDelay) async {
+        guard let payload = notification.payload else {
+            Logger.w("StreamingConnectionManager: keyList notification missing payload, falling back to fetchAll")
+            await fetchCoordinator.refetchAll(delay: delay)
+            return
+        }
+
+        do {
+            let jsonString = try payloadDecoder.decodeAsString(payload: payload, compressionType: notification.compressionType)
+            let keyList = try payloadDecoder.parseKeyList(jsonString: jsonString)
+            let affectedHashes = keyList.added.union(keyList.removed)
+
+            let affectedKeys = fetchCoordinator.registeredMatchingKeys.filter { key in
+                affectedHashes.contains(payloadDecoder.hashKey(key))
+            }
+            await fetchCoordinator.refetchKeys(Set(affectedKeys), delay: delay)
+        } catch {
+            Logger.e("StreamingConnectionManager: error decoding keyList payload: \(error). Falling back to fetchAll")
+            await fetchCoordinator.refetchAll(delay: delay)
+        }
+    }
+
+    private func refetchDelay(from notification: EvaluationUpdateNotification) -> RefetchDelay {
+        guard let intervalMs = notification.updateIntervalMs, let seed = notification.algorithmSeed else { return .none }
+
+        return RefetchDelay(intervalMs: intervalMs, seed: seed)
+    }
+
     // MARK: - Private
 
     private func connectSse() async {
@@ -179,7 +245,7 @@ final class DefaultStreamingConnectionManager: StreamingConnectionManager, SseHa
                     self?.backoffCounter?.resetCounter()
                     self?.onConnect?()
                     Logger.d("StreamingConnectionManager: SSE connected")
-                    Task { [weak self] in await self?.fetchCoordinator.refetchAll(notification: nil) }
+                    Task { [weak self] in await self?.fetchCoordinator.refetchAll(delay: .none) }
                 } else {
                     Logger.w("StreamingConnectionManager: SSE connection failed")
                     self?.reportError(isRetryable: true)
