@@ -28,7 +28,8 @@ final class FailedClient: SplitClient {
 
     func removeEventListener(_ listener: SplitEventListener) {}
 
-    func track(eventType: String, value: Double?, properties: EventProperties?) {}
+    @discardableResult
+    func track(eventType: String, value: Double?, properties: EventProperties?) -> Bool { false }
 
     func destroy() async {}
 

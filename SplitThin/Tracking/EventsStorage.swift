@@ -25,8 +25,8 @@ final class DefaultEventsStorage: EventsReadStorage, EventsWriteStorage, Sendabl
     // MARK: - EventsWriteStorage
 
     func add(_ event: EventEntity) async {
-        let propertiesJson = encodeProperties(event.properties)
-        try? await storage.addEvent(id: event.id, trafficType: event.trafficType, eventType: event.eventType, value: event.value, properties: propertiesJson, timestamp: event.timestamp.timeIntervalSince1970)
+        let dto = EventDTO(id: event.id, trafficType: event.trafficType, eventType: event.eventType, value: event.value, properties: encodeProperties(event.properties), timestamp: event.timestamp.timeIntervalSince1970)
+        try? await storage.addEvent(dto)
     }
 
     func remove(_ events: [EventEntity]) async {
@@ -42,8 +42,8 @@ final class DefaultEventsStorage: EventsReadStorage, EventsWriteStorage, Sendabl
 
     func getBatch(size: Int) async -> [EventEntity] {
         let batch = await storage.getEventBatch(size: size)
-        return batch.map { item in
-            EventEntity(id: item.id, trafficType: item.trafficType, eventType: item.eventType, value: item.value, properties: decodeProperties(item.properties), timestamp: Date(timeIntervalSince1970: item.timestamp))
+        return batch.map { dto in
+            EventEntity(id: dto.id, trafficType: dto.trafficType, eventType: dto.eventType, value: dto.value, properties: decodeProperties(dto.properties), timestamp: Date(timeIntervalSince1970: dto.timestamp))
         }
     }
 
