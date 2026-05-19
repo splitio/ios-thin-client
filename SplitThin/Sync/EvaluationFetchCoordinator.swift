@@ -26,12 +26,13 @@ private struct FetchKey: Hashable {
 }
 
 protocol EvaluationFetchCoordinator: Sendable {
-    /// Coordinates fetch requests so only one relevant fetch runs at a time.
-    /// Returns the fetched evaluations (can be empty on success). Throws on failure.
     func fetchIfNeeded(target: Target, filters: EvaluationFilters?, reason: FetchReason) async throws -> FetchResult
+    func refetchAll(delay: RefetchDelay) async
+    func refetchKeys(_ matchingKeys: Set<String>, delay: RefetchDelay) async
+    func unregister(target: Target)
 
-    /// Re-fetches all previously fetched keys with push reason.
-    func refetchAll(notification: EvaluationUpdateNotification?) async
+    /// The matching keys that have been registered via fetchIfNeeded (and not unregistered).
+    var registeredMatchingKeys: [String] { get }
 }
 
 final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unchecked Sendable {
@@ -39,7 +40,6 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
     private let provider: EvaluationProvider
     private let observer: Observer // For logging & telemetry
     private let storage: EvaluationWriteStorage?
-    private let delayProvider: DelayProvider
 
     // Called after a successful fetch, per key
     private var onUpdateActions = [Key: (FetchResult) -> Void]()
@@ -49,11 +49,10 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
     private var fetchedKeys = Set<FetchKey>()
     private let lock = NSLock()
 
-    init(provider: EvaluationProvider, observer: Observer, storage: EvaluationWriteStorage? = nil, delayProvider: @escaping DelayProvider = buildDelayProvider()) {
+    init(provider: EvaluationProvider, observer: Observer, storage: EvaluationWriteStorage? = nil) {
         self.provider = provider
         self.observer = observer
         self.storage = storage
-        self.delayProvider = delayProvider
     }
 
     func registerOnUpdateAction(for key: Key, action: @escaping (FetchResult) -> Void) {
@@ -62,6 +61,17 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
 
     func unregisterOnUpdateAction(for key: Key) {
         withLock(lock) { onUpdateActions.removeValue(forKey: key) }
+    }
+
+    func unregister(target: Target) {
+        withLock(lock) {
+            fetchedKeys = fetchedKeys.filter { $0.target != target }
+            onUpdateActions.removeValue(forKey: target.key)
+        }
+    }
+
+    var registeredMatchingKeys: [String] {
+        withLock(lock) { fetchedKeys.map { $0.target.matchingKey } }
     }
 
     @discardableResult
@@ -93,12 +103,24 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
         return try await task.value
     }
 
-    func refetchAll(notification: EvaluationUpdateNotification?) async {
+    func refetchAll(delay: RefetchDelay = .none) async {
         let keys = withLock(lock) { fetchedKeys }
+        await fetchKeys(keys, delay: delay)
+    }
+
+    func refetchKeys(_ matchingKeys: Set<String>, delay: RefetchDelay = .none) async {
+        let keys = withLock(lock) { fetchedKeys }
+        let filtered = keys.filter { matchingKeys.contains($0.target.matchingKey) }
+        await fetchKeys(filtered, delay: delay)
+    }
+
+    // MARK: - Private
+
+    private func fetchKeys(_ keys: Set<FetchKey>, delay: RefetchDelay) async {
         for key in keys {
-            let delay = delayProvider(notification, key.target.matchingKey)
-            if delay > 0 {
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            let keyDelay = computeKeyDelay(matchingKey: key.target.matchingKey, delay: delay)
+            if keyDelay > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(keyDelay * 1_000_000_000))
             }
             _ = try? await fetchIfNeeded(target: key.target, filters: key.filters, reason: .push)
         }
