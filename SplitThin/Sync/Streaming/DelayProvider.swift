@@ -3,17 +3,19 @@
 
 import Foundation
 
-typealias DelayProvider = (EvaluationUpdateNotification?, String) -> TimeInterval
+struct RefetchDelay {
+    let intervalMs: Int64
+    let seed: Int
 
-func buildDelayProvider() -> DelayProvider {
-    return { notification, key in
-        guard let intervalMs = notification?.updateIntervalMs,
-              let seed = notification?.algorithmSeed else {
-            return 0
-        }
-        let hash = Murmur3Hash.hashString(key, UInt32(truncatingIfNeeded: seed))
-        let bucket = Int64(bitPattern: UInt64(hash)) % intervalMs
-        let ms = bucket < 0 ? -bucket : bucket
-        return Double(ms) / 1000.0
-    }
+    static let none = RefetchDelay(intervalMs: 0, seed: 0)
+}
+
+/// Computes a deterministic per-key delay in seconds within [0, intervalMs) using Murmur3Hash.
+func computeKeyDelay(matchingKey: String, delay: RefetchDelay) -> TimeInterval {
+    guard delay.intervalMs > 0 else { return 0 }
+
+    let hash = Murmur3Hash.hashString(matchingKey, UInt32(truncatingIfNeeded: delay.seed))
+    let bucket = Int64(bitPattern: UInt64(hash)) % delay.intervalMs
+    let ms = bucket < 0 ? -bucket : bucket
+    return Double(ms) / 1000.0
 }

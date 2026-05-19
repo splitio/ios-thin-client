@@ -54,6 +54,7 @@ final class SplitClientEventsTest: XCTestCase {
     func testFlushEmitsFlushEvents() async {
         await client.flush()
 
-        XCTAssertEqual(observerSpy.eventNames, ["flushStarted", "flushCompleted"])
+        XCTAssertTrue(observerSpy.notifiedEvents.contains { if case .flushStarted(.telemetry) = $0 { return true }; return false })
+        XCTAssertTrue(observerSpy.notifiedEvents.contains { if case .flushCompleted(.telemetry) = $0 { return true }; return false })
     }
 }

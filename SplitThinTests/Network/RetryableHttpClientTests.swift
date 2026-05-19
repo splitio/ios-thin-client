@@ -55,7 +55,7 @@ final class DefaultRetryableHttpClientTest: XCTestCase {
         let endpoint = createEndpoint()
 
         do {
-            _ = try await client.execute(endpoint, category: .evaluations)
+            try await client.execute(endpoint, category: .evaluations)
             XCTFail("Expected maxAttemptsReached error")
         } catch let error as RetryableHttpError {
             if case .maxAttemptsReached(let statusCode, let attempts) = error {
@@ -115,7 +115,7 @@ final class DefaultRetryableHttpClientTest: XCTestCase {
         let client = createClient()
         let endpoint = createEndpoint()
 
-        _ = try await client.execute(endpoint, category: .evaluations)
+        try await client.execute(endpoint, category: .evaluations)
 
         XCTAssertEqual(backoffCounterMock.resetCounterCallCount, 1)
     }

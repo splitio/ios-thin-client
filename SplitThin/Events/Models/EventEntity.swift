@@ -5,14 +5,16 @@ import Foundation
 
 public struct EventEntity: DynamicEncodable, @unchecked Sendable {
     let id: UUID
+    let key: String
     let trafficType: String
     let eventType: String
     let value: Double?
     let properties: [String: Any]?
     let timestamp: Date
 
-    init(id: UUID = UUID(), trafficType: String, eventType: String, value: Double? = nil, properties: [String: Any]? = nil, timestamp: Date = Date()) {
+    init(id: UUID = UUID(), key: String = "", trafficType: String, eventType: String, value: Double? = nil, properties: [String: Any]? = nil, timestamp: Date = Date()) {
         self.id = id
+        self.key = key
         self.trafficType = trafficType
         self.eventType = eventType
         self.value = value
@@ -22,6 +24,7 @@ public struct EventEntity: DynamicEncodable, @unchecked Sendable {
 
     func toJsonObject() -> Any {
         var dict = [String: Any]()
+        dict["key"] = key
         dict["eventTypeId"] = eventType
         dict["trafficTypeName"] = trafficType
         dict["timestamp"] = Int64(timestamp.timeIntervalSince1970 * 1000)

@@ -3,12 +3,12 @@
 
 import Foundation
 
-struct EvaluationChangeDTO: DynamicCodable, Sendable {
+struct EvaluationChangeDTO: DynamicCodable, @unchecked Sendable {
     let changeNumber: Int64?
-    let attributes: [String: String]?
+    let attributes: [String: Any]?
     let evaluations: [String: EvaluationResultDTO]?
 
-    init(changeNumber: Int64? = -1, attributes: [String: String]? = nil, evaluations: [String: EvaluationResultDTO]? = [:]) {
+    init(changeNumber: Int64? = -1, attributes: [String: Any]? = nil, evaluations: [String: EvaluationResultDTO]? = [:]) {
         self.changeNumber = changeNumber
         self.attributes = attributes
         self.evaluations = evaluations
@@ -19,7 +19,7 @@ struct EvaluationChangeDTO: DynamicCodable, Sendable {
             throw JsonError.invalidData
         }
         changeNumber = dict["changeNumber"] as? Int64 ?? -1
-        attributes = dict["attributes"] as? [String: String]
+        attributes = dict["attributes"] as? [String: Any]
 
         if let evaluationsDict = dict["evaluations"] as? [String: Any] {
             evaluations = try evaluationsDict.mapValues { value in

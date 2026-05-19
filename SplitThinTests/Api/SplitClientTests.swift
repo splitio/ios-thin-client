@@ -20,7 +20,7 @@ final class DefaultSplitClientTest: XCTestCase {
         trackerMock = TrackerMock()
         eventsTrackerMock = EventsTrackerMock()
         eventsSchedulerMock = EventsPeriodicSchedulerMock()
-        client = DefaultSplitClient(target: Target(matchingKey: "user1"), treatmentsManager: treatmentsManagerMock, eventsManager: eventsManagerMock, observer: ObserverSpy(), syncManager: syncManagerMock, tracker: trackerMock, eventsTracker: eventsTrackerMock, eventsScheduler: eventsSchedulerMock)
+        client = buildClient(target: "user1", treatmentsManager: treatmentsManagerMock, eventsManager: eventsManagerMock, syncManager: syncManagerMock, tracker: trackerMock, eventsTracker: eventsTrackerMock, eventsScheduler: eventsSchedulerMock)
     }
 
     override func tearDown() {
@@ -104,7 +104,7 @@ final class DefaultSplitClientTest: XCTestCase {
         let listener2 = TestEventListener()
         client.addEventListener(listener1)
 
-        let client2 = DefaultSplitClient(target: Target(matchingKey: "user2"), treatmentsManager: treatmentsManagerMock, eventsManager: eventsManagerMock, observer: ObserverSpy(), syncManager: syncManagerMock, tracker: TrackerMock(), eventsTracker: EventsTrackerMock(), eventsScheduler: EventsPeriodicSchedulerMock())
+        let client2 = buildClient(target: "user2", treatmentsManager: treatmentsManagerMock, eventsManager: eventsManagerMock, syncManager: syncManagerMock)
         client2.addEventListener(listener2)
 
         await client.destroy()

@@ -11,6 +11,13 @@ final class TargetTest: XCTestCase {
         XCTAssertEqual(t1.hashValue, t2.hashValue)
     }
 
+    func testEqualTargetsWithMixedAttributeTypes() {
+        let t1 = Target(matchingKey: "key1", attributes: ["env": "prod", "age": 30, "premium": true])
+        let t2 = Target(matchingKey: "key1", attributes: ["env": "prod", "age": 30, "premium": true])
+
+        XCTAssertEqual(t1, t2)
+    }
+
     func testDifferentMatchingKeyNotEqual() {
         XCTAssertNotEqual(Target(matchingKey: "key1"), Target(matchingKey: "key2"))
     }
@@ -33,6 +40,13 @@ final class TargetTest: XCTestCase {
         XCTAssertNotEqual(
             Target(matchingKey: "key1", attributes: ["env": "prod"]),
             Target(matchingKey: "key1", attributes: ["env": "staging"])
+        )
+    }
+
+    func testNilVsEmptyAttributesNotEqual() {
+        XCTAssertNotEqual(
+            Target(matchingKey: "key1", attributes: nil),
+            Target(matchingKey: "key1", attributes: [:])
         )
     }
 

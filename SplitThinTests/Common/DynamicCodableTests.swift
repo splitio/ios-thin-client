@@ -37,12 +37,14 @@ final class ParsingTest: XCTestCase {
         XCTAssertThrowsError(try Json.decode(from: json, to: AuthResponse.self))
     }
 
-    func testAuthResponseThrowsOnMissingPushEnabled() {
+    func testAuthResponseDefaultsPushEnabledToFalse() throws {
         let json = """
         {"token":"jwt-token"}
         """.data(using: .utf8)!
 
-        XCTAssertThrowsError(try Json.decode(from: json, to: AuthResponse.self))
+        let response = try Json.decode(from: json, to: AuthResponse.self)
+        XCTAssertFalse(response.pushEnabled)
+        XCTAssertNil(response.connDelay)
     }
 
     func testAuthResponseThrowsOnInvalidJson() {

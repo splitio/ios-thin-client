@@ -1,4 +1,5 @@
 import Foundation
+import Http
 @testable import SplitThin
 
 // This file centralizes all internal methods used to inject components in the 
@@ -19,8 +20,8 @@ extension DefaultSplitFactoryBuilder {
     }
 
     @discardableResult
-    func setStreamingConnectionManagerFactory(_ factory: @escaping (EvaluationFetchCoordinator) -> StreamingConnectionManager) -> DefaultSplitFactoryBuilder {
-        self.connectionManagerFactory = factory
+    func setStreamingConnectionManagerFactory(_ factory: @escaping (EvaluationFetchCoordinator) -> Streaming) -> DefaultSplitFactoryBuilder {
+        self.connectionFactory = factory
         return self
     }
 
@@ -50,6 +51,27 @@ extension SplitClient {
     @discardableResult
     func getTreatment(_ flag: String) -> EvaluationResult {
         getTreatment(flag: flag)
+    }
+}
+
+extension CredentialFetcher {
+    @discardableResult
+    func fetchCredential(for user: String) async throws -> JwtCredential {
+        try await fetchCredential(for: [user])
+    }
+}
+
+extension SecureHttpClient {
+    @discardableResult
+    func fetchEvaluations(target: Target) async throws -> HttpResponse {
+        try await fetchEvaluations(target: target, filters: nil)
+    }
+}
+
+extension RetryableHttpClient {
+    @discardableResult
+    func execute(_ endpoint: Endpoint, category: RequestCategory) async throws -> HttpResponse {
+        try await execute(endpoint, category: category, body: nil)
     }
 }
 

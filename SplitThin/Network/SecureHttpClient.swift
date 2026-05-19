@@ -3,6 +3,7 @@
 
 import Foundation
 import Http
+import Logging
 
 enum SecureHttpError: Error {
     case invalidResponse
@@ -22,11 +23,15 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
     private let retryableHttpClient: RetryableHttpClient
     private let authProvider: AuthProvider
     private let serviceEndpoints: ServiceEndpoints
+    private let configsEnabled: Bool
+    private let apiKey: String
 
-    init(retryableHttpClient: RetryableHttpClient, authProvider: AuthProvider, serviceEndpoints: ServiceEndpoints) {
+    init(retryableHttpClient: RetryableHttpClient, authProvider: AuthProvider, serviceEndpoints: ServiceEndpoints, configsEnabled: Bool = false, apiKey: String) {
         self.retryableHttpClient = retryableHttpClient
         self.authProvider = authProvider
         self.serviceEndpoints = serviceEndpoints
+        self.configsEnabled = configsEnabled
+        self.apiKey = apiKey
     }
 
     func fetchEvaluations(target: Target, filters: EvaluationFilters?) async throws -> HttpResponse {
@@ -47,6 +52,7 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
         let endpoint = Endpoint.builder(baseUrl: serviceEndpoints.eventsEndpoint, path: "events/bulk")
                                .set(method: .post)
                                .add(header: "Content-Type", withValue: "application/json")
+                               .add(header: "Authorization", withValue: "Bearer \(apiKey)")
                                .build()
 
         return try await retryableHttpClient.execute(endpoint, category: .events, body: payload)
@@ -62,20 +68,58 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
     }
 
     private func performEvaluationsRequest(target: Target, filters: EvaluationFilters?, token: String) async throws -> HttpResponse {
-        var queryString = "&user=\(target.matchingKey)&since=-1"
+        let queryString = buildEvaluationsQueryString(target: target, filters: filters)
+        let digest = ContentDigest.compute(for: target)
+
+        let endpoint = Endpoint.builder(baseUrl: serviceEndpoints.sdkEndpoint, path: "evaluations", defaultQueryString: queryString)
+            .set(method: .post)
+            .add(header: "Content-Type", withValue: "application/json")
+            .add(header: "Authorization", withValue: "Bearer \(token)")
+            .add(header: "X-Harness-FME-Content-Digest", withValue: digest)
+            .build()
+        
+        let body = serializeAttributes(target.attributes)
+        return try await retryableHttpClient.execute(endpoint, category: .evaluations, body: body)
+    }
+}
+
+// MARK: Formatting Methods
+extension DefaultSecureHttpClient {
+
+    //
+    // Evaluations URL query (ensures it will always arrive in alphabetical order, even if new params are added).
+    //
+    // In case of adding *lists* as values, make sure they are ordered as well using .sorted()
+    //
+    private func buildEvaluationsQueryString(target: Target, filters: EvaluationFilters?) -> String {
+        var params: [(String, String)] = []
+
         if let flagNames = filters?.flagNames, !flagNames.isEmpty {
-            queryString += "&names=\(flagNames.joined(separator: ","))"
-        } else if let flagSets = filters?.flagSets, !flagSets.isEmpty {
-            queryString += "&sets=\(flagSets.joined(separator: ","))"
+            params.append(("&names", flagNames.sorted().joined(separator: ","))) // Automatic sorting
+        }
+        if let flagSets = filters?.flagSets, !flagSets.isEmpty {
+            params.append(("&sets", flagSets.sorted().joined(separator: ","))) // Automatic sorting
+        }
+        params.append(("&since", "-1"))
+        params.append(("&user", target.matchingKey))
+        params.append(("&capabilities", configsEnabled ? "evaluatorWithConfigs" : "evaluator"))
+
+        return params.sorted { $0.0 < $1.0 }.map { "\($0)=\($1)" }.joined() // Automatic sorting
+    }
+
+    //
+    // Attributes serialization
+    //
+    private func serializeAttributes(_ attributes: [String: Any]?) -> Data? {
+        guard let attributes, !attributes.isEmpty else {
+            return "{}".data(using: .utf8)
         }
 
-        let endpoint = Endpoint.builder(baseUrl: serviceEndpoints.sdkEndpoint,path: "evaluations", defaultQueryString: queryString)
-                               .set(method: .post)
-                               .add(header: "Content-Type", withValue: "application/json")
-                               .add(header: "Authorization", withValue: "Bearer \(token)")
-                               .build()
-
-        let emptyBody = "{}".data(using: .utf8) // TODO: Remove hardcoding
-        return try await retryableHttpClient.execute(endpoint, category: .evaluations, body: emptyBody)
+        do {
+            return try JSONSerialization.data(withJSONObject: ["attributes": attributes])
+        } catch {
+            Logger.e("SecureHttpClient: Failed to serialize attributes: \(error)")
+            return "{}".data(using: .utf8)
+        }
     }
 }
