@@ -15,7 +15,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         authProviderMock = AuthProviderMock()
         authProviderMock.credentialToReturn = makeCredential()
         serviceEndpoints = ServiceEndpoints.builder().set(sdkEndpoint: "https://evaluator.split.io/api").set(eventsEndpoint: "https://events.split.io/api").set(telemetryServiceEndpoint: "https://telemetry.split.io/api/v1").build()
-        client = DefaultSecureHttpClient(retryableHttpClient: retryableHttpMock, authProvider: authProviderMock, serviceEndpoints: serviceEndpoints)
+        client = DefaultSecureHttpClient(retryableHttpClient: retryableHttpMock, authProvider: authProviderMock, serviceEndpoints: serviceEndpoints, apiKey: "test-api-key")
     }
 
     // MARK: - fetchEvaluations
@@ -86,7 +86,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
 
     func testFetchEvaluationsQueryParamsAreAlphabetical() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
-        let configsClient = DefaultSecureHttpClient(retryableHttpClient: retryableHttpMock, authProvider: authProviderMock, serviceEndpoints: serviceEndpoints, configsEnabled: true)
+        let configsClient = DefaultSecureHttpClient(retryableHttpClient: retryableHttpMock, authProvider: authProviderMock, serviceEndpoints: serviceEndpoints, configsEnabled: true, apiKey: "test-api-key")
 
         let target = Target(matchingKey: "user1")
         let filters = EvaluationFilters(flagNames: ["z_flag"])
@@ -153,7 +153,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
 
     func testIncludesWithConfigParamWhenEnabled() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
-        let configsClient = DefaultSecureHttpClient(retryableHttpClient: retryableHttpMock, authProvider: authProviderMock, serviceEndpoints: serviceEndpoints, configsEnabled: true)
+        let configsClient = DefaultSecureHttpClient(retryableHttpClient: retryableHttpMock, authProvider: authProviderMock, serviceEndpoints: serviceEndpoints, configsEnabled: true, apiKey: "test-api-key")
 
         let target = Target(matchingKey: "user1")
 

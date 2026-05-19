@@ -33,9 +33,11 @@ struct EvaluationUpdateDataDto: DynamicDecodable {
     let changeNumber: Int64
     let dt: Int?
     let u: Int?
+    let c: Int?
     let s: Int?
     let h: Int?
     let i: Int64?
+    let d: String?
 
     init(jsonObject: Any) throws {
         guard let dict = jsonObject as? [String: Any] else { throw JsonError.parsingFailed }
@@ -44,9 +46,11 @@ struct EvaluationUpdateDataDto: DynamicDecodable {
         self.changeNumber = changeNumber
         self.dt = dict["dt"] as? Int
         self.u = dict["u"] as? Int
+        self.c = dict["c"] as? Int
         self.s = dict["s"] as? Int
         self.h = dict["h"] as? Int
         self.i = dict["i"] as? Int64
+        self.d = dict["d"] as? String
     }
 }
 
