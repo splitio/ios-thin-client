@@ -12,6 +12,7 @@ protocol EvaluationPeriodicScheduler: Sendable {
 final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @unchecked Sendable {
 
     private let fetchCoordinator: EvaluationFetchCoordinator
+    private let evaluationRepository: EvaluationRepository
     private let observer: Observer // For SDK events & logging
     private let target: Target
     private let filters: EvaluationFilters?
@@ -21,8 +22,9 @@ final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @un
     private var isRunning = false
     private let lock = NSLock()
 
-    init(fetchCoordinator: EvaluationFetchCoordinator, observer: Observer, target: Target, filters: EvaluationFilters?, intervalSeconds: Int) {
+    init(fetchCoordinator: EvaluationFetchCoordinator, evaluationRepository: EvaluationRepository, observer: Observer, target: Target, filters: EvaluationFilters?, intervalSeconds: Int) {
         self.fetchCoordinator = fetchCoordinator
+        self.evaluationRepository = evaluationRepository
         self.observer = observer
         self.target = target
         self.filters = filters
@@ -61,7 +63,7 @@ final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @un
                 do {
                     let result = try await self.fetchCoordinator.fetchIfNeeded(target: self.target, filters: self.filters, reason: .periodic)
                     if !result.evaluations.isEmpty {
-                        // TODO: update repository
+                        self.evaluationRepository.update(result.evaluations, for: self.target)
                         self.observer.notify(event: .evaluationsUpdated(SdkUpdateMetadata(type: .flagsUpdate, names: result.evaluations.map { $0.flag }, changeNumber: result.changeNumber)))
                     }
                 } catch {

@@ -29,10 +29,12 @@ final class DefaultSplitClient: SplitClient {
     private let tracker: Tracker
     private let eventsTracker: EventsTracker
     private let eventsScheduler: EventsPeriodicScheduler
+    private let telemetryObserver: TelemetryObserver
+    private let telemetrySubmitter: TelemetrySubmitter
     private var clientListeners = [SplitEventListener]()
     private var isDestroyed = false
 
-    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, observer: Observer, syncManager: SyncManager, tracker: Tracker, eventsTracker: EventsTracker, eventsScheduler: EventsPeriodicScheduler) {
+    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, observer: Observer, syncManager: SyncManager, tracker: Tracker, eventsTracker: EventsTracker, eventsScheduler: EventsPeriodicScheduler, telemetryObserver: TelemetryObserver, telemetrySubmitter: TelemetrySubmitter) {
         self.target = target
         self.treatmentsManager = treatmentsManager
         self.eventsManager = eventsManager
@@ -41,6 +43,8 @@ final class DefaultSplitClient: SplitClient {
         self.tracker = tracker
         self.eventsTracker = eventsTracker
         self.eventsScheduler = eventsScheduler
+        self.telemetryObserver = telemetryObserver
+        self.telemetrySubmitter = telemetrySubmitter
     }
 
     // MARK: - Evaluations
@@ -103,6 +107,9 @@ final class DefaultSplitClient: SplitClient {
         eventsScheduler.stop()
         await eventsTracker.flush()
 
+        await telemetryObserver.persistNow()
+        await telemetrySubmitter.flush(count: nil)
+
         for listener in clientListeners {
             eventsManager.removeListener(listener)
         }
@@ -117,6 +124,10 @@ final class DefaultSplitClient: SplitClient {
         observer.notify(event: .flushStarted(.events))
         await eventsTracker.flush()
         observer.notify(event: .flushCompleted(.events))
+
+        observer.notify(event: .flushStarted(.telemetry))
+        await telemetrySubmitter.flush(count: nil)
+        observer.notify(event: .flushCompleted(.telemetry))
     }
 }
 

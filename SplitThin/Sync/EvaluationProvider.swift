@@ -5,7 +5,7 @@ import Foundation
 import Logging
 
 protocol EvaluationProvider: Sendable {
-    func fetch(target: Target, filters: EvaluationFilters?) async -> EvaluationsResult?
+    func fetch(target: Target, filters: EvaluationFilters?) async throws -> EvaluationsResult?
 }
 
 final class DefaultEvaluationProvider: EvaluationProvider, @unchecked Sendable {
@@ -16,9 +16,16 @@ final class DefaultEvaluationProvider: EvaluationProvider, @unchecked Sendable {
         self.secureHttpClient = secureHttpClient
     }
 
-    func fetch(target: Target, filters: EvaluationFilters?) async -> EvaluationsResult? {
+    private static let httpNotModified = 304
+
+    func fetch(target: Target, filters: EvaluationFilters?) async throws -> EvaluationsResult? {
         do {
             let response = try await secureHttpClient.fetchEvaluations(target: target, filters: filters)
+
+            if response.code == Self.httpNotModified {
+                Logger.d("EvaluationProvider: Server returned 304, evaluations are up to date")
+                return EvaluationsResult(evaluations: [])
+            }
 
             guard response.isSuccess, let data = response.data else {
                 Logger.e("EvaluationProvider: Failed to fetch evaluations: HTTP \(response.code)")
@@ -28,6 +35,8 @@ final class DefaultEvaluationProvider: EvaluationProvider, @unchecked Sendable {
             let result = try Json.decode(from: data, to: EvaluationsResult.self)
             Logger.d("EvaluationProvider: Fetched \(result.evaluations.count) evaluations")
             return result
+        } catch CredentialFetcherError.unauthorized {
+            throw CredentialFetcherError.unauthorized
         } catch {
             Logger.e("EvaluationProvider: Failed to fetch evaluations: \(error)")
             return nil

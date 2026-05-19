@@ -40,6 +40,15 @@ enum ContentDigest {
         return "{\(pairs.joined(separator: ","))}"
     }
 
+    private static func stringRepresentation(_ value: Any) -> String {
+        switch value {
+            case let string as String: string
+            case let bool as Bool: bool ? "true" : "false"
+            case let number as NSNumber: "\(number)"
+            default: "\(value)"
+        }
+    }
+
     private static func serializeValue(_ value: Any) -> String {
         switch value {
             case let string as String:
@@ -56,8 +65,8 @@ enum ContentDigest {
             case let collection as [Any]:
                 let sorted = collection
                     .filter { !($0 is NSNull) }
+                    .sorted { stringRepresentation($0) < stringRepresentation($1) }
                     .map { serializeValue($0) }
-                    .sorted()
                 return "[\(sorted.joined(separator: ","))]"
             default:
                 return "\"\(value)\""

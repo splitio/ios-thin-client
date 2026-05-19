@@ -14,6 +14,7 @@ final class CoreDataStorage: @unchecked Sendable {
     private static let clientSessionEntity = "ClientSession"
     private static let evaluationEntity = "Evaluation"
     private static let eventEntity = "Event"
+    private static let telemetrySessionEntity = "TelemetrySession"
 
     private let container: NSPersistentContainer
 
@@ -183,6 +184,7 @@ final class CoreDataStorage: @unchecked Sendable {
 
             let event = NSManagedObject(entity: entity, insertInto: context)
             event.setValue(dto.id.uuidString, forKey: "id")
+            event.setValue(dto.key, forKey: "key")
             event.setValue(dto.trafficType, forKey: "trafficType")
             event.setValue(dto.eventType, forKey: "eventType")
             event.setValue(dto.value ?? 0, forKey: "value")
@@ -206,7 +208,7 @@ final class CoreDataStorage: @unchecked Sendable {
                 }
 
                 let hasValue = result.value(forKey: "hasValue") as? Bool ?? false
-                return EventDTO(id: id, trafficType: result.value(forKey: "trafficType") as? String ?? "", eventType: result.value(forKey: "eventType") as? String ?? "", value: hasValue ? result.value(forKey: "value") as? Double : nil, properties: result.value(forKey: "properties") as? String, timestamp: result.value(forKey: "timestamp") as? Double ?? 0)
+                return EventDTO(id: id, key: result.value(forKey: "key") as? String ?? "", trafficType: result.value(forKey: "trafficType") as? String ?? "", eventType: result.value(forKey: "eventType") as? String ?? "", value: hasValue ? result.value(forKey: "value") as? Double : nil, properties: result.value(forKey: "properties") as? String, timestamp: result.value(forKey: "timestamp") as? Double ?? 0)
             }
         }) ?? []
     }
@@ -234,6 +236,100 @@ final class CoreDataStorage: @unchecked Sendable {
     func clearEvents() async {
         try? await withContext { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.eventEntity)
+            for object in try context.fetch(request) {
+                context.delete(object)
+            }
+            try context.save()
+        }
+    }
+
+    // MARK: - TelemetrySession Operations
+
+    func upsertTelemetrySession(sessionId: String, metricsJson: String, timestamp: Double) async throws {
+        try await withContext { context in
+            let fetchRequest = NSFetchRequest<NSManagedObject>(entityName: Self.telemetrySessionEntity)
+            fetchRequest.predicate = NSPredicate(format: "sessionId == %@", sessionId)
+            fetchRequest.fetchLimit = 1
+
+            let existing = try context.fetch(fetchRequest).first
+
+            if let existing {
+                existing.setValue(metricsJson, forKey: "metricsJson")
+                existing.setValue(timestamp, forKey: "lastUpdateTimestamp")
+            } else {
+                guard let entity = NSEntityDescription.entity(forEntityName: Self.telemetrySessionEntity, in: context) else {
+                    throw StorageError.entityNotFound
+                }
+                let record = NSManagedObject(entity: entity, insertInto: context)
+                record.setValue(sessionId, forKey: "sessionId")
+                record.setValue(metricsJson, forKey: "metricsJson")
+                record.setValue(timestamp, forKey: "lastUpdateTimestamp")
+            }
+
+            try context.save()
+        }
+    }
+
+    func getTelemetrySessions(excluding sessionId: String) async -> [(sessionId: String, metricsJson: String, lastUpdateTimestamp: Double)] {
+        (try? await withContext { context in
+            let request = NSFetchRequest<NSManagedObject>(entityName: Self.telemetrySessionEntity)
+            request.predicate = NSPredicate(format: "sessionId != %@", sessionId)
+            request.sortDescriptors = [NSSortDescriptor(key: "lastUpdateTimestamp", ascending: true)]
+
+            return try context.fetch(request).compactMap { result -> (String, String, Double)? in
+                guard let sid = result.value(forKey: "sessionId") as? String,
+                      let json = result.value(forKey: "metricsJson") as? String else { return nil }
+                let ts = result.value(forKey: "lastUpdateTimestamp") as? Double ?? 0
+                return (sid, json, ts)
+            }
+        }) ?? []
+    }
+
+    func getAllTelemetrySessions() async -> [(sessionId: String, metricsJson: String, lastUpdateTimestamp: Double)] {
+        (try? await withContext { context in
+            let request = NSFetchRequest<NSManagedObject>(entityName: Self.telemetrySessionEntity)
+            request.sortDescriptors = [NSSortDescriptor(key: "lastUpdateTimestamp", ascending: true)]
+
+            return try context.fetch(request).compactMap { result -> (String, String, Double)? in
+                guard let sid = result.value(forKey: "sessionId") as? String,
+                      let json = result.value(forKey: "metricsJson") as? String else { return nil }
+                let ts = result.value(forKey: "lastUpdateTimestamp") as? Double ?? 0
+                return (sid, json, ts)
+            }
+        }) ?? []
+    }
+
+    func countTelemetrySessions() async -> Int {
+        (try? await withContext { context in
+            let request = NSFetchRequest<NSManagedObject>(entityName: Self.telemetrySessionEntity)
+            return try context.count(for: request)
+        }) ?? 0
+    }
+
+    func removeTelemetrySessions(sessionIds: [String]) async {
+        guard !sessionIds.isEmpty else { return }
+
+        try? await withContext { context in
+            let request = NSFetchRequest<NSManagedObject>(entityName: Self.telemetrySessionEntity)
+            request.predicate = NSPredicate(format: "sessionId IN %@", sessionIds)
+            for object in try context.fetch(request) {
+                context.delete(object)
+            }
+            try context.save()
+        }
+    }
+
+    func removeOldestTelemetrySessions(keepCount: Int) async {
+        try? await withContext { context in
+            let countRequest = NSFetchRequest<NSManagedObject>(entityName: Self.telemetrySessionEntity)
+            let total = try context.count(for: countRequest)
+
+            guard total > keepCount else { return }
+
+            let request = NSFetchRequest<NSManagedObject>(entityName: Self.telemetrySessionEntity)
+            request.sortDescriptors = [NSSortDescriptor(key: "lastUpdateTimestamp", ascending: true)]
+            request.fetchLimit = total - keepCount
+
             for object in try context.fetch(request) {
                 context.delete(object)
             }
@@ -370,6 +466,10 @@ final class CoreDataStorage: @unchecked Sendable {
         eventHasValueAttr.name = "hasValue"
         eventHasValueAttr.attributeType = .booleanAttributeType
 
+        let eventKeyAttr = NSAttributeDescription()
+        eventKeyAttr.name = "key"
+        eventKeyAttr.attributeType = .stringAttributeType
+
         let eventPropertiesAttr = NSAttributeDescription()
         eventPropertiesAttr.name = "properties"
         eventPropertiesAttr.attributeType = .stringAttributeType
@@ -379,14 +479,33 @@ final class CoreDataStorage: @unchecked Sendable {
         eventTimestampAttr.name = "timestamp"
         eventTimestampAttr.attributeType = .doubleAttributeType
 
-        eventEntity.properties = [eventIdAttr, eventTrafficTypeAttr, eventEventTypeAttr, eventValueAttr, eventHasValueAttr, eventPropertiesAttr, eventTimestampAttr]
+        eventEntity.properties = [eventIdAttr, eventKeyAttr, eventTrafficTypeAttr, eventEventTypeAttr, eventValueAttr, eventHasValueAttr, eventPropertiesAttr, eventTimestampAttr]
 
         let eventTimestampIndex = NSFetchIndexDescription(name: "byTimestamp", elements: [
             NSFetchIndexElementDescription(property: eventTimestampAttr, collationType: .binary)
         ])
         eventEntity.indexes = [eventTimestampIndex]
 
-        model.entities = [clientSessionEntity, evaluationEntity, eventEntity]
+        // TelemetrySession entity
+        let telemetrySessionEntity = NSEntityDescription()
+        telemetrySessionEntity.name = Self.telemetrySessionEntity
+        telemetrySessionEntity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+
+        let telemetrySessionIdAttr = NSAttributeDescription()
+        telemetrySessionIdAttr.name = "sessionId"
+        telemetrySessionIdAttr.attributeType = .stringAttributeType
+
+        let telemetryMetricsJsonAttr = NSAttributeDescription()
+        telemetryMetricsJsonAttr.name = "metricsJson"
+        telemetryMetricsJsonAttr.attributeType = .stringAttributeType
+
+        let telemetryTimestampAttr = NSAttributeDescription()
+        telemetryTimestampAttr.name = "lastUpdateTimestamp"
+        telemetryTimestampAttr.attributeType = .doubleAttributeType
+
+        telemetrySessionEntity.properties = [telemetrySessionIdAttr, telemetryMetricsJsonAttr, telemetryTimestampAttr]
+
+        model.entities = [clientSessionEntity, evaluationEntity, eventEntity, telemetrySessionEntity]
         return model
     }
 

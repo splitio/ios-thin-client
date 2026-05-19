@@ -41,7 +41,9 @@ final class DefaultThinNotificationParser: ThinNotificationParser {
                 channel: channel, timestamp: timestamp, changeNumber: dto.changeNumber,
                 dataType: dto.dt.flatMap(NotificationDataType.init),
                 updateStrategy: dto.u.flatMap(UpdateStrategy.init),
-                algorithmSeed: dto.s, hashingAlgorithm: dto.h, updateIntervalMs: dto.i)
+                compressionType: CompressionType.from(dto.c),
+                algorithmSeed: dto.s, hashingAlgorithm: dto.h, updateIntervalMs: dto.i,
+                payload: dto.d)
         }
 
         if data.contains(kControlType) {

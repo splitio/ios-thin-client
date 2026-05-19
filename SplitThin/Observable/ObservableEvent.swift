@@ -72,6 +72,7 @@ enum ObservableEvent: Sendable {
     case jwtFetchFailedNonRetryable(statusCode: Int)
     case jwtStored(secureStorage: Bool)
     case jwtExpiredOrInvalid
+    case authUnauthorized
 
     // HTTP
     case httpRequestStarted(category: HttpCategory, method: ObservableHttpMethod)

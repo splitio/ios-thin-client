@@ -5,6 +5,7 @@ import Foundation
 import Http
 
 enum CredentialFetcherError: Error {
+    case unauthorized
     case invalidAuthResponse
     case missingTokenExpiration
     case networkError(Error)
@@ -47,6 +48,10 @@ final class DefaultCredentialFetcher: CredentialFetcher, @unchecked Sendable {
 
         let response = try await retryableHttpClient.execute(endpoint, category: .auth)
 
+        if response.code == 401 {
+            throw CredentialFetcherError.unauthorized
+        }
+
         guard response.isSuccess, let data = response.data else {
             throw CredentialFetcherError.invalidAuthResponse
         }
@@ -55,7 +60,7 @@ final class DefaultCredentialFetcher: CredentialFetcher, @unchecked Sendable {
         let expiresAt = try extractExpiration(from: authResponse.token)
 
         observer.notify(event: .jwtFetchSucceeded(expiresAt: Int64(expiresAt.timeIntervalSince1970), pushEnabled: authResponse.pushEnabled))
-        return JwtCredential(token: authResponse.token, expiresAt: expiresAt, pushEnabled: authResponse.pushEnabled)
+        return JwtCredential(token: authResponse.token, expiresAt: expiresAt, pushEnabled: authResponse.pushEnabled, connDelay: authResponse.connDelay)
     }
 
     private func extractExpiration(from jwt: String) throws -> Date {

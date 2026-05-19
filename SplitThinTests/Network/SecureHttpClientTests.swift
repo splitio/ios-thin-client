@@ -15,7 +15,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         authProviderMock = AuthProviderMock()
         authProviderMock.credentialToReturn = makeCredential()
         serviceEndpoints = ServiceEndpoints.builder().set(sdkEndpoint: "https://evaluator.split.io/api").set(eventsEndpoint: "https://events.split.io/api").set(telemetryServiceEndpoint: "https://telemetry.split.io/api/v1").build()
-        client = DefaultSecureHttpClient(retryableHttpClient: retryableHttpMock, authProvider: authProviderMock, serviceEndpoints: serviceEndpoints)
+        client = DefaultSecureHttpClient(retryableHttpClient: retryableHttpMock, authProvider: authProviderMock, serviceEndpoints: serviceEndpoints, apiKey: "test-api-key")
     }
 
     // MARK: - fetchEvaluations
@@ -71,16 +71,47 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         XCTAssertTrue(url.contains("sets=setA,setB"), "URL should contain sets param: \(url)")
     }
 
-    func testFetchEvaluationsSendsEmptyAttributesWhenNoAttributes() async throws {
+    func testFetchEvaluationsIncludesBothNamesAndSets() async throws {
+        retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
+
+        let target = Target(matchingKey: "user1")
+        let filters = EvaluationFilters(flagNames: ["flag2", "flag1"], flagSets: ["setC", "setA"])
+
+        _ = try await client.fetchEvaluations(target: target, filters: filters)
+
+        let url = retryableHttpMock.executeCalls[0].endpoint.url.absoluteString
+        XCTAssertTrue(url.contains("names=flag1,flag2"), "Names should be sorted: \(url)")
+        XCTAssertTrue(url.contains("sets=setA,setC"), "Sets should be sorted: \(url)")
+    }
+
+    func testFetchEvaluationsQueryParamsAreAlphabetical() async throws {
+        retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
+        let configsClient = DefaultSecureHttpClient(retryableHttpClient: retryableHttpMock, authProvider: authProviderMock, serviceEndpoints: serviceEndpoints, configsEnabled: true, apiKey: "test-api-key")
+
+        let target = Target(matchingKey: "user1")
+        let filters = EvaluationFilters(flagNames: ["z_flag"])
+
+        _ = try await configsClient.fetchEvaluations(target: target, filters: filters)
+
+        let url = retryableHttpMock.executeCalls[0].endpoint.url.absoluteString
+        let namesIdx = url.range(of: "names=")!.lowerBound
+        let sinceIdx = url.range(of: "since=")!.lowerBound
+        let userIdx = url.range(of: "user=")!.lowerBound
+        let capabilitiesIdx = url.range(of: "capabilities=")!.lowerBound
+        XCTAssertTrue(capabilitiesIdx < namesIdx, "capabilities should come before names")
+        XCTAssertTrue(namesIdx < sinceIdx, "names should come before since")
+        XCTAssertTrue(sinceIdx < userIdx, "since should come before user")
+    }
+
+    func testFetchEvaluationsSendsEmptyBodyWhenNoAttributes() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
         let target = Target(matchingKey: "user1")
 
         try await client.fetchEvaluations(target: target)
 
-        let body = retryableHttpMock.executeCalls[0].body!
-        let parsed = try JSONSerialization.jsonObject(with: body) as! [String: Any]
-        XCTAssertTrue(parsed["attributes"] is NSNull)
+        let body = retryableHttpMock.executeCalls[0].body
+        XCTAssertEqual(body, "{}".data(using: .utf8))
     }
 
     func testFetchEvaluationsSendsAttributesInBody() async throws {
@@ -120,19 +151,19 @@ final class DefaultSecureHttpClientTest: XCTestCase {
 
     // MARK: - Configs enabled
 
-    func testIncludesWithConfigParamWhenEnabled() async throws {
+    func testIncludesEvaluatorWithConfigsCapabilityWhenEnabled() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
-        let configsClient = DefaultSecureHttpClient(retryableHttpClient: retryableHttpMock, authProvider: authProviderMock, serviceEndpoints: serviceEndpoints, configsEnabled: true)
+        let configsClient = DefaultSecureHttpClient(retryableHttpClient: retryableHttpMock, authProvider: authProviderMock, serviceEndpoints: serviceEndpoints, configsEnabled: true, apiKey: "test-api-key")
 
         let target = Target(matchingKey: "user1")
 
         try await configsClient.fetchEvaluations(target: target)
 
         let url = retryableHttpMock.executeCalls[0].endpoint.url.absoluteString
-        XCTAssertTrue(url.contains("withConfig=true"), "URL should contain withConfig param: \(url)")
+        XCTAssertTrue(url.contains("capabilities=evaluatorWithConfigs"), "URL should contain evaluatorWithConfigs capability: \(url)")
     }
 
-    func testExcludesWithConfigParamWhenDisabled() async throws {
+    func testIncludesEvaluationsCapabilityWhenDisabled() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
         let target = Target(matchingKey: "user1")
@@ -140,7 +171,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         try await client.fetchEvaluations(target: target)
 
         let url = retryableHttpMock.executeCalls[0].endpoint.url.absoluteString
-        XCTAssertFalse(url.contains("withConfig"), "URL should not contain withConfig param: \(url)")
+        XCTAssertTrue(url.contains("capabilities=evaluator"), "URL should contain evaluations capability: \(url)")
     }
 
     // MARK: - 401 Retry Flow

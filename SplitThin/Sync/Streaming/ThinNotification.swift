@@ -47,17 +47,21 @@ class EvaluationUpdateNotification: ThinNotification {
     let changeNumber: Int64
     let dataType: NotificationDataType?
     let updateStrategy: UpdateStrategy?
+    let compressionType: CompressionType
     let algorithmSeed: Int?
     let hashingAlgorithm: Int?
     let updateIntervalMs: Int64?
+    let payload: String?
 
-    init(channel: String?, timestamp: Int64, changeNumber: Int64, dataType: NotificationDataType? = nil, updateStrategy: UpdateStrategy? = nil, algorithmSeed: Int? = nil, hashingAlgorithm: Int? = nil, updateIntervalMs: Int64? = nil) {
+    init(channel: String?, timestamp: Int64, changeNumber: Int64, dataType: NotificationDataType? = nil, updateStrategy: UpdateStrategy? = nil, compressionType: CompressionType = .none, algorithmSeed: Int? = nil, hashingAlgorithm: Int? = nil, updateIntervalMs: Int64? = nil, payload: String? = nil) {
         self.changeNumber = changeNumber
         self.dataType = dataType
         self.updateStrategy = updateStrategy
+        self.compressionType = compressionType
         self.algorithmSeed = algorithmSeed
         self.hashingAlgorithm = hashingAlgorithm
         self.updateIntervalMs = updateIntervalMs
+        self.payload = payload
         super.init(type: .evaluationUpdate, channel: channel, timestamp: timestamp)
     }
 }

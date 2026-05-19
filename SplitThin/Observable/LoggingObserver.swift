@@ -78,6 +78,8 @@ final class LoggingObserver: Observer, @unchecked Sendable {
                 Logger.d("JWT stored (secureStorage: \(secureStorage))")
             case .jwtExpiredOrInvalid:
                 Logger.i("JWT expired/invalid, refreshing")
+            case .authUnauthorized:
+                Logger.e("Auth returned 401: invalid API key. Sync will not start.")
 
             // HTTP
             case .httpRequestStarted(let category, let method):
