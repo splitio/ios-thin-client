@@ -167,7 +167,7 @@ final class PollingE2ETest: XCTestCase {
         let listener1 = TestEventListener(readyExpectation: ready1, updateExpectation: update1)
         let listener2 = TestEventListener(readyExpectation: ready2, updateExpectation: update2)
 
-        factory = try buildFactory(httpClient: httpMock, syncMode: .polling, refreshRate: 1, target: "user-A")
+        factory = try buildFactory(httpClient: httpMock, syncMode: .polling, refreshRate: 1, target: Target(matchingKey: "user-A"))
         let client2 = factory.getClient("user-B")
 
         factory.client.addEventListener(listener1)
