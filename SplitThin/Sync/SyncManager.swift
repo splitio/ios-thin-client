@@ -98,7 +98,7 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
                 // Already fetched
                 return
             case .streaming:
-                Task { await streaming.start() }
+                streaming.start()
             case .polling:
                 polling.start()
         }

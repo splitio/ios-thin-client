@@ -102,9 +102,7 @@ extension DefaultSecureHttpClient {
         }
         params.append(("&since", "-1"))
         params.append(("&user", target.matchingKey))
-        if configsEnabled {
-            params.append(("&withConfig", "true"))
-        }
+        params.append(("&capabilities", configsEnabled ? "evaluatorWithConfigs" : "evaluator"))
 
         return params.sorted { $0.0 < $1.0 }.map { "\($0)=\($1)" }.joined() // Automatic sorting
     }
