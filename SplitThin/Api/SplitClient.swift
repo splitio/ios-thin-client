@@ -3,6 +3,7 @@
 
 import Foundation
 import Logging
+import Tracker
 
 public protocol SplitClient: AnyObject {
     var target: Target { get }
@@ -12,7 +13,8 @@ public protocol SplitClient: AnyObject {
     func setTarget(target: Target)
     func addEventListener(_ listener: SplitEventListener)
     func removeEventListener(_ listener: SplitEventListener)
-    func track(eventType: String, value: Double?, properties: EventProperties?)
+    @discardableResult
+    func track(eventType: String, value: Double?, properties: EventProperties?) -> Bool
     func destroy() async
     func flush() async
 }
@@ -25,16 +27,26 @@ final class DefaultSplitClient: SplitClient {
     private let authProvider: AuthProvider
     private let observer: Observer // For SDK events & logging
     private let syncManager: SyncManager
+    private let tracker: Tracker
+    private let eventsTracker: EventsTracker
+    private let eventsScheduler: EventsPeriodicScheduler
+    private let telemetryObserver: TelemetryObserver
+    private let telemetrySubmitter: TelemetrySubmitter
     private var clientListeners = [SplitEventListener]()
     private var isDestroyed = false
 
-    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, authProvider: AuthProvider, observer: Observer, syncManager: SyncManager) {
+    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, authProvider: AuthProvider, observer: Observer, syncManager: SyncManager, tracker: Tracker, eventsTracker: EventsTracker, eventsScheduler: EventsPeriodicScheduler, telemetryObserver: TelemetryObserver, telemetrySubmitter: TelemetrySubmitter) {
         self.target = target
         self.treatmentsManager = treatmentsManager
         self.eventsManager = eventsManager
         self.authProvider = authProvider
         self.observer = observer
         self.syncManager = syncManager
+        self.tracker = tracker
+        self.eventsTracker = eventsTracker
+        self.eventsScheduler = eventsScheduler
+        self.telemetryObserver = telemetryObserver
+        self.telemetrySubmitter = telemetrySubmitter
     }
 
     // MARK: - Evaluations
@@ -76,13 +88,15 @@ final class DefaultSplitClient: SplitClient {
 
     // MARK: - Tracking
 
-    func track(eventType: String, value: Double?, properties: EventProperties?) {
+    @discardableResult
+    func track(eventType: String, value: Double?, properties: EventProperties?) -> Bool {
         guard !isDestroyed else {
             observer.notify(event: .trackDropped(reason: .destroyed))
-            return
+            return false
         }
+
         observer.notify(event: .trackCalled)
-        // TODO: Connect with tracker module
+        return tracker.track(eventType: eventType, trafficType: target.trafficType, value: value, properties: properties, matchingKey: target.matchingKey, isSdkReady: true)
     }
 
     // MARK: - Lifecycle
@@ -93,6 +107,12 @@ final class DefaultSplitClient: SplitClient {
         isDestroyed = true
 
         authProvider.unregister(target: target.matchingKey)
+
+        eventsScheduler.stop()
+        await eventsTracker.flush()
+
+        await telemetryObserver.persistNow()
+        await telemetrySubmitter.flush(count: nil)
 
         for listener in clientListeners {
             eventsManager.removeListener(listener)
@@ -106,8 +126,12 @@ final class DefaultSplitClient: SplitClient {
 
     func flush() async {
         observer.notify(event: .flushStarted(.events))
-        // TODO: Connect with flush module
+        await eventsTracker.flush()
         observer.notify(event: .flushCompleted(.events))
+
+        observer.notify(event: .flushStarted(.telemetry))
+        await telemetrySubmitter.flush(count: nil)
+        observer.notify(event: .flushCompleted(.telemetry))
     }
 }
 

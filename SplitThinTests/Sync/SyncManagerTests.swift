@@ -36,7 +36,7 @@ final class SyncManagerTests: XCTestCase {
         syncManager.pause()
 
         XCTAssertEqual(polling.stopCalls, 1)
-        XCTAssertEqual(streaming.pauseCalls, 1)
+        XCTAssertEqual(streaming.pauseCallCount, 1)
     }
 
     func testPauseMultipleTimesOnlyPausesOnce() {
@@ -47,7 +47,7 @@ final class SyncManagerTests: XCTestCase {
         syncManager.pause()
 
         XCTAssertEqual(polling.stopCalls, 1)
-        XCTAssertEqual(streaming.pauseCalls, 1)
+        XCTAssertEqual(streaming.pauseCallCount, 1)
     }
 
     // MARK: - Resume Tests
@@ -59,7 +59,7 @@ final class SyncManagerTests: XCTestCase {
         syncManager.resume()
 
         XCTAssertEqual(polling.startCalls, 1)
-        XCTAssertEqual(streaming.resumeCalls, 0)
+        XCTAssertEqual(streaming.resumeCallCount, 0)
     }
 
     func testResumeStreamingModeResumesStreaming() {
@@ -69,7 +69,7 @@ final class SyncManagerTests: XCTestCase {
         syncManager.resume()
 
         XCTAssertEqual(polling.startCalls, 0)
-        XCTAssertEqual(streaming.resumeCalls, 1)
+        XCTAssertEqual(streaming.resumeCallCount, 1)
     }
 
     func testResumeSingleSyncModeDoesNothing() {
@@ -79,7 +79,7 @@ final class SyncManagerTests: XCTestCase {
         syncManager.resume()
 
         XCTAssertEqual(polling.startCalls, 0)
-        XCTAssertEqual(streaming.resumeCalls, 0)
+        XCTAssertEqual(streaming.resumeCallCount, 0)
     }
 
     func testResumeWithoutPauseDoesNothing() {
@@ -88,7 +88,7 @@ final class SyncManagerTests: XCTestCase {
         syncManager.resume()
 
         XCTAssertEqual(polling.startCalls, 0)
-        XCTAssertEqual(streaming.resumeCalls, 0)
+        XCTAssertEqual(streaming.resumeCallCount, 0)
     }
 
     func testResumeAfterResumeDoesNothing() {
@@ -118,25 +118,3 @@ final class PeriodicSchedulerMock: EvaluationPeriodicScheduler, @unchecked Senda
     }
 }
 
-final class StreamingMock: Streaming, @unchecked Sendable {
-    var startCalls = 0
-    var stopCalls = 0
-    var pauseCalls = 0
-    var resumeCalls = 0
-
-    func start() async {
-        startCalls += 1
-    }
-
-    func stop() async {
-        stopCalls += 1
-    }
-
-    func pause() {
-        pauseCalls += 1
-    }
-
-    func resume() {
-        resumeCalls += 1
-    }
-}

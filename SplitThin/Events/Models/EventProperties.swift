@@ -3,4 +3,4 @@
 
 import Foundation
 
-public typealias EventProperties = [String: String]
+public typealias EventProperties = [String: Any]

@@ -1,5 +1,6 @@
 import XCTest
 import Http
+import BackoffCounter
 @testable import SplitThin
 
 final class StreamingE2ETest: XCTestCase {
@@ -30,9 +31,9 @@ final class StreamingE2ETest: XCTestCase {
         let sdkUpdate = expectation(description: "SDK update")
         let listener = TestEventListener(readyExpectation: sdkReady, updateExpectation: sdkUpdate)
 
-        var connectionManagerRef: DefaultStreamingConnectionManager?
+        var connectionManagerRef: DefaultStreaming?
         factory = try buildStreamingFactory(target: target) { fetchCoordinator in
-            let cm = DefaultStreamingConnectionManager(target: target, fetchCoordinator: fetchCoordinator, notificationParser: DefaultThinNotificationParser())
+            let cm = DefaultStreaming(target: target, fetchCoordinator: fetchCoordinator, notificationParser: DefaultThinNotificationParser())
             connectionManagerRef = cm
             return cm
         }
@@ -89,8 +90,8 @@ final class StreamingE2ETest: XCTestCase {
         let sdkReady = expectation(description: "SDK ready")
         let listener = TestEventListener(readyExpectation: sdkReady)
 
-        let connectionManagerMock = StreamingConnectionManagerMock()
-        factory = try buildStreamingFactory(target: Target(matchingKey: "user-123")) { _ in connectionManagerMock }
+        let connectionManagerMock = StreamingMock()
+        factory = try buildStreamingFactory(target: "user-123") { _ in connectionManagerMock }
         factory.client.addEventListener(listener)
         waitFor(sdkReady)
 
@@ -165,13 +166,13 @@ final class StreamingE2ETest: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Builds a streaming factory with a real `DefaultStreamingConnectionManager`.
+    /// Builds a streaming factory with a real `DefaultStreaming`.
     /// The returned ref is populated lazily when the streaming manager starts (after SDK ready).
     private func buildStreamingFactory(target: String) throws -> (SplitFactory, ConnectionManagerRef) {
         let t = Target(matchingKey: target)
         let ref = ConnectionManagerRef()
         let factory = try buildStreamingFactory(target: t) { fetchCoordinator in
-            let cm = DefaultStreamingConnectionManager(target: t, fetchCoordinator: fetchCoordinator, notificationParser: DefaultThinNotificationParser())
+            let cm = DefaultStreaming(target: t, fetchCoordinator: fetchCoordinator, notificationParser: DefaultThinNotificationParser())
             ref.value = cm
             return cm
         }
@@ -179,12 +180,12 @@ final class StreamingE2ETest: XCTestCase {
     }
 
     private class ConnectionManagerRef {
-        var value: DefaultStreamingConnectionManager!
+        var value: DefaultStreaming!
         func handleNotification(_ notification: ThinNotification) { value.handleNotification(notification) }
     }
 
     /// Builds a streaming factory with a custom connection manager factory (for mocks).
-    private func buildStreamingFactory(target: Target, connectionManagerFactory: @escaping (EvaluationFetchCoordinator) -> StreamingConnectionManager) throws -> SplitFactory {
+    private func buildStreamingFactory(target: Target, connectionManagerFactory: @escaping (EvaluationFetchCoordinator) -> Streaming) throws -> SplitFactory {
         let config = SplitClientConfig.builder()
                                       .setMinEvaluationRefreshRate(1)
                                       .set(syncMode: .streaming)
@@ -201,6 +202,50 @@ final class StreamingE2ETest: XCTestCase {
             throw NSError(domain: "StreamingE2ETest", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to build factory"])
         }
         return factory
+    }
+
+    func testStreamingRespectsDelayFromAuth() async throws {
+        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"]))
+
+        let delaySeconds = 4
+        let authProviderMock = AuthProviderMock()
+        authProviderMock.credentialToReturn = JwtCredential(token: "fake.jwt.token", expiresAt: Date().addingTimeInterval(3600), pushEnabled: true, connDelay: delaySeconds)
+
+        let parseCalledAt = Box<Date?>(nil)
+        let jwtParserSpy = SseJwtParserSpy { parseCalledAt.value = Date() }
+
+        let target = Target(matchingKey: "user-123")
+        let cm = DefaultStreaming(target: target, authProvider: authProviderMock, streamingEndpoint: URL(string: "https://fake.endpoint")!, httpClient: DefaultHttpClient.shared, fetchCoordinator: EvaluationFetchCoordinatorMock(), notificationParser: DefaultThinNotificationParser(), jwtParser: jwtParserSpy, backoffCounter: DefaultBackoffCounter(backoffBase: 1))
+
+        let startTime = Date()
+        cm.start()
+
+        // Before delay elapses, parser should not have been called
+        try await Task.sleep(nanoseconds: UInt64(delaySeconds - 1) * 1_000_000_000)
+        XCTAssertNil(parseCalledAt.value, "JWT parser should not be called before delay elapses")
+
+        // After delay elapses, parser should have been called
+        try await Task.sleep(nanoseconds: 2_000_000_000)
+        XCTAssertNotNil(parseCalledAt.value, "JWT parser should be called after delay elapses")
+
+        let elapsed = parseCalledAt.value!.timeIntervalSince(startTime)
+        XCTAssertGreaterThanOrEqual(elapsed, Double(delaySeconds) - 0.5, "Connection should be delayed by at least \(delaySeconds)s")
+
+        cm.stop()
+    }
+
+    private class Box<T> {
+        var value: T
+        init(_ value: T) { self.value = value }
+    }
+
+    private class SseJwtParserSpy: SseJwtParser {
+        let onParse: () -> Void
+        init(onParse: @escaping () -> Void) { self.onParse = onParse }
+        func extractChannels(from jwt: String) -> [String]? {
+            onParse()
+            return nil
+        }
     }
 
     private func computeExpectedDelay(key: String, updateIntervalMs: Int64, algorithmSeed: Int) -> TimeInterval {
