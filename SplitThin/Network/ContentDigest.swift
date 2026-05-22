@@ -22,7 +22,8 @@ enum ContentDigest {
     static func buildHashInput(for target: Target) -> String {
         let bucketingKey = target.bucketingKey ?? ""
         let attrsJson = serializeAttributes(target.attributes)
-        return "\(target.matchingKey):\(bucketingKey):\(attrsJson)"
+        //return "\(target.matchingKey):\(bucketingKey):\(attrsJson)" //TODO: mandar solo los atributos
+        return "\(attrsJson)" // TODO: si no mandar 0
     }
 
     private static func serializeAttributes(_ attributes: [String: Any]?) -> String {
