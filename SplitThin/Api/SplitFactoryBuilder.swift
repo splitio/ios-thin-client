@@ -131,7 +131,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         let http = httpClient ?? DefaultHttpClient.shared
         let retryable = retryableHttpClient ?? DefaultRetryableHttpClient(httpClient: http, observer: observer)
         let credStorage = credentialStorage ?? KeychainCredentialStorage(keychainKey: "\(Self.databaseName(prefix: config.prefix, apiKey: sdkKey))_jwt")
-        let fetcher = DefaultCredentialFetcher(retryableHttpClient: retryable, observer: observer, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey, configsEnabled: config.dynamicConfig)
+        let fetcher = DefaultCredentialFetcher(retryableHttpClient: retryable, observer: observer, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey, configsEnabled: config.dynamicConfig, evaluationFilters: evaluationFilters)
         let auth = authProvider ?? DefaultAuthProvider(credentialStorage: credStorage, credentialFetcher: fetcher, observer: observer)
         let client = secureHttpClient ?? DefaultSecureHttpClient(retryableHttpClient: retryable, authProvider: auth, serviceEndpoints: serviceEndpoints, configsEnabled: config.dynamicConfig, apiKey: sdkKey)
         return (client, auth)

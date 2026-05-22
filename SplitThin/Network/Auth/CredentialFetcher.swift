@@ -22,25 +22,33 @@ final class DefaultCredentialFetcher: CredentialFetcher, @unchecked Sendable {
     private let authEndpoint: URL
     private let sdkKey: String
     private let configsEnabled: Bool
+    private let evaluationFilters: EvaluationFilters?
 
-    init(retryableHttpClient: RetryableHttpClient, observer: Observer, authEndpoint: URL, sdkKey: String, configsEnabled: Bool = false) {
+    init(retryableHttpClient: RetryableHttpClient, observer: Observer, authEndpoint: URL, sdkKey: String, configsEnabled: Bool = false, evaluationFilters: EvaluationFilters? = nil) {
         self.retryableHttpClient = retryableHttpClient
         self.observer = observer
         self.authEndpoint = authEndpoint
         self.sdkKey = sdkKey
         self.configsEnabled = configsEnabled
+        self.evaluationFilters = evaluationFilters
     }
 
     func fetchCredential(for users: [String]) async throws -> JwtCredential {
         observer.notify(event: .jwtFetchStarted)
 
-        let usersParam = users.joined(separator: ",")
-        var queryString = "&users=\(usersParam)"
+        var queryString = ""
         if configsEnabled {
-            queryString += "&configs=true"
+            queryString += "&capabilities=evaluatorWithConfigs"
+        } else {
+            queryString += "&capabilities=evaluator"
         }
+        if let flagSets = evaluationFilters?.flagSets, !flagSets.isEmpty {
+            queryString += "&sets=\(flagSets.sorted().joined(separator: ","))"
+        }
+        let usersParam = users.joined(separator: ",")
+        queryString += "&users=\(usersParam)"
 
-        let endpoint = Endpoint.builder(baseUrl: authEndpoint, path: "auth/thin-client", defaultQueryString: queryString)
+        let endpoint = Endpoint.builder(baseUrl: authEndpoint, path: "auth", defaultQueryString: queryString)
                                .set(method: .get)
                                .add(header: "Authorization", withValue: "Bearer \(sdkKey)")
                                .add(header: "Content-Type", withValue: "application/json")
