@@ -44,7 +44,7 @@ final class DefaultCredentialFetcherTest: XCTestCase {
 
         let call = httpClientMock.executeCalls[0]
         XCTAssertEqual(call.category, .auth)
-        XCTAssertTrue(call.endpoint.url.absoluteString.contains("auth/thin-client"))
+        XCTAssertTrue(call.endpoint.url.absoluteString.contains("/auth"))
         XCTAssertTrue(call.endpoint.url.absoluteString.contains("users=user1"))
         XCTAssertEqual(call.endpoint.headers["Authorization"], "Bearer \(sdkKey)")
     }
@@ -131,9 +131,9 @@ final class DefaultCredentialFetcherTest: XCTestCase {
         XCTAssertEqual(credential.expiresAt.timeIntervalSince1970, expTime, accuracy: 1)
     }
 
-    // MARK: - Configs enabled
+    // MARK: - Capabilities
 
-    func testIncludesConfigsParamWhenEnabled() async throws {
+    func testUsesEvaluatorWithConfigsCapabilityWhenDynamicConfigEnabled() async throws {
         let jwt = makeJwt(exp: Date().addingTimeInterval(3600).timeIntervalSince1970)
         let authResponse = "{\"token\":\"\(jwt)\",\"pushEnabled\":true}".data(using: .utf8)!
         httpClientMock.responses = [HttpResponse(code: 200, data: authResponse)]
@@ -143,10 +143,10 @@ final class DefaultCredentialFetcherTest: XCTestCase {
         try await configsFetcher.fetchCredential(for: "user1")
 
         let url = httpClientMock.executeCalls[0].endpoint.url.absoluteString
-        XCTAssertTrue(url.contains("configs=true"), "URL should contain configs param: \(url)")
+        XCTAssertTrue(url.contains("capabilities=evaluatorWithConfigs"), "URL should contain capabilities=evaluatorWithConfigs: \(url)")
     }
 
-    func testExcludesConfigsParamWhenDisabled() async throws {
+    func testUsesEvaluatorCapabilityByDefault() async throws {
         let jwt = makeJwt(exp: Date().addingTimeInterval(3600).timeIntervalSince1970)
         let authResponse = "{\"token\":\"\(jwt)\",\"pushEnabled\":true}".data(using: .utf8)!
         httpClientMock.responses = [HttpResponse(code: 200, data: authResponse)]
@@ -154,7 +154,52 @@ final class DefaultCredentialFetcherTest: XCTestCase {
         try await fetcher.fetchCredential(for: "user1")
 
         let url = httpClientMock.executeCalls[0].endpoint.url.absoluteString
-        XCTAssertFalse(url.contains("configs"), "URL should not contain configs param: \(url)")
+        XCTAssertTrue(url.contains("capabilities=evaluator"), "URL should contain capabilities=evaluator: \(url)")
+        XCTAssertFalse(url.contains("capabilities=evaluatorWithConfigs"), "URL should not contain capabilities=evaluatorWithConfigs: \(url)")
+    }
+
+    // MARK: - Evaluation filters
+
+    func testIncludesFlagSetsParamWhenProvided() async throws {
+        let jwt = makeJwt(exp: Date().addingTimeInterval(3600).timeIntervalSince1970)
+        let authResponse = "{\"token\":\"\(jwt)\",\"pushEnabled\":true}".data(using: .utf8)!
+        httpClientMock.responses = [HttpResponse(code: 200, data: authResponse)]
+
+        let filters = EvaluationFilters(flagSets: ["set_z", "set_a"])
+        let filteredFetcher = DefaultCredentialFetcher(retryableHttpClient: httpClientMock, observer: ObserverSpy(), authEndpoint: authEndpoint, sdkKey: sdkKey, evaluationFilters: filters)
+
+        try await filteredFetcher.fetchCredential(for: "user1")
+
+        let url = httpClientMock.executeCalls[0].endpoint.url.absoluteString
+        XCTAssertTrue(url.contains("sets=set_a,set_z"), "URL should contain alphabetically-sorted sets param: \(url)")
+        XCTAssertFalse(url.contains("names="), "URL should not contain names param when flagNames is nil: \(url)")
+    }
+
+    func testExcludesFilterParamsWhenFiltersAreNil() async throws {
+        let jwt = makeJwt(exp: Date().addingTimeInterval(3600).timeIntervalSince1970)
+        let authResponse = "{\"token\":\"\(jwt)\",\"pushEnabled\":true}".data(using: .utf8)!
+        httpClientMock.responses = [HttpResponse(code: 200, data: authResponse)]
+
+        try await fetcher.fetchCredential(for: "user1")
+
+        let url = httpClientMock.executeCalls[0].endpoint.url.absoluteString
+        XCTAssertFalse(url.contains("names="), "URL should not contain names param: \(url)")
+        XCTAssertFalse(url.contains("sets="), "URL should not contain sets param: \(url)")
+    }
+
+    func testExcludesFilterParamsWhenListsAreEmpty() async throws {
+        let jwt = makeJwt(exp: Date().addingTimeInterval(3600).timeIntervalSince1970)
+        let authResponse = "{\"token\":\"\(jwt)\",\"pushEnabled\":true}".data(using: .utf8)!
+        httpClientMock.responses = [HttpResponse(code: 200, data: authResponse)]
+
+        let filters = EvaluationFilters(flagNames: [], flagSets: [])
+        let filteredFetcher = DefaultCredentialFetcher(retryableHttpClient: httpClientMock, observer: ObserverSpy(), authEndpoint: authEndpoint, sdkKey: sdkKey, evaluationFilters: filters)
+
+        try await filteredFetcher.fetchCredential(for: "user1")
+
+        let url = httpClientMock.executeCalls[0].endpoint.url.absoluteString
+        XCTAssertFalse(url.contains("names="), "URL should not contain names param when flagNames is empty: \(url)")
+        XCTAssertFalse(url.contains("sets="), "URL should not contain sets param when flagSets is empty: \(url)")
     }
 
     // MARK: - Helpers
