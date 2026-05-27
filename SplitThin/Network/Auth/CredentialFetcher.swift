@@ -40,7 +40,7 @@ final class DefaultCredentialFetcher: CredentialFetcher, @unchecked Sendable {
             queryString += "&configs=true"
         }
 
-        let endpoint = Endpoint.builder(baseUrl: authEndpoint, path: "auth/thin-client", defaultQueryString: queryString)
+        let endpoint = Endpoint.builder(baseUrl: authEndpoint, path: "api/v3/auth/thin-client", defaultQueryString: queryString)
                                .set(method: .get)
                                .add(header: "Authorization", withValue: "Bearer \(sdkKey)")
                                .add(header: "Content-Type", withValue: "application/json")

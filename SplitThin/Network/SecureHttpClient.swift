@@ -49,7 +49,7 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
     }
 
     func postEvents(payload: Data) async throws -> HttpResponse {
-        let endpoint = Endpoint.builder(baseUrl: serviceEndpoints.eventsEndpoint, path: "events/bulk")
+        let endpoint = Endpoint.builder(baseUrl: serviceEndpoints.eventsEndpoint, path: "api/events/bulk")
                                .set(method: .post)
                                .add(header: "Content-Type", withValue: "application/json")
                                .add(header: "Authorization", withValue: "Bearer \(apiKey)")
@@ -59,7 +59,7 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
     }
 
     func postTelemetry(payload: Data) async throws -> HttpResponse {
-        let endpoint = Endpoint.builder(baseUrl: serviceEndpoints.telemetryServiceEndpoint, path: "metrics/usage")
+        let endpoint = Endpoint.builder(baseUrl: serviceEndpoints.telemetryServiceEndpoint, path: "api/v1/metrics/usage")
                                .set(method: .post)
                                .add(header: "Content-Type", withValue: "application/json")
                                .build()
@@ -71,7 +71,7 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
         let queryString = buildEvaluationsQueryString(target: target, filters: filters)
         let digest = ContentDigest.compute(for: target)
 
-        let endpoint = Endpoint.builder(baseUrl: serviceEndpoints.sdkEndpoint, path: "evaluations", defaultQueryString: queryString)
+        let endpoint = Endpoint.builder(baseUrl: serviceEndpoints.sdkEndpoint, path: "api/evaluations", defaultQueryString: queryString)
             .set(method: .post)
             .add(header: "Content-Type", withValue: "application/json")
             .add(header: "Authorization", withValue: "Bearer \(token)")

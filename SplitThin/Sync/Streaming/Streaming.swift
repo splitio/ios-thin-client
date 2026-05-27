@@ -243,7 +243,7 @@ final class DefaultStreaming: Streaming, SseHandler, @unchecked Sendable {
 
             let kAblySplitSdkClientKeyLength = 4
             
-            let endpoint = Endpoint.builder(baseUrl: streamingEndpoint).set(method: .get).add(headers:
+            let endpoint = Endpoint.builder(baseUrl: streamingEndpoint, path: "sse").set(method: .get).add(headers:
                                                                                                 ["Content-Type":"text/event-stream",
                                                                                                  "SplitSDKClientKey": "\(String("apiKey".suffix(kAblySplitSdkClientKeyLength)))",
                                                                                                  "SplitSDKVersion":"\(Version.semantic)"]).build()

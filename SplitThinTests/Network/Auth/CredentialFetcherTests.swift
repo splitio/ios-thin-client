@@ -6,7 +6,7 @@ final class DefaultCredentialFetcherTest: XCTestCase {
 
     private var httpClientMock: RetryableHttpClientMock!
     private var fetcher: DefaultCredentialFetcher!
-    private let authEndpoint = URL(string: "https://auth.split.io/api/v3")!
+    private let authEndpoint = URL(string: "https://auth.split.io")!
     private let sdkKey = "test-sdk-key"
 
     override func setUp() {

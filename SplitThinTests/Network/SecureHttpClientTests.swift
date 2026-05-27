@@ -14,7 +14,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         retryableHttpMock = RetryableHttpClientMock()
         authProviderMock = AuthProviderMock()
         authProviderMock.credentialToReturn = makeCredential()
-        serviceEndpoints = ServiceEndpoints.builder().set(sdkEndpoint: "https://evaluator.split.io/api").set(eventsEndpoint: "https://events.split.io/api").set(telemetryServiceEndpoint: "https://telemetry.split.io/api/v1").build()
+        serviceEndpoints = ServiceEndpoints.builder().set(sdkEndpoint: "https://evaluator.split.io").set(eventsEndpoint: "https://events.split.io").set(telemetryServiceEndpoint: "https://telemetry.split.io").build()
         client = DefaultSecureHttpClient(retryableHttpClient: retryableHttpMock, authProvider: authProviderMock, serviceEndpoints: serviceEndpoints, apiKey: "test-api-key")
     }
 

@@ -22,7 +22,7 @@ public struct SplitClientConfig: Sendable {
     let impressionsMode: ImpressionsMode
     let dynamicConfig: Bool
     let logLevel: LogLevel
-    let evaluationRefreshRate: Int
+    let evaluationsRefreshRate: Int
     let timeout: Int
     let prefix: String?
     let pushRate: Int
@@ -34,7 +34,7 @@ public struct SplitClientConfig: Sendable {
         self.impressionsMode = impressionsMode
         self.dynamicConfig = dynamicConfig
         self.logLevel = logLevel
-        self.evaluationRefreshRate = evaluationRefreshRate
+        self.evaluationsRefreshRate = evaluationRefreshRate
         self.timeout = timeout
         self.prefix = prefix
         self.pushRate = pushRate
