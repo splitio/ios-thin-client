@@ -14,7 +14,7 @@ final class SplitClientConfigTest: XCTestCase {
         XCTAssertEqual(config.syncMode, .streaming)
         XCTAssertNil(config.serviceEndpoints)
         XCTAssertEqual(config.impressionsMode, .default)
-        XCTAssertFalse(config.dynamicConfig)
+        XCTAssertFalse(config.configsEnabled)
         XCTAssertNil(config.prefix)
         XCTAssertEqual(config.pushRate, 1800)
     }
@@ -197,14 +197,32 @@ final class SplitClientConfigTest: XCTestCase {
         XCTAssertNotNil(config.serviceEndpoints)
     }
 
-    // MARK: - dynamicConfig
+    // MARK: - configsEnabled
 
-    func testDynamicConfigCanBeEnabled() {
+    func testConfigsEnabledCanBeEnabled() {
         let config = SplitClientConfig.builder()
-                                      .set(dynamicConfig: true)
+                                      .set(configsEnabled: true)
                                       .build()
 
-        XCTAssertTrue(config.dynamicConfig)
+        XCTAssertTrue(config.configsEnabled)
+    }
+
+    // MARK: - evaluationFilters
+
+    func testEvaluationFiltersDefaultsToNil() {
+        let config = SplitClientConfig.builder().build()
+
+        XCTAssertNil(config.evaluationFilters)
+    }
+
+    func testEvaluationFiltersCanBeSet() {
+        let filters = EvaluationFilters(flagNames: ["flag_a"], flagSets: ["set_1"])
+
+        let config = SplitClientConfig.builder()
+                                      .set(evaluationFilters: filters)
+                                      .build()
+
+        XCTAssertEqual(config.evaluationFilters, filters)
     }
 
     // MARK: - Builder chaining
@@ -216,7 +234,7 @@ final class SplitClientConfigTest: XCTestCase {
                                       .set(timeout: 30)
                                       .set(pushRate: 60)
                                       .set(logLevel: .debug)
-                                      .set(dynamicConfig: true)
+                                      .set(configsEnabled: true)
                                       .build()
 
         XCTAssertEqual(config.syncMode, .polling)
@@ -224,6 +242,6 @@ final class SplitClientConfigTest: XCTestCase {
         XCTAssertEqual(config.timeout, 30)
         XCTAssertEqual(config.pushRate, 60)
         XCTAssertEqual(config.logLevel, .debug)
-        XCTAssertTrue(config.dynamicConfig)
+        XCTAssertTrue(config.configsEnabled)
     }
 }

@@ -42,19 +42,19 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
     }
 
     func testBuildSuccessWithAllParams() {
+        let filters = EvaluationFilters(flagNames: ["flag_a"], flagSets: ["set_1"])
         let config = SplitClientConfig.builder()
                                       .set(evaluationRefreshRate: 120)
                                       .set(syncMode: .polling)
+                                      .set(evaluationFilters: filters)
                                       .build()
 
-        let filters = EvaluationFilters(flagNames: ["flag_a"], flagSets: ["set_1"])
         let target = Target(matchingKey: "user1", bucketingKey: "bk1",
                             attributes: ["env": "prod"], trafficType: "user")
 
         let factory = DefaultSplitFactoryBuilder().setSdkKey("api-key-123")
                                                   .setTarget(target)
                                                   .setConfig(config)
-                                                  .setEvaluationFilters(filters)
                                                   .build()
 
         XCTAssertNotNil(factory, "Factory should not be nil with all params")
@@ -112,9 +112,8 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
         let b1 = builder.setSdkKey("key")
         let b2 = b1.setTarget("user1")
         let b3 = b2.setConfig(SplitClientConfig.builder().build())
-        let b4 = b3.setEvaluationFilters(EvaluationFilters())
 
-        XCTAssertNotNil(b4.build())
+        XCTAssertNotNil(b3.build())
     }
 
     // MARK: - databaseName

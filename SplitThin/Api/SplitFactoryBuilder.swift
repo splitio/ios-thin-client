@@ -13,8 +13,6 @@ public protocol SplitFactoryBuilder {
     func setTarget(_ target: Target) -> SplitFactoryBuilder
     @discardableResult
     func setConfig(_ config: SplitClientConfig) -> SplitFactoryBuilder
-    @discardableResult
-    func setEvaluationFilters(_ filters: EvaluationFilters) -> SplitFactoryBuilder
     func build() -> SplitFactory?
 }
 
@@ -23,7 +21,6 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
     private var sdkKey: SdkKey?
     private var target: Target?
     private var config = SplitClientConfig.builder().build()
-    private var evaluationFilters: EvaluationFilters?
     private var httpClient: HttpClient?
     private var authProvider: AuthProvider?
 
@@ -53,12 +50,6 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
     @discardableResult
     public func setConfig(_ config: SplitClientConfig) -> SplitFactoryBuilder {
         self.config = config
-        return self
-    }
-
-    @discardableResult
-    public func setEvaluationFilters(_ filters: EvaluationFilters) -> SplitFactoryBuilder {
-        self.evaluationFilters = filters
         return self
     }
 
@@ -98,7 +89,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         let evaluationStorage = PersistentStorage(storage: coreDataStorage)
 
         let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider, observer: resolvedObserver, storage: evaluationStorage)
-        let evaluationRepository = DefaultEvaluationRepository(fetchCoordinator: fetchCoordinator, evaluationFilters: evaluationFilters)
+        let evaluationRepository = DefaultEvaluationRepository(fetchCoordinator: fetchCoordinator, evaluationFilters: config.evaluationFilters)
         let splitManager = DefaultSplitManager(evaluationRepository: evaluationRepository, target: target)
 
         // Streaming
@@ -118,7 +109,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
 
         let telemetryStorage = DefaultTelemetryStorage(storage: coreDataStorage)
 
-        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: evaluationFilters, secureHttpClient: secureHttp, authProvider: resolvedAuth, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, streaming: streaming, evaluationStorage: evaluationStorage, coreDataStorage: coreDataStorage, splitManager: splitManager, factoryObserver: resolvedObserver, telemetryStorage: telemetryStorage)
+        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: config.evaluationFilters, secureHttpClient: secureHttp, authProvider: resolvedAuth, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, streaming: streaming, evaluationStorage: evaluationStorage, coreDataStorage: coreDataStorage, splitManager: splitManager, factoryObserver: resolvedObserver, telemetryStorage: telemetryStorage)
     }
 
     private func configureLogger() {
@@ -131,9 +122,9 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         let http = httpClient ?? DefaultHttpClient.shared
         let retryable = retryableHttpClient ?? DefaultRetryableHttpClient(httpClient: http, observer: observer)
         let credStorage = credentialStorage ?? KeychainCredentialStorage(keychainKey: "\(Self.databaseName(prefix: config.prefix, apiKey: sdkKey))_jwt")
-        let fetcher = DefaultCredentialFetcher(retryableHttpClient: retryable, observer: observer, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey, configsEnabled: config.dynamicConfig, evaluationFilters: evaluationFilters)
+        let fetcher = DefaultCredentialFetcher(retryableHttpClient: retryable, observer: observer, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey, configsEnabled: config.configsEnabled, evaluationFilters: config.evaluationFilters)
         let auth = authProvider ?? DefaultAuthProvider(credentialStorage: credStorage, credentialFetcher: fetcher, observer: observer)
-        let client = secureHttpClient ?? DefaultSecureHttpClient(retryableHttpClient: retryable, authProvider: auth, serviceEndpoints: serviceEndpoints, configsEnabled: config.dynamicConfig, apiKey: sdkKey)
+        let client = secureHttpClient ?? DefaultSecureHttpClient(retryableHttpClient: retryable, authProvider: auth, serviceEndpoints: serviceEndpoints, configsEnabled: config.configsEnabled, apiKey: sdkKey)
         return (client, auth)
     }
 
