@@ -30,11 +30,20 @@ class ThinNotification {
     }
 }
 
-enum NotificationDataType: Int {
+enum NotificationDataType: Int, CustomStringConvertible {
     case flagUpdate = 0  // Flag
     case rbsUpdate = 1   // Rule Based Segment
     case sUpdate = 2     // Segment  
     case lsUpdate = 3    // Large Segment
+
+    var description: String {
+        switch self {
+            case .flagUpdate: "Flag"
+            case .rbsUpdate: "Rule Based Segment"
+            case .sUpdate: "Segment"
+            case .lsUpdate: "Large Segment"
+        }
+    }
 }
 
 enum UpdateStrategy: Int {

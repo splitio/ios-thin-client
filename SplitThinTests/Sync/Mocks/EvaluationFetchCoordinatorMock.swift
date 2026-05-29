@@ -12,6 +12,7 @@ final class EvaluationFetchCoordinatorMock: EvaluationFetchCoordinator, @uncheck
     var errorToThrow: Error?
     var onFetchCallback: (() -> Void)?
     var onRefetchAllCallback: (() -> Void)?
+    var onRefetchKeysCallback: (() -> Void)?
     var registeredMatchingKeys: [String] = []
 
     private let lock = NSLock()
@@ -30,7 +31,7 @@ final class EvaluationFetchCoordinatorMock: EvaluationFetchCoordinator, @uncheck
 
     func refetchKeys(_ matchingKeys: Set<String>, delay: RefetchDelay) async {
         withLock(lock) { refetchKeysCalls.append((matchingKeys, delay)) }
-        onRefetchAllCallback?()
+        onRefetchKeysCallback?()
     }
 
     func unregister(target: Target) {

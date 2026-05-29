@@ -22,37 +22,34 @@ class DefaultStreamingTest: XCTestCase {
     // MARK: - handleNotification
 
     func testEvaluationUpdateCallsRefetchAll() async {
-        let refetched = expectation(description: "refetchAll called")
-        fetchCoordinatorMock.onRefetchAllCallback = { refetched.fulfill() }
+        let refetchAll = expectation()
+        fetchCoordinatorMock.onRefetchAllCallback = { refetchAll.fulfill() }
 
         let notification = EvaluationUpdateNotification(channel: "ch1", timestamp: 1000, changeNumber: 99)
         streaming.handleNotification(notification)
 
-        await fulfillment(of: [refetched], timeout: 2)
-        XCTAssertEqual(fetchCoordinatorMock.refetchAllCalls.count, 1)
+        waitFor(refetchAll)
         XCTAssertEqual(fetchCoordinatorMock.fetchCalls.count, 0)
     }
 
     func testControlNotificationDoesNotTriggerFetch() async throws {
-        let shouldNotFetch = expectation(description: "shouldNotFetch")
-        shouldNotFetch.isInverted = true
+        let shouldNotFetch = expectation().inverted()
         fetchCoordinatorMock.onFetchCallback = { shouldNotFetch.fulfill() }
 
         let notification = ThinControlNotification(channel: "ctrl", timestamp: 1000, controlType: .streamingPaused)
         streaming.handleNotification(notification)
 
-        await fulfillment(of: [shouldNotFetch], timeout: 0.3)
+        waitFor(shouldNotFetch, timeout: 0.3)
     }
 
     func testOccupancyNotificationDoesNotTriggerFetch() async {
-        let shouldNotFetch = expectation(description: "shouldNotFetch")
-        shouldNotFetch.isInverted = true
+        let shouldNotFetch = expectation().inverted()
         fetchCoordinatorMock.onFetchCallback = { shouldNotFetch.fulfill() }
 
         let notification = ThinOccupancyNotification(channel: "[?occupancy=metrics.publishers]ch1", timestamp: 1000, publishers: 2)
         streaming.handleNotification(notification)
 
-        await fulfillment(of: [shouldNotFetch], timeout: 0.3)
+        waitFor(shouldNotFetch, timeout: 0.3)
     }
 
     func testStreamingDisabledControlStopsManager() {
@@ -79,8 +76,8 @@ class DefaultStreamingTest: XCTestCase {
     }
 
     func testHandleIncomingMessageCallsRefetchAll() async {
-        let refetched = expectation(description: "refetchAll called")
-        fetchCoordinatorMock.onRefetchAllCallback = { refetched.fulfill() }
+        let refetchAll = expectation()
+        fetchCoordinatorMock.onRefetchAllCallback = { refetchAll.fulfill() }
 
         let innerData = "{\"type\":\"EVALUATIONS_UPDATE\",\"changeNumber\":55}"
         let escaped = innerData.replacingOccurrences(of: "\\", with: "\\\\")
@@ -89,8 +86,7 @@ class DefaultStreamingTest: XCTestCase {
             "data": "{\"channel\":\"ch1\",\"data\":\"\(escaped)\",\"timestamp\":1000}"
         ])
 
-        await fulfillment(of: [refetched], timeout: 2)
-        XCTAssertEqual(fetchCoordinatorMock.refetchAllCalls.count, 1)
+        waitFor(refetchAll)
     }
 
     func testHandleIncomingMessageWithMissingDataDoesNothing() {
@@ -161,8 +157,8 @@ class DefaultStreamingTest: XCTestCase {
     // MARK: - Lifecycle
 
     func testPauseAndResumeChangesState() async {
-        let refetched = expectation(description: "refetchAll called after resume")
-        fetchCoordinatorMock.onRefetchAllCallback = { refetched.fulfill() }
+        let refetchAll = expectation()
+        fetchCoordinatorMock.onRefetchAllCallback = { refetchAll.fulfill() }
 
         streaming.pause()
         streaming.resume()
@@ -171,7 +167,7 @@ class DefaultStreamingTest: XCTestCase {
         let notification = EvaluationUpdateNotification(channel: "ch1", timestamp: 1000, changeNumber: 1)
         streaming.handleNotification(notification)
 
-        await fulfillment(of: [refetched], timeout: 2)
+        waitFor(refetchAll)
     }
 
     func testStopPreventsSubsequentStart() {
@@ -198,15 +194,15 @@ class DefaultStreamingTest: XCTestCase {
 
         streaming = DefaultStreaming(target: target, fetchCoordinator: fetchCoordinatorMock, notificationParser: DefaultThinNotificationParser(), payloadDecoder: decoderMock)
 
-        let called = expectation(description: "refetchKeys called")
-        fetchCoordinatorMock.onRefetchAllCallback = { called.fulfill() }
+        let refetchKeys = expectation()
+        fetchCoordinatorMock.onRefetchKeysCallback = { refetchKeys.fulfill() }
 
         let notification = EvaluationUpdateNotification(channel: "ch1", timestamp: 1000, changeNumber: 2, updateStrategy: .boundedFetchRequest, compressionType: .gzip, payload: "some-payload")
         streaming.handleNotification(notification)
 
-        await fulfillment(of: [called], timeout: 2)
-        XCTAssertEqual(fetchCoordinatorMock.refetchKeysCalls.count, 1)
+        waitFor(refetchKeys)
         XCTAssertEqual(fetchCoordinatorMock.refetchKeysCalls.first?.matchingKeys, ["user1"])
+        XCTAssertEqual(fetchCoordinatorMock.refetchAllCalls.count, 0, "refetchAll should not be called when bounded strategy succeeds")
     }
 
     func testBoundedFallsBackToRefetchAllOnDecodingError() async {
@@ -216,27 +212,25 @@ class DefaultStreamingTest: XCTestCase {
 
         streaming = DefaultStreaming(target: target, fetchCoordinator: fetchCoordinatorMock, notificationParser: DefaultThinNotificationParser(), payloadDecoder: decoderMock)
 
-        let called = expectation(description: "refetchAll fallback called")
-        fetchCoordinatorMock.onRefetchAllCallback = { called.fulfill() }
+        let refetchAll = expectation()
+        fetchCoordinatorMock.onRefetchAllCallback = { refetchAll.fulfill() }
 
         let notification = EvaluationUpdateNotification(channel: "ch1", timestamp: 1000, changeNumber: 2, updateStrategy: .boundedFetchRequest, compressionType: .gzip, payload: "bad")
         streaming.handleNotification(notification)
 
-        await fulfillment(of: [called], timeout: 2)
-        XCTAssertEqual(fetchCoordinatorMock.refetchAllCalls.count, 1)
+        waitFor(refetchAll)
     }
 
     func testBoundedFallsBackToRefetchAllOnMissingPayload() async {
         fetchCoordinatorMock.registeredMatchingKeys = ["user1"]
 
-        let called = expectation(description: "refetchAll fallback called")
-        fetchCoordinatorMock.onRefetchAllCallback = { called.fulfill() }
+        let refetchAll = expectation()
+        fetchCoordinatorMock.onRefetchAllCallback = { refetchAll.fulfill() }
 
         let notification = EvaluationUpdateNotification(channel: "ch1", timestamp: 1000, changeNumber: 2, updateStrategy: .boundedFetchRequest, compressionType: .gzip, payload: nil)
         streaming.handleNotification(notification)
 
-        await fulfillment(of: [called], timeout: 2)
-        XCTAssertEqual(fetchCoordinatorMock.refetchAllCalls.count, 1)
+        waitFor(refetchAll)
     }
 
     func testKeyListOnlyRefetchesAffectedKeys() async {
@@ -246,15 +240,15 @@ class DefaultStreamingTest: XCTestCase {
 
         streaming = DefaultStreaming(target: target, fetchCoordinator: fetchCoordinatorMock, notificationParser: DefaultThinNotificationParser(), payloadDecoder: decoderMock)
 
-        let called = expectation(description: "refetchKeys called")
-        fetchCoordinatorMock.onRefetchAllCallback = { called.fulfill() }
+        let refetchKeys = expectation()
+        fetchCoordinatorMock.onRefetchKeysCallback = { refetchKeys.fulfill() }
 
         let notification = EvaluationUpdateNotification(channel: "ch1", timestamp: 1000, changeNumber: 2, updateStrategy: .keyList, compressionType: .gzip, payload: "some-payload")
         streaming.handleNotification(notification)
 
-        await fulfillment(of: [called], timeout: 2)
-        XCTAssertEqual(fetchCoordinatorMock.refetchKeysCalls.count, 1)
+        waitFor(refetchKeys)
         XCTAssertEqual(fetchCoordinatorMock.refetchKeysCalls.first?.matchingKeys, ["user2"])
+        XCTAssertEqual(fetchCoordinatorMock.refetchAllCalls.count, 0, "refetchAll should not be called when keyList strategy succeeds")
     }
 
     func testKeyListFallsBackToRefetchAllOnError() async {
@@ -264,24 +258,55 @@ class DefaultStreamingTest: XCTestCase {
 
         streaming = DefaultStreaming(target: target, fetchCoordinator: fetchCoordinatorMock, notificationParser: DefaultThinNotificationParser(), payloadDecoder: decoderMock)
 
-        let called = expectation(description: "refetchAll fallback called")
-        fetchCoordinatorMock.onRefetchAllCallback = { called.fulfill() }
+        let refetchAll = expectation()
+        fetchCoordinatorMock.onRefetchAllCallback = { refetchAll.fulfill() }
 
         let notification = EvaluationUpdateNotification(channel: "ch1", timestamp: 1000, changeNumber: 2, updateStrategy: .keyList, compressionType: .gzip, payload: "bad")
         streaming.handleNotification(notification)
 
-        await fulfillment(of: [called], timeout: 2)
-        XCTAssertEqual(fetchCoordinatorMock.refetchAllCalls.count, 1)
+        waitFor(refetchAll)
+    }
+
+    func testKeyListFallsBackToRefetchAllOnMissingPayload() async {
+        let decoderMock = PayloadDecoderMock()
+        fetchCoordinatorMock.registeredMatchingKeys = ["user1"]
+
+        streaming = DefaultStreaming(target: target, fetchCoordinator: fetchCoordinatorMock, notificationParser: DefaultThinNotificationParser(), payloadDecoder: decoderMock)
+
+        let refetchAll = expectation()
+        fetchCoordinatorMock.onRefetchAllCallback = { refetchAll.fulfill() }
+
+        let notification = EvaluationUpdateNotification(channel: "ch1", timestamp: 1000, changeNumber: 2, updateStrategy: .keyList, compressionType: .gzip, payload: nil)
+        streaming.handleNotification(notification)
+
+        waitFor(refetchAll)
+    }
+
+    func testKeyListRefetchesRemovedKeys() async {
+        let decoderMock = PayloadDecoderMock()
+        decoderMock.keyListResult = KeyList(added: [], removed: [Murmur64x128.hashKey("user1")])
+        fetchCoordinatorMock.registeredMatchingKeys = ["user1", "user2"]
+
+        streaming = DefaultStreaming(target: target, fetchCoordinator: fetchCoordinatorMock, notificationParser: DefaultThinNotificationParser(), payloadDecoder: decoderMock)
+
+        let refetchKeys = expectation()
+        fetchCoordinatorMock.onRefetchKeysCallback = { refetchKeys.fulfill() }
+
+        let notification = EvaluationUpdateNotification(channel: "ch1", timestamp: 1000, changeNumber: 2, updateStrategy: .keyList, compressionType: .gzip, payload: "some-payload")
+        streaming.handleNotification(notification)
+
+        waitFor(refetchKeys)
+        XCTAssertEqual(fetchCoordinatorMock.refetchKeysCalls.first?.matchingKeys, ["user1"])
+        XCTAssertEqual(fetchCoordinatorMock.refetchAllCalls.count, 0, "refetchAll should not be called when keyList strategy succeeds")
     }
 
     func testFetchAllStrategyCallsRefetchAll() async {
-        let called = expectation(description: "refetchAll called")
-        fetchCoordinatorMock.onRefetchAllCallback = { called.fulfill() }
+        let refetchAll = expectation()
+        fetchCoordinatorMock.onRefetchAllCallback = { refetchAll.fulfill() }
 
         let notification = EvaluationUpdateNotification(channel: "ch1", timestamp: 1000, changeNumber: 2, updateStrategy: .fetchAll)
         streaming.handleNotification(notification)
 
-        await fulfillment(of: [called], timeout: 2)
-        XCTAssertEqual(fetchCoordinatorMock.refetchAllCalls.count, 1)
+        waitFor(refetchAll)
     }
 }
