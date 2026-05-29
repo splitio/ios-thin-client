@@ -34,7 +34,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         XCTAssertEqual(endpoint.headers["Authorization"], "Bearer jwt-token")
     }
 
-    func testFetchEvaluationsIncludesUserQueryParam() async throws {
+    func testFetchEvaluationsUrlContainsOnlySinceQueryParam() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
         let target = Target(matchingKey: "lucrap")
@@ -42,89 +42,131 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         try await client.fetchEvaluations(target: target)
 
         let url = retryableHttpMock.executeCalls[0].endpoint.url.absoluteString
-        XCTAssertTrue(url.contains("user=lucrap"), "URL should contain user param: \(url)")
         XCTAssertTrue(url.contains("since=-1"), "URL should contain since param: \(url)")
+        XCTAssertFalse(url.contains("key="), "key should be in body, not URL: \(url)")
+        XCTAssertFalse(url.contains("capabilities="), "capabilities should not be in URL anymore: \(url)")
+        XCTAssertFalse(url.contains("sets="), "sets should be in body, not URL: \(url)")
+        XCTAssertFalse(url.contains("names="), "names should not be sent at all: \(url)")
     }
 
-    func testFetchEvaluationsIncludesFlagNames() async throws {
+    func testFetchEvaluationsBodyIncludesKey() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
-        let target = Target(matchingKey: "user1")
-        let filters = EvaluationFilters(flagNames: ["flag1", "flag2"])
+        let target = Target(matchingKey: "lucrap")
 
-        _ = try await client.fetchEvaluations(target: target, filters: filters)
+        try await client.fetchEvaluations(target: target)
 
-        let url = retryableHttpMock.executeCalls[0].endpoint.url.absoluteString
-        XCTAssertTrue(url.contains("names=flag1,flag2"), "URL should contain names param: \(url)")
+        let body = try parseBody(retryableHttpMock.executeCalls[0].body)
+        XCTAssertEqual(body["key"] as? String, "lucrap")
     }
 
-    func testFetchEvaluationsIncludesFlagSets() async throws {
+    func testFetchEvaluationsBodyIncludesBucketingKeyWhenSet() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
-        let target = Target(matchingKey: "user1")
-        let filters = EvaluationFilters(flagSets: ["setA", "setB"])
+        let target = Target(matchingKey: "user1", bucketingKey: "bucket-42")
 
-        _ = try await client.fetchEvaluations(target: target, filters: filters)
+        try await client.fetchEvaluations(target: target)
 
-        let url = retryableHttpMock.executeCalls[0].endpoint.url.absoluteString
-        XCTAssertTrue(url.contains("sets=setA,setB"), "URL should contain sets param: \(url)")
+        let body = try parseBody(retryableHttpMock.executeCalls[0].body)
+        XCTAssertEqual(body["bucketingKey"] as? String, "bucket-42")
     }
 
-    func testFetchEvaluationsIncludesBothNamesAndSets() async throws {
-        retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
-
-        let target = Target(matchingKey: "user1")
-        let filters = EvaluationFilters(flagNames: ["flag2", "flag1"], flagSets: ["setC", "setA"])
-
-        _ = try await client.fetchEvaluations(target: target, filters: filters)
-
-        let url = retryableHttpMock.executeCalls[0].endpoint.url.absoluteString
-        XCTAssertTrue(url.contains("names=flag1,flag2"), "Names should be sorted: \(url)")
-        XCTAssertTrue(url.contains("sets=setA,setC"), "Sets should be sorted: \(url)")
-    }
-
-    func testFetchEvaluationsQueryParamsAreAlphabetical() async throws {
-        retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
-        let configsClient = DefaultSecureHttpClient(retryableHttpClient: retryableHttpMock, authProvider: authProviderMock, serviceEndpoints: serviceEndpoints, configsEnabled: true, apiKey: "test-api-key")
-
-        let target = Target(matchingKey: "user1")
-        let filters = EvaluationFilters(flagNames: ["z_flag"])
-
-        _ = try await configsClient.fetchEvaluations(target: target, filters: filters)
-
-        let url = retryableHttpMock.executeCalls[0].endpoint.url.absoluteString
-        let namesIdx = url.range(of: "names=")!.lowerBound
-        let sinceIdx = url.range(of: "since=")!.lowerBound
-        let userIdx = url.range(of: "user=")!.lowerBound
-        let capabilitiesIdx = url.range(of: "capabilities=")!.lowerBound
-        XCTAssertTrue(capabilitiesIdx < namesIdx, "capabilities should come before names")
-        XCTAssertTrue(namesIdx < sinceIdx, "names should come before since")
-        XCTAssertTrue(sinceIdx < userIdx, "since should come before user")
-    }
-
-    func testFetchEvaluationsSendsEmptyBodyWhenNoAttributes() async throws {
+    func testFetchEvaluationsBodyOmitsBucketingKeyWhenNil() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
         let target = Target(matchingKey: "user1")
 
         try await client.fetchEvaluations(target: target)
 
-        let body = retryableHttpMock.executeCalls[0].body
-        XCTAssertEqual(body, "{}".data(using: .utf8))
+        let body = try parseBody(retryableHttpMock.executeCalls[0].body)
+        XCTAssertNil(body["bucketingKey"])
     }
 
-    func testFetchEvaluationsSendsAttributesInBody() async throws {
+    func testFetchEvaluationsBodyIncludesFlagSetsAsArray() async throws {
+        retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
+
+        let target = Target(matchingKey: "user1")
+        let filters = EvaluationFilters(flagSets: ["setB", "setA"])
+
+        try await client.fetchEvaluations(target: target, filters: filters)
+
+        let body = try parseBody(retryableHttpMock.executeCalls[0].body)
+        XCTAssertEqual(body["sets"] as? [String], ["setA", "setB"], "sets should be sorted")
+    }
+
+    func testFetchEvaluationsBodyOmitsFlagSetsWhenEmpty() async throws {
+        retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
+
+        let target = Target(matchingKey: "user1")
+
+        try await client.fetchEvaluations(target: target, filters: EvaluationFilters(flagSets: []))
+
+        let body = try parseBody(retryableHttpMock.executeCalls[0].body)
+        XCTAssertNil(body["sets"])
+    }
+
+    func testFetchEvaluationsBodyExcludesNamesEvenWhenProvided() async throws {
+        retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
+
+        let target = Target(matchingKey: "user1")
+        let filters = EvaluationFilters(flagNames: ["flag1", "flag2"])
+
+        try await client.fetchEvaluations(target: target, filters: filters)
+
+        let body = try parseBody(retryableHttpMock.executeCalls[0].body)
+        XCTAssertNil(body["names"], "names is not supported in the body yet")
+    }
+
+    func testFetchEvaluationsBodyOmitsAttributesWhenNoneProvided() async throws {
+        retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
+
+        let target = Target(matchingKey: "user1")
+
+        try await client.fetchEvaluations(target: target)
+
+        let body = try parseBody(retryableHttpMock.executeCalls[0].body)
+        XCTAssertNil(body["attributes"])
+    }
+
+    func testFetchEvaluationsBodyKeysAreAlphabeticallySorted() async throws {
+        retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
+        let configsClient = DefaultSecureHttpClient(retryableHttpClient: retryableHttpMock, authProvider: authProviderMock, serviceEndpoints: serviceEndpoints, configsEnabled: true, apiKey: "test-api-key")
+
+        let target = Target(matchingKey: "user1", bucketingKey: "bk-1", attributes: ["zebra": "z", "alpha": "a"])
+        let filters = EvaluationFilters(flagSets: ["setA"])
+
+        try await configsClient.fetchEvaluations(target: target, filters: filters)
+
+        let bodyString = String(data: retryableHttpMock.executeCalls[0].body!, encoding: .utf8)!
+
+        // Top-level keys must appear in alphabetical order: attributes < bucketingKey < configs < key < sets
+        let attributesIdx = bodyString.range(of: "\"attributes\"")!.lowerBound
+        let bucketingKeyIdx = bodyString.range(of: "\"bucketingKey\"")!.lowerBound
+        let configsIdx = bodyString.range(of: "\"configs\"")!.lowerBound
+        let keyIdx = bodyString.range(of: "\"key\"")!.lowerBound
+        let setsIdx = bodyString.range(of: "\"sets\"")!.lowerBound
+        XCTAssertTrue(attributesIdx < bucketingKeyIdx, "attributes should come before bucketingKey: \(bodyString)")
+        XCTAssertTrue(bucketingKeyIdx < configsIdx, "bucketingKey should come before configs: \(bodyString)")
+        XCTAssertTrue(configsIdx < keyIdx, "configs should come before key: \(bodyString)")
+        XCTAssertTrue(keyIdx < setsIdx, "key should come before sets: \(bodyString)")
+
+        // Nested attribute keys also sorted: alpha < zebra
+        let alphaIdx = bodyString.range(of: "\"alpha\"")!.lowerBound
+        let zebraIdx = bodyString.range(of: "\"zebra\"")!.lowerBound
+        XCTAssertTrue(alphaIdx < zebraIdx, "nested attribute keys should also be sorted: \(bodyString)")
+    }
+
+    func testFetchEvaluationsBodyIncludesAttributesWhenProvided() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
         let target = Target(matchingKey: "user1", attributes: ["plan": "enterprise", "role": "admin"])
 
         try await client.fetchEvaluations(target: target)
 
-        let body = retryableHttpMock.executeCalls[0].body!
-        let parsed = try JSONSerialization.jsonObject(with: body) as! [String: Any]
-        let attributes = parsed["attributes"] as! [String: String]
-        XCTAssertEqual(attributes["plan"], "enterprise")
-        XCTAssertEqual(attributes["role"], "admin")
+        let body = try parseBody(retryableHttpMock.executeCalls[0].body)
+        let attributes = body["attributes"] as? [String: String]
+        XCTAssertEqual(attributes?["plan"], "enterprise")
+        XCTAssertEqual(attributes?["role"], "admin")
     }
 
     func testFetchEvaluationsIncludesContentDigestHeader() async throws {
@@ -135,7 +177,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         try await client.fetchEvaluations(target: target)
 
         let endpoint = retryableHttpMock.executeCalls[0].endpoint
-        XCTAssertEqual(endpoint.headers["X-Harness-FME-Content-Digest"], "EVu1Yxs6Jvs")
+        XCTAssertEqual(endpoint.headers["X-Harness-FME-Content-Digest"], "7Q3YUSpyReg")
     }
 
     func testFetchEvaluationsUsesEvaluationsCategory() async throws {
@@ -150,7 +192,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
 
     // MARK: - Configs enabled
 
-    func testIncludesEvaluatorWithConfigsCapabilityWhenEnabled() async throws {
+    func testBodyIncludesConfigsTrueWhenEnabled() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
         let configsClient = DefaultSecureHttpClient(retryableHttpClient: retryableHttpMock, authProvider: authProviderMock, serviceEndpoints: serviceEndpoints, configsEnabled: true, apiKey: "test-api-key")
 
@@ -158,19 +200,19 @@ final class DefaultSecureHttpClientTest: XCTestCase {
 
         try await configsClient.fetchEvaluations(target: target)
 
-        let url = retryableHttpMock.executeCalls[0].endpoint.url.absoluteString
-        XCTAssertTrue(url.contains("capabilities=evaluatorWithConfigs"), "URL should contain evaluatorWithConfigs capability: \(url)")
+        let body = try parseBody(retryableHttpMock.executeCalls[0].body)
+        XCTAssertEqual(body["configs"] as? Bool, true)
     }
 
-    func testIncludesEvaluationsCapabilityWhenDisabled() async throws {
+    func testBodyIncludesConfigsFalseWhenDisabled() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
         let target = Target(matchingKey: "user1")
 
         try await client.fetchEvaluations(target: target)
 
-        let url = retryableHttpMock.executeCalls[0].endpoint.url.absoluteString
-        XCTAssertTrue(url.contains("capabilities=evaluator"), "URL should contain evaluations capability: \(url)")
+        let body = try parseBody(retryableHttpMock.executeCalls[0].body)
+        XCTAssertEqual(body["configs"] as? Bool, false)
     }
 
     // MARK: - 401 Retry Flow
@@ -246,8 +288,51 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         XCTAssertEqual(retryableHttpMock.executeCalls[0].category, .telemetry)
     }
 
+    // MARK: - contentDigest
+
+    func testContentDigestEmptyJsonObject() {
+        let digest = DefaultSecureHttpClient.contentDigest(for: Data("{}".utf8))
+
+        XCTAssertEqual(digest, "J8dGcK23UHU")
+    }
+
+    func testContentDigestFullEvaluationsBody() {
+        let body = Data(#"{"attributes":{"age":200,"colors":["green","red"],"country":"arg","version":"3.0.0"},"bucketingKey":123,"configs":true,"key":"mauro","sets":["set_a","set_b"]}"#.utf8)
+
+        let digest = DefaultSecureHttpClient.contentDigest(for: body)
+
+        XCTAssertEqual(digest, "UiiSm/lWBfs")
+    }
+
+    func testContentDigestIsDeterministic() {
+        let body = Data(#"{"configs":false,"key":"user1"}"#.utf8)
+
+        XCTAssertEqual(DefaultSecureHttpClient.contentDigest(for: body), DefaultSecureHttpClient.contentDigest(for: body))
+    }
+
+    func testContentDigestDifferentInputsProduceDifferentDigests() {
+        let bodyA = Data(#"{"configs":false,"key":"alice"}"#.utf8)
+        let bodyB = Data(#"{"configs":false,"key":"bob"}"#.utf8)
+
+        XCTAssertNotEqual(DefaultSecureHttpClient.contentDigest(for: bodyA), DefaultSecureHttpClient.contentDigest(for: bodyB))
+    }
+
+    func testContentDigestHasNoBase64Padding() {
+        let digest = DefaultSecureHttpClient.contentDigest(for: Data("{}".utf8))
+
+        XCTAssertFalse(digest.contains("="), "digest should be base64 without padding: \(digest)")
+    }
+
     // MARK: - Helpers
     private func makeCredential(token: String = "test-token") -> JwtCredential {
         JwtCredential(token: token, expiresAt: Date().addingTimeInterval(3600), pushEnabled: true)
+    }
+
+    private func parseBody(_ data: Data?) throws -> [String: Any] {
+        guard let data, let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            XCTFail("Body could not be parsed as JSON object")
+            return [:]
+        }
+        return parsed
     }
 }

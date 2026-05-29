@@ -1,6 +1,7 @@
 //  Created by Martin Cardozo
 //  Copyright © 2026 Harness. All rights reserved
 
+import CryptoKit
 import Foundation
 import Http
 import Logging
@@ -68,17 +69,16 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
     }
 
     private func performEvaluationsRequest(target: Target, filters: EvaluationFilters?, token: String) async throws -> HttpResponse {
-        let queryString = buildEvaluationsQueryString(target: target, filters: filters)
-        let digest = ContentDigest.compute(for: target)
+        let body = buildEvaluationsBody(target: target, filters: filters)
+        let digest = body.map(Self.contentDigest(for:)) ?? ""
 
-        let endpoint = Endpoint.builder(baseUrl: serviceEndpoints.sdkEndpoint, path: "api/evaluations", defaultQueryString: queryString)
+        let endpoint = Endpoint.builder(baseUrl: serviceEndpoints.sdkEndpoint, path: "api/evaluations", defaultQueryString: "&since=-1")
             .set(method: .post)
             .add(header: "Content-Type", withValue: "application/json")
             .add(header: "Authorization", withValue: "Bearer \(token)")
             .add(header: "X-Harness-FME-Content-Digest", withValue: digest)
             .build()
-        
-        let body = serializeAttributes(target.attributes)
+
         return try await retryableHttpClient.execute(endpoint, category: .evaluations, body: body)
     }
 }
@@ -87,39 +87,43 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
 extension DefaultSecureHttpClient {
 
     //
-    // Evaluations URL query (ensures it will always arrive in alphabetical order, even if new params are added).
+    // Evaluations request body.
     //
-    // In case of adding *lists* as values, make sure they are ordered as well using .sorted()
+    // Always includes `configs` and `key`. Optional fields (`attributes`, `bucketingKey`, `sets`)
+    // are omitted when not set / empty. `sets` is sorted to ensure determinism.
     //
-    private func buildEvaluationsQueryString(target: Target, filters: EvaluationFilters?) -> String {
-        var params: [(String, String)] = []
+    private func buildEvaluationsBody(target: Target, filters: EvaluationFilters?) -> Data? {
+        var body: [String: Any] = [
+            "configs": configsEnabled,
+            "key": target.matchingKey
+        ]
 
-        if let flagNames = filters?.flagNames, !flagNames.isEmpty {
-            params.append(("&names", flagNames.sorted().joined(separator: ","))) // Automatic sorting
+        if let bucketingKey = target.bucketingKey {
+            body["bucketingKey"] = bucketingKey
+        }
+        if let attributes = target.attributes, !attributes.isEmpty, JSONSerialization.isValidJSONObject(attributes) {
+            body["attributes"] = attributes
         }
         if let flagSets = filters?.flagSets, !flagSets.isEmpty {
-            params.append(("&sets", flagSets.sorted().joined(separator: ","))) // Automatic sorting
-        }
-        params.append(("&since", "-1"))
-        params.append(("&user", target.matchingKey))
-        params.append(("&capabilities", configsEnabled ? "evaluatorWithConfigs" : "evaluator"))
-
-        return params.sorted { $0.0 < $1.0 }.map { "\($0)=\($1)" }.joined() // Automatic sorting
-    }
-
-    //
-    // Attributes serialization
-    //
-    private func serializeAttributes(_ attributes: [String: Any]?) -> Data? {
-        guard let attributes, !attributes.isEmpty else {
-            return "{}".data(using: .utf8)
+            body["sets"] = flagSets.sorted()
         }
 
         do {
-            return try JSONSerialization.data(withJSONObject: ["attributes": attributes])
+            return try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
         } catch {
-            Logger.e("SecureHttpClient: Failed to serialize attributes: \(error)")
-            return "{}".data(using: .utf8)
+            Logger.e("SecureHttpClient: Failed to serialize evaluations body: \(error)")
+            return nil
         }
+    }
+
+    //
+    // X-Harness-FME-Content-Digest header value for the given body.
+    //
+    // Format: SHA512(body) → first 64 bits → base64 (no padding).
+    //
+    static func contentDigest(for body: Data) -> String {
+        let digest = SHA512.hash(data: body)
+        let first64Bits = Data(digest.prefix(8))
+        return first64Bits.base64EncodedString().trimmingCharacters(in: CharacterSet(charactersIn: "="))
     }
 }
