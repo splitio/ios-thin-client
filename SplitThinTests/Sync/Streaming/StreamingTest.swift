@@ -21,7 +21,7 @@ class DefaultStreamingTest: XCTestCase {
 
     // MARK: - handleNotification
 
-    func testEvaluationUpdateCallsRefetchAll() async {
+    func testEvaluationUpdateCallsRefetchAll() {
         let refetchAll = expectation()
         fetchCoordinatorMock.onRefetchAllCallback = { refetchAll.fulfill() }
 
@@ -32,7 +32,7 @@ class DefaultStreamingTest: XCTestCase {
         XCTAssertEqual(fetchCoordinatorMock.fetchCalls.count, 0)
     }
 
-    func testControlNotificationDoesNotTriggerFetch() async throws {
+    func testControlNotificationDoesNotTriggerFetch() {
         let shouldNotFetch = expectation().inverted()
         fetchCoordinatorMock.onFetchCallback = { shouldNotFetch.fulfill() }
 
@@ -42,7 +42,7 @@ class DefaultStreamingTest: XCTestCase {
         waitFor(shouldNotFetch, timeout: 0.3)
     }
 
-    func testOccupancyNotificationDoesNotTriggerFetch() async {
+    func testOccupancyNotificationDoesNotTriggerFetch() {
         let shouldNotFetch = expectation().inverted()
         fetchCoordinatorMock.onFetchCallback = { shouldNotFetch.fulfill() }
 
@@ -75,7 +75,7 @@ class DefaultStreamingTest: XCTestCase {
         XCTAssertFalse(streaming.isConnectionConfirmed(message: [:]))
     }
 
-    func testHandleIncomingMessageCallsRefetchAll() async {
+    func testHandleIncomingMessageCallsRefetchAll() {
         let refetchAll = expectation()
         fetchCoordinatorMock.onRefetchAllCallback = { refetchAll.fulfill() }
 
@@ -156,7 +156,7 @@ class DefaultStreamingTest: XCTestCase {
 
     // MARK: - Lifecycle
 
-    func testPauseAndResumeChangesState() async {
+    func testPauseAndResumeChangesState() {
         let refetchAll = expectation()
         fetchCoordinatorMock.onRefetchAllCallback = { refetchAll.fulfill() }
 
@@ -187,7 +187,7 @@ class DefaultStreamingTest: XCTestCase {
 
     // MARK: - Update strategies
 
-    func testBoundedOnlyRefetchesAffectedKeys() async {
+    func testBoundedOnlyRefetchesAffectedKeys() {
         let decoderMock = PayloadDecoderMock()
         decoderMock.bitmapKeys = [Murmur64x128.hashKey("user1")]
         fetchCoordinatorMock.registeredMatchingKeys = ["user1", "user2"]
@@ -205,7 +205,7 @@ class DefaultStreamingTest: XCTestCase {
         XCTAssertEqual(fetchCoordinatorMock.refetchAllCalls.count, 0, "refetchAll should not be called when bounded strategy succeeds")
     }
 
-    func testBoundedFallsBackToRefetchAllOnDecodingError() async {
+    func testBoundedFallsBackToRefetchAllOnDecodingError() {
         let decoderMock = PayloadDecoderMock()
         decoderMock.errorToThrow = PayloadDecodingError.base64DecodingFailed
         fetchCoordinatorMock.registeredMatchingKeys = ["user1"]
@@ -221,7 +221,7 @@ class DefaultStreamingTest: XCTestCase {
         waitFor(refetchAll)
     }
 
-    func testBoundedFallsBackToRefetchAllOnMissingPayload() async {
+    func testBoundedFallsBackToRefetchAllOnMissingPayload() {
         fetchCoordinatorMock.registeredMatchingKeys = ["user1"]
 
         let refetchAll = expectation()
@@ -233,7 +233,7 @@ class DefaultStreamingTest: XCTestCase {
         waitFor(refetchAll)
     }
 
-    func testKeyListOnlyRefetchesAffectedKeys() async {
+    func testKeyListOnlyRefetchesAffectedKeys() {
         let decoderMock = PayloadDecoderMock()
         decoderMock.keyListResult = KeyList(added: [Murmur64x128.hashKey("user2")], removed: [])
         fetchCoordinatorMock.registeredMatchingKeys = ["user1", "user2"]
@@ -251,7 +251,7 @@ class DefaultStreamingTest: XCTestCase {
         XCTAssertEqual(fetchCoordinatorMock.refetchAllCalls.count, 0, "refetchAll should not be called when keyList strategy succeeds")
     }
 
-    func testKeyListFallsBackToRefetchAllOnError() async {
+    func testKeyListFallsBackToRefetchAllOnError() {
         let decoderMock = PayloadDecoderMock()
         decoderMock.errorToThrow = PayloadDecodingError.base64DecodingFailed
         fetchCoordinatorMock.registeredMatchingKeys = ["user1"]
@@ -267,7 +267,7 @@ class DefaultStreamingTest: XCTestCase {
         waitFor(refetchAll)
     }
 
-    func testKeyListFallsBackToRefetchAllOnMissingPayload() async {
+    func testKeyListFallsBackToRefetchAllOnMissingPayload() {
         let decoderMock = PayloadDecoderMock()
         fetchCoordinatorMock.registeredMatchingKeys = ["user1"]
 
@@ -282,7 +282,7 @@ class DefaultStreamingTest: XCTestCase {
         waitFor(refetchAll)
     }
 
-    func testKeyListRefetchesRemovedKeys() async {
+    func testKeyListRefetchesRemovedKeys() {
         let decoderMock = PayloadDecoderMock()
         decoderMock.keyListResult = KeyList(added: [], removed: [Murmur64x128.hashKey("user1")])
         fetchCoordinatorMock.registeredMatchingKeys = ["user1", "user2"]
@@ -300,7 +300,7 @@ class DefaultStreamingTest: XCTestCase {
         XCTAssertEqual(fetchCoordinatorMock.refetchAllCalls.count, 0, "refetchAll should not be called when keyList strategy succeeds")
     }
 
-    func testFetchAllStrategyCallsRefetchAll() async {
+    func testFetchAllStrategyCallsRefetchAll() {
         let refetchAll = expectation()
         fetchCoordinatorMock.onRefetchAllCallback = { refetchAll.fulfill() }
 
