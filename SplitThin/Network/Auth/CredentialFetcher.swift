@@ -50,6 +50,7 @@ final class DefaultCredentialFetcher: CredentialFetcher, @unchecked Sendable {
         let endpoint = Endpoint.builder(baseUrl: authEndpoint, path: "api/v3/auth/thin-client", defaultQueryString: queryString)
                                .set(method: .get)
                                .add(header: "Authorization", withValue: "Bearer \(sdkKey)")
+                               .add(header: "X-Harness-FME-SDK-Version", withValue: "ios-\(Version.semantic)")
                                .add(header: "Content-Type", withValue: "application/json")
                                .build()
 

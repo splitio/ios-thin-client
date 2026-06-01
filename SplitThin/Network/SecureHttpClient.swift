@@ -54,6 +54,7 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
                                .set(method: .post)
                                .add(header: "Content-Type", withValue: "application/json")
                                .add(header: "Authorization", withValue: "Bearer \(apiKey)")
+                               .add(header: "X-Harness-FME-SDK-Version", withValue: "ios-\(Version.semantic)")
                                .build()
 
         return try await retryableHttpClient.execute(endpoint, category: .events, body: payload)
@@ -63,6 +64,7 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
         let endpoint = Endpoint.builder(baseUrl: serviceEndpoints.telemetryServiceEndpoint, path: "api/v1/metrics/usage")
                                .set(method: .post)
                                .add(header: "Content-Type", withValue: "application/json")
+                               .add(header: "X-Harness-FME-SDK-Version", withValue: "ios-\(Version.semantic)")
                                .build()
 
         return try await retryableHttpClient.execute(endpoint, category: .telemetry, body: payload)
@@ -76,6 +78,7 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
             .set(method: .post)
             .add(header: "Content-Type", withValue: "application/json")
             .add(header: "Authorization", withValue: "Bearer \(token)")
+            .add(header: "X-Harness-FME-SDK-Version", withValue: "ios-\(Version.semantic)")
             .add(header: "X-Harness-FME-Content-Digest", withValue: digest)
             .build()
 
