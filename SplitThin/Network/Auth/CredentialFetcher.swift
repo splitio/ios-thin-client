@@ -42,10 +42,10 @@ final class DefaultCredentialFetcher: CredentialFetcher, @unchecked Sendable {
         } else {
             queryString += "&capabilities=evaluator"
         }
+        queryString += users.map { "&key=\($0)" }.joined()
         if let flagSets = evaluationFilters?.flagSets, !flagSets.isEmpty {
             queryString += "&sets=\(flagSets.sorted().joined(separator: ","))"
         }
-        queryString += users.map { "&key=\($0)" }.joined()
 
         let endpoint = Endpoint.builder(baseUrl: authEndpoint, path: "api/v3/auth/thin-client", defaultQueryString: queryString)
                                .set(method: .get)
