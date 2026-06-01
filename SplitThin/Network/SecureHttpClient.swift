@@ -102,7 +102,7 @@ extension DefaultSecureHttpClient {
             body["bucketingKey"] = bucketingKey
         }
         if let attributes = target.attributes, !attributes.isEmpty, JSONSerialization.isValidJSONObject(attributes) {
-            body["attributes"] = attributes
+            body["attributes"] = canonicalize(attributes)
         }
         if let flagSets = filters?.flagSets, !flagSets.isEmpty {
             body["sets"] = flagSets.sorted()
@@ -125,5 +125,30 @@ extension DefaultSecureHttpClient {
         let digest = SHA512.hash(data: body)
         let first64Bits = Data(digest.prefix(8))
         return first64Bits.base64EncodedString().trimmingCharacters(in: CharacterSet(charactersIn: "="))
+    }
+
+    func canonicalize(_ dict: [String: Any]) -> [String: Any] {
+        var result: [String: Any] = [:]
+
+        for (key, value) in dict {
+            switch value {
+            case let array as [String]:
+                result[key] = array.sorted()
+
+            case let array as [Int]:
+                result[key] = array.sorted()
+
+            case let array as [Double]:
+                result[key] = array.sorted()
+
+            case let array as [Bool]:
+                result[key] = array.sorted { (!$0 && $1) }
+
+            default:
+                result[key] = value
+            }
+        }
+
+        return result
     }
 }

@@ -91,7 +91,7 @@ final class StreamingE2ETest: XCTestCase {
         let listener = TestEventListener(readyExpectation: sdkReady)
 
         let connectionManagerMock = StreamingMock()
-        factory = try buildStreamingFactory(target: "user-123") { _ in connectionManagerMock }
+        factory = try buildStreamingFactory(target: Target(key: Key(matchingKey: "user-123"))) { _ in connectionManagerMock }
         factory.client.addEventListener(listener)
         waitFor(sdkReady)
 

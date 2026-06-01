@@ -169,6 +169,42 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         XCTAssertEqual(attributes?["role"], "admin")
     }
 
+    func testFetchEvaluationsBodyIncludesAttributesListOrderedString() async throws {
+        retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
+
+        let target = Target(matchingKey: "user1", attributes: ["plan": ["lola", "pepe", "abacio"], "role": "admin"])
+
+        try await client.fetchEvaluations(target: target)
+
+        let body = try parseBody(retryableHttpMock.executeCalls[0].body)
+        let attributes = body["attributes"] as? [String: Any]
+        XCTAssertEqual(attributes?["plan"] as? [String], ["abacio", "lola", "pepe"], "sets should be sorted")
+    }
+    
+    func testFetchEvaluationsBodyIncludesAttributesListOrderedNumber() async throws {
+        retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
+
+        let target = Target(matchingKey: "user1", attributes: ["plan": [2, 1.5, 0], "role": "admin"])
+
+        try await client.fetchEvaluations(target: target)
+
+        let body = try parseBody(retryableHttpMock.executeCalls[0].body)
+        let attributes = body["attributes"] as? [String: Any]
+        XCTAssertEqual(attributes?["plan"] as? [Double], [0, 1.5, 2], "sets should be sorted")
+    }
+    
+    func testFetchEvaluationsBodyIncludesAttributesListOrderedBool() async throws {
+        retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
+
+        let target = Target(matchingKey: "user1", attributes: ["plan": [true, false], "role": "admin"])
+
+        try await client.fetchEvaluations(target: target)
+
+        let body = try parseBody(retryableHttpMock.executeCalls[0].body)
+        let attributes = body["attributes"] as? [String: Any]
+        XCTAssertEqual(attributes?["plan"] as? [Bool], [false, true], "sets should be sorted")
+    }
+
     func testFetchEvaluationsIncludesContentDigestHeader() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
