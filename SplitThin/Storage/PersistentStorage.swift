@@ -30,9 +30,11 @@ final class PersistentStorage: EvaluationReadStorage, EvaluationWriteStorage, Se
 
     func upsert(change: EvaluationChange) async throws {
         let matchingKey = change.target.matchingKey
+        let bucketingKey = change.target.bucketingKey
 
         try await storage.upsertClientSession(
             matchingKey: matchingKey,
+            bucketingKey: bucketingKey,
             attributes: change.target.attributes,
             changeNumber: change.changeNumber
         )
@@ -40,31 +42,31 @@ final class PersistentStorage: EvaluationReadStorage, EvaluationWriteStorage, Se
         let evaluations = change.evaluations.map { eval in
             (flagName: eval.flag, treatment: eval.treatment, config: eval.config, sets: eval.flagSets)
         }
-        try await storage.upsertEvaluations(matchingKey: matchingKey, evaluations: evaluations)
+        try await storage.upsertEvaluations(matchingKey: matchingKey, bucketingKey: bucketingKey, evaluations: evaluations)
     }
 
     func clear(target: Target) async {
-        try? await storage.deleteClientSession(matchingKey: target.matchingKey)
+        try? await storage.deleteClientSession(matchingKey: target.matchingKey, bucketingKey: target.bucketingKey)
     }
 
     // MARK: - EvaluationReadStorage
 
     func get(target: Target, flag: String) async -> EvaluationResult? {
-        guard let eval = await storage.getEvaluation(matchingKey: target.matchingKey, flagName: flag) else {
+        guard let eval = await storage.getEvaluation(matchingKey: target.matchingKey, bucketingKey: target.bucketingKey, flagName: flag) else {
             return nil
         }
         return EvaluationResult(flag: flag, treatment: eval.treatment, flagSets: eval.sets ?? [], config: eval.config)
     }
 
     func get(target: Target, flags: [String]) async -> [EvaluationResult] {
-        let evaluations = await storage.getEvaluations(matchingKey: target.matchingKey, flagNames: flags)
+        let evaluations = await storage.getEvaluations(matchingKey: target.matchingKey, bucketingKey: target.bucketingKey, flagNames: flags)
         return evaluations.map { eval in
             EvaluationResult(flag: eval.flagName, treatment: eval.treatment, flagSets: eval.sets ?? [], config: eval.config)
         }
     }
 
     func get(target: Target, byFlagSets flagSets: [String]) async -> [EvaluationResult] {
-        let allEvaluations = await storage.getAllEvaluations(matchingKey: target.matchingKey)
+        let allEvaluations = await storage.getAllEvaluations(matchingKey: target.matchingKey, bucketingKey: target.bucketingKey)
         let requestedSets = Set(flagSets)
 
         return allEvaluations.compactMap { eval in
@@ -76,7 +78,7 @@ final class PersistentStorage: EvaluationReadStorage, EvaluationWriteStorage, Se
     }
 
     func getAll(target: Target) async -> [EvaluationResult] {
-        let evaluations = await storage.getAllEvaluations(matchingKey: target.matchingKey)
+        let evaluations = await storage.getAllEvaluations(matchingKey: target.matchingKey, bucketingKey: target.bucketingKey)
         let flagNames = evaluations.map { $0.flagName }.joined(separator: ", ")
         Logger.d("PersistentStorage: Loaded \(evaluations.count) flags for '\(target.matchingKey)': [\(flagNames)]")
         return evaluations.map { eval in
@@ -85,10 +87,10 @@ final class PersistentStorage: EvaluationReadStorage, EvaluationWriteStorage, Se
     }
 
     func getFlagNames(target: Target) async -> [String] {
-        await storage.getFlagNames(matchingKey: target.matchingKey)
+        await storage.getFlagNames(matchingKey: target.matchingKey, bucketingKey: target.bucketingKey)
     }
 
     func lastChangeNumber(target: Target) async -> Int64? {
-        await storage.getChangeNumber(matchingKey: target.matchingKey)
+        await storage.getChangeNumber(matchingKey: target.matchingKey, bucketingKey: target.bucketingKey)
     }
 }
