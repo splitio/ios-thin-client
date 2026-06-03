@@ -57,6 +57,42 @@ final class PersistenceE2ETest: XCTestCase {
         XCTAssertEqual(result.treatment, "on", "Cached flag should be available after rehydration")
     }
 
+    func testCacheInvalidatedWhenAttributesChange() async throws {
+        let prefix = "persist_e2e_attr_\(UUID().uuidString.prefix(8))"
+
+        // Factory A: persist evaluations for user_a with attributes ["plan": "pro"]
+        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["cached_flag"]))
+
+        let sdkReady = expectation("SDK ready A")
+        let listenerA = TestEventListener(readyExpectation: sdkReady)
+        let targetA = Target(matchingKey: "user_a", attributes: ["plan": "pro"])
+        factory = try buildFactoryWithPrefix(httpClient: httpMock, target: targetA, prefix: prefix)
+        factory.client.addEventListener(listenerA)
+        waitFor(sdkReady)
+
+        // Give persistence a moment to write (it's non-blocking)
+        sleep(seconds: 0.5)
+
+        await factory.destroy()
+        factory = nil
+
+        // Factory B: same matchingKey, different attributes — cache should be invalidated
+        let httpMock2 = SecureHttpClientMock()
+        httpMock2.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["cached_flag"]))
+
+        let sdkReady2 = expectation("SDK ready B")
+        let listenerB = TestEventListener(readyExpectation: sdkReady2)
+        let targetB = Target(matchingKey: "user_a", attributes: ["plan": "free"])
+        factory2 = try buildFactoryWithPrefix(httpClient: httpMock2, target: targetB, prefix: prefix)
+        factory2.client.addEventListener(listenerB)
+        waitFor(sdkReady2, timeout: 5)
+
+        XCTAssertEqual(
+            httpMock2.fetchEvaluationsCalls.count, 1,
+            "Factory B should have fired a fresh network request because attributes changed (cache invalidated)"
+        )
+    }
+
     // Storage-level isolation between nil and non-nil bucketingKey identities is covered in
     // SplitThinTests/Storage/CoreDataStorageTests.swift (testNilAndNonNilBucketingKeysDontOverwriteEachOther
     // and testClearDeletesByScopedIdentity). An E2E-level test would require fine-grained control
