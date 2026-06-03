@@ -36,7 +36,7 @@ final class CoreDataStorage: @unchecked Sendable {
 
     // MARK: - ClientSession Operations
 
-    func upsertClientSession(matchingKey: String, bucketingKey: String?, attributes: [String: Any]?, changeNumber: Int64) async throws {
+    func upsertClientSession(matchingKey: String, bucketingKey: String?, attributesHash: String, attributes: [String: Any]?, changeNumber: Int64) async throws {
         try await withContext { context in
             let deleteRequest = NSFetchRequest<NSManagedObject>(entityName: Self.clientSessionEntity)
             deleteRequest.predicate = self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey)
@@ -52,8 +52,18 @@ final class CoreDataStorage: @unchecked Sendable {
             session.setValue(bucketingKey, forKey: "bucketingKey")
             session.setValue(changeNumber, forKey: "changeNumber")
             session.setValue(self.encodeAttributes(attributes), forKey: "attributes")
+            session.setValue(attributesHash, forKey: "attributesHash")
 
             try context.save()
+        }
+    }
+
+    func getAttributesHash(matchingKey: String, bucketingKey: String?) async -> String? {
+        try? await withContext { context in
+            let request = NSFetchRequest<NSManagedObject>(entityName: Self.clientSessionEntity)
+            request.predicate = self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey)
+            request.fetchLimit = 1
+            return try context.fetch(request).first?.value(forKey: "attributesHash") as? String
         }
     }
 
@@ -420,7 +430,12 @@ final class CoreDataStorage: @unchecked Sendable {
         sessionBucketingKeyAttr.attributeType = .stringAttributeType
         sessionBucketingKeyAttr.isOptional = true
 
-        clientSessionEntity.properties = [matchingKeyAttr, attributesAttr, changeNumberAttr, sessionBucketingKeyAttr]
+        let attributesHashAttr = NSAttributeDescription()
+        attributesHashAttr.name = "attributesHash"
+        attributesHashAttr.attributeType = .stringAttributeType
+        attributesHashAttr.isOptional = true
+
+        clientSessionEntity.properties = [matchingKeyAttr, attributesAttr, attributesHashAttr, changeNumberAttr, sessionBucketingKeyAttr]
 
         // Evaluation entity
         let evaluationEntity = NSEntityDescription()

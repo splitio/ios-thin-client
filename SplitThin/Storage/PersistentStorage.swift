@@ -32,9 +32,11 @@ final class PersistentStorage: EvaluationReadStorage, EvaluationWriteStorage, Se
         let matchingKey = change.target.matchingKey
         let bucketingKey = change.target.bucketingKey
 
+        let attributesHash = Murmur3Hash.attributesHash(for: change.target.attributes)
         try await storage.upsertClientSession(
             matchingKey: matchingKey,
             bucketingKey: bucketingKey,
+            attributesHash: attributesHash,
             attributes: change.target.attributes,
             changeNumber: change.changeNumber
         )
@@ -91,6 +93,11 @@ final class PersistentStorage: EvaluationReadStorage, EvaluationWriteStorage, Se
     }
 
     func lastChangeNumber(target: Target) async -> Int64? {
-        await storage.getChangeNumber(matchingKey: target.matchingKey, bucketingKey: target.bucketingKey)
+        let storedHash = await storage.getAttributesHash(matchingKey: target.matchingKey, bucketingKey: target.bucketingKey)
+        let freshHash = Murmur3Hash.attributesHash(for: target.attributes)
+        if let storedHash, storedHash != freshHash {
+            return nil
+        }
+        return await storage.getChangeNumber(matchingKey: target.matchingKey, bucketingKey: target.bucketingKey)
     }
 }
