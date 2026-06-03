@@ -83,7 +83,8 @@ final class KeychainCredentialStorageTest: XCTestCase {
 
     // MARK: - Keychain persistence
 
-    func testSavedCredentialSurvivesNewInstance() {
+    func testSavedCredentialSurvivesNewInstance() throws {
+        try skipIfKeychainUnavailable()
         let storage1 = KeychainCredentialStorage(keychainKey: testKeychainKey)
         storage1.save(makeCredential(token: "persisted-token"), for: "composite-key")
 
@@ -94,7 +95,8 @@ final class KeychainCredentialStorageTest: XCTestCase {
         XCTAssertEqual(result?.token, "persisted-token")
     }
 
-    func testExpiredCredentialNotLoadedFromKeychain() {
+    func testExpiredCredentialNotLoadedFromKeychain() throws {
+        try skipIfKeychainUnavailable()
         let storage1 = KeychainCredentialStorage(keychainKey: testKeychainKey)
         storage1.save(makeCredential(expiresInSeconds: -1), for: "expired-key")
 
@@ -103,7 +105,8 @@ final class KeychainCredentialStorageTest: XCTestCase {
         XCTAssertNil(storage2.get(for: "expired-key"))
     }
 
-    func testInvalidatedCredentialNotPersistedInKeychain() {
+    func testInvalidatedCredentialNotPersistedInKeychain() throws {
+        try skipIfKeychainUnavailable()
         let storage1 = KeychainCredentialStorage(keychainKey: testKeychainKey)
         storage1.save(makeCredential(token: "to-remove"), for: "key")
         storage1.invalidate(for: "key")
@@ -113,7 +116,8 @@ final class KeychainCredentialStorageTest: XCTestCase {
         XCTAssertNil(storage2.get(for: "key"))
     }
 
-    func testDifferentKeychainKeysAreIsolated() {
+    func testDifferentKeychainKeysAreIsolated() throws {
+        try skipIfKeychainUnavailable()
         let storageA = KeychainCredentialStorage(keychainKey: "\(testKeychainKey)_A")
         let storageB = KeychainCredentialStorage(keychainKey: "\(testKeychainKey)_B")
 
@@ -127,7 +131,8 @@ final class KeychainCredentialStorageTest: XCTestCase {
         cleanKeychain(key: "\(testKeychainKey)_B")
     }
 
-    func testPushEnabledIsPreservedAcrossInstances() {
+    func testPushEnabledIsPreservedAcrossInstances() throws {
+        try skipIfKeychainUnavailable()
         let storage1 = KeychainCredentialStorage(keychainKey: testKeychainKey)
         storage1.save(makeCredential(pushEnabled: true), for: "key")
 
@@ -149,5 +154,30 @@ final class KeychainCredentialStorageTest: XCTestCase {
             kSecAttrAccount as String: "credentials"
         ]
         SecItemDelete(query as CFDictionary)
+    }
+
+    // Since we don't have entitlements options on SPM, some tests fail because
+    // iOS does not give access to Keychain. 
+    // However, this tests run well on macOS where permissions aren't so strict.
+    // They are skipped on iOS (because they fail), and must be tested manually.
+    // They have been tested manually and the behavior is the expected.
+    //
+    // For a Tapp, entitlements must be granted at the project level to accces Keychain.
+    //
+    private func skipIfKeychainUnavailable() throws {
+        let testKey = "keychain_availability_test"
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: testKey,
+            kSecAttrAccount as String: "test",
+            kSecValueData as String: Data("test".utf8)
+        ]
+        SecItemDelete(query as CFDictionary)
+        let status = SecItemAdd(query as CFDictionary, nil)
+        SecItemDelete(query as CFDictionary)
+
+        if status == errSecMissingEntitlement {
+            throw XCTSkip("Keychain not available (missing entitlements)")
+        }
     }
 }

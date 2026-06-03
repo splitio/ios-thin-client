@@ -13,6 +13,10 @@ final class EventsStorageMock: EventsReadStorage, EventsWriteStorage, @unchecked
         addedEvents.append(event)
     }
 
+    func add(_ events: [EventEntity]) async {
+        addedEvents.append(contentsOf: events)
+    }
+
     func remove(_ events: [EventEntity]) async {
         removedEvents.append(events)
     }

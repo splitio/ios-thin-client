@@ -54,7 +54,7 @@ final class DefaultSecureHttpClient: SecureHttpClient, @unchecked Sendable {
                                .set(method: .post)
                                .add(header: "Content-Type", withValue: "application/json")
                                .add(header: "Authorization", withValue: "Bearer \(apiKey)")
-                               .add(header: "X-Harness-FME-SDK-Version", withValue: "ios-\(Version.semantic)")
+                               .add(header: "SplitSDKVersion", withValue: "ios-\(Version.semantic)")
                                .build()
 
         return try await retryableHttpClient.execute(endpoint, category: .events, body: payload)

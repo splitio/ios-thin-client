@@ -47,11 +47,11 @@ final class DefaultCredentialFetcher: CredentialFetcher, @unchecked Sendable {
             queryString += "&sets=\(flagSets.sorted().joined(separator: ","))"
         }
 
-        let endpoint = Endpoint.builder(baseUrl: authEndpoint, path: "api/v3/auth/thin-client", defaultQueryString: queryString)
+        let endpoint = Endpoint.builder(baseUrl: authEndpoint, path: "api/v3/auth", defaultQueryString: queryString)
                                .set(method: .get)
                                .add(header: "Authorization", withValue: "Bearer \(sdkKey)")
-                               .add(header: "X-Harness-FME-SDK-Version", withValue: "ios-\(Version.semantic)")
                                .add(header: "Content-Type", withValue: "application/json")
+                               .add(header: "X-Harness-FME-SDK-Version", withValue: "ios-\(Version.semantic)")
                                .build()
 
         let response = try await retryableHttpClient.execute(endpoint, category: .auth)

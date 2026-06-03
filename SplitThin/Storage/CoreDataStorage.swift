@@ -177,20 +177,28 @@ final class CoreDataStorage: @unchecked Sendable {
     // MARK: - Event Operations
 
     func addEvent(_ dto: EventDTO) async throws {
+        try await addEvents([dto])
+    }
+
+    func addEvents(_ dtos: [EventDTO]) async throws {
+        guard !dtos.isEmpty else { return }
+
         try await withContext { context in
             guard let entity = NSEntityDescription.entity(forEntityName: Self.eventEntity, in: context) else {
                 throw StorageError.entityNotFound
             }
 
-            let event = NSManagedObject(entity: entity, insertInto: context)
-            event.setValue(dto.id.uuidString, forKey: "id")
-            event.setValue(dto.key, forKey: "key")
-            event.setValue(dto.trafficType, forKey: "trafficType")
-            event.setValue(dto.eventType, forKey: "eventType")
-            event.setValue(dto.value ?? 0, forKey: "value")
-            event.setValue(dto.value != nil, forKey: "hasValue")
-            event.setValue(dto.properties, forKey: "properties")
-            event.setValue(dto.timestamp, forKey: "timestamp")
+            for dto in dtos {
+                let event = NSManagedObject(entity: entity, insertInto: context)
+                event.setValue(dto.id.uuidString, forKey: "id")
+                event.setValue(dto.key, forKey: "key")
+                event.setValue(dto.trafficType, forKey: "trafficType")
+                event.setValue(dto.eventType, forKey: "eventType")
+                event.setValue(dto.value ?? 0, forKey: "value")
+                event.setValue(dto.value != nil, forKey: "hasValue")
+                event.setValue(dto.properties, forKey: "properties")
+                event.setValue(dto.timestamp, forKey: "timestamp")
+            }
 
             try context.save()
         }
