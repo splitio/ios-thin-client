@@ -71,7 +71,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         XCTAssertEqual(body["bucketingKey"] as? String, "bucket-42")
     }
 
-    func testFetchEvaluationsBodyOmitsBucketingKeyWhenNil() async throws {
+    func testFetchEvaluationsBodyIncludesNullBucketingKeyWhenNil() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
         let target = Target(matchingKey: "user1")
@@ -79,7 +79,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         try await client.fetchEvaluations(target: target)
 
         let body = try parseBody(retryableHttpMock.executeCalls[0].body)
-        XCTAssertNil(body["bucketingKey"])
+        XCTAssertTrue(body["bucketingKey"] is NSNull, "bucketingKey must always be present (null when unset) for digest parity")
     }
 
     func testFetchEvaluationsBodyIncludesFlagSetsAsArray() async throws {
@@ -94,7 +94,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         XCTAssertEqual(body["sets"] as? [String], ["setA", "setB"], "sets should be sorted")
     }
 
-    func testFetchEvaluationsBodyOmitsFlagSetsWhenEmpty() async throws {
+    func testFetchEvaluationsBodyIncludesEmptyFlagSetsWhenEmpty() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
         let target = Target(matchingKey: "user1")
@@ -102,7 +102,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         try await client.fetchEvaluations(target: target, filters: EvaluationFilters(flagSets: []))
 
         let body = try parseBody(retryableHttpMock.executeCalls[0].body)
-        XCTAssertNil(body["sets"])
+        XCTAssertEqual(body["sets"] as? [String], [], "sets must always be present (empty array when unset) for digest parity")
     }
 
     func testFetchEvaluationsBodyExcludesNamesEvenWhenProvided() async throws {
@@ -117,7 +117,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         XCTAssertNil(body["names"], "names is not supported in the body yet")
     }
 
-    func testFetchEvaluationsBodyOmitsAttributesWhenNoneProvided() async throws {
+    func testFetchEvaluationsBodyIncludesEmptyAttributesWhenNoneProvided() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
         let target = Target(matchingKey: "user1")
@@ -125,7 +125,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         try await client.fetchEvaluations(target: target)
 
         let body = try parseBody(retryableHttpMock.executeCalls[0].body)
-        XCTAssertNil(body["attributes"])
+        XCTAssertEqual((body["attributes"] as? [String: Any])?.isEmpty, true, "attributes must always be present (empty object when unset) for digest parity")
     }
 
     func testFetchEvaluationsBodyKeysAreAlphabeticallySorted() async throws {
@@ -213,7 +213,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         try await client.fetchEvaluations(target: target)
 
         let endpoint = retryableHttpMock.executeCalls[0].endpoint
-        XCTAssertEqual(endpoint.headers["X-Harness-FME-Content-Digest"], "7Q3YUSpyReg")
+        XCTAssertEqual(endpoint.headers["X-Harness-FME-Content-Digest"], "T05eBmW0qdw")
     }
 
     func testFetchEvaluationsUsesEvaluationsCategory() async throws {

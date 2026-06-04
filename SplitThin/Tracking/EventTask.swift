@@ -10,7 +10,7 @@ protocol EventTask: Sendable {
 
 final class DefaultEventTask: EventTask {
 
-    private static let batchSize = 200
+    private static let batchSize = 500
 
     private let storage: EventsReadStorage & EventsWriteStorage
     private let serializer: EventSerializer

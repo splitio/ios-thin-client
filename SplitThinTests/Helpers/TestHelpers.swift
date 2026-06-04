@@ -50,14 +50,13 @@ func buildClient(target: String = "user-123", treatmentsManager: TreatmentsManag
                        telemetrySubmitter: telemetrySubmitter ?? TelemetrySubmitterMock())
 }
 
-func mockEvaluationsData(flags: [String], treatment: String = "on") -> Data {
+func mockEvaluationsData(flags: [String], treatment: String = "on", since: Int64 = -1, till: Int64 = 12345) -> Data {
     let evaluations = flags.map { flag in
         """
         {
             "featureName": "\(flag)",
             "treatment": "\(treatment)",
-            "label": "default rule",
-            "changeNumber": 12345,
+            "changeNumber": \(till),
             "sets": ["set-a"]
         }
         """
@@ -66,8 +65,8 @@ func mockEvaluationsData(flags: [String], treatment: String = "on") -> Data {
     return """
     {
         "evaluations": [\(evaluations)],
-        "since": -1,
-        "till": 12345
+        "since": \(since),
+        "till": \(till)
     }
     """.data(using: .utf8)!
 }
