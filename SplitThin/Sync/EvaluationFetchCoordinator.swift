@@ -40,6 +40,7 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
     private let provider: EvaluationProvider
     private let observer: Observer // For logging & telemetry
     private let storage: EvaluationWriteStorage?
+    private let readStorage: EvaluationReadStorage?
 
     // Called after a successful fetch, per key
     private var onUpdateActions = [Key: (FetchResult) -> Void]()
@@ -49,10 +50,11 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
     private var fetchedKeys = Set<FetchKey>()
     private let lock = NSLock()
 
-    init(provider: EvaluationProvider, observer: Observer, storage: EvaluationWriteStorage? = nil) {
+    init(provider: EvaluationProvider, observer: Observer, storage: EvaluationWriteStorage? = nil, readStorage: EvaluationReadStorage? = nil) {
         self.provider = provider
         self.observer = observer
         self.storage = storage
+        self.readStorage = readStorage
     }
 
     func registerOnUpdateAction(for key: Key, action: @escaping (FetchResult) -> Void) {
@@ -129,6 +131,8 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
     private func performFetch(target: Target, filters: EvaluationFilters?, reason: FetchReason) async throws -> FetchResult {
         observer.notify(event: .evalFetchStarted(reason: reason))
 
+        let storedChangeNumber = await readStorage?.lastChangeNumber(target: target) ?? -1
+
         let result: EvaluationsResult
         do {
             guard let fetched = try await provider.fetch(target: target, filters: filters) else {
@@ -142,15 +146,19 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
             throw CredentialFetcherError.unauthorized
         }
 
-        let changeNumber = result.till
-        observer.notify(event: .evalFetchSucceeded(changeNumber: changeNumber ?? -1))
+        let changeNumber = result.till ?? -1
+        observer.notify(event: .evalFetchSucceeded(changeNumber: changeNumber))
 
-        if let storage {
+        // When till == stored changeNumber the server confirms we're up to date
+        // and returns an empty evaluations array. Persisting it would erase existing data.
+        let hasNewData = changeNumber > storedChangeNumber
+
+        if hasNewData, let storage {
             observer.notify(event: .evalStorageWriteScheduled)
 
             Task { // Non-blocking persistence
                 do {
-                    try await storage.upsert(change: EvaluationChange(target: target, changeNumber: changeNumber ?? -1, evaluations: result.evaluations))
+                    try await storage.upsert(change: EvaluationChange(target: target, changeNumber: changeNumber, evaluations: result.evaluations))
                     self.observer.notify(event: .evalStorageWriteSucceeded)
                 } catch {
                     self.observer.notify(event: .evalStorageWriteFailed)
@@ -158,15 +166,17 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
             }
         }
 
-        if reason == .push {
+        if reason == .push, hasNewData {
             let fetchResult = FetchResult(evaluations: result.evaluations, changeNumber: changeNumber)
             let updateAction = withLock(lock) { onUpdateActions[target.key] }
             updateAction?(fetchResult) // Notifies the eventsManager of the client
         }
 
-        observer.notify(event: .evalStorageUpdated(names: result.evaluations.map { $0.flag }))
+        if hasNewData {
+            observer.notify(event: .evalStorageUpdated(names: result.evaluations.map { $0.flag }))
+        }
 
-        Logger.d("EvaluationFetchCoordinator: Fetched \(result.evaluations.count) evaluations for \(target.matchingKey) (reason: \(reason))")
+        Logger.d("EvaluationFetchCoordinator: Fetched \(result.evaluations.count) evaluations for \(target.matchingKey) (reason: \(reason), hasNewData: \(hasNewData))")
         return FetchResult(evaluations: result.evaluations, changeNumber: changeNumber)
     }
 }

@@ -10,6 +10,7 @@ final class StreamingE2ETest: XCTestCase {
 
     override func setUp() {
         super.setUp()
+        Self.cleanTestDatabase()
         httpMock = SecureHttpClientMock()
     }
 
@@ -42,7 +43,7 @@ final class StreamingE2ETest: XCTestCase {
 
         XCTAssertEqual(factory.client.getTreatment("flag_a").treatment, "on", "Initial treatment should be 'on'")
 
-        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"], treatment: "off"))
+        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"], treatment: "off", till: 12346))
         connectionManagerRef!.handleNotification(EvaluationUpdateNotification(channel: nil, timestamp: 0, changeNumber: 2))
 
         waitFor(sdkUpdate)
@@ -68,6 +69,7 @@ final class StreamingE2ETest: XCTestCase {
         let algorithmSeed = 42
         let expectedDelay = computeExpectedDelay(key: targetKey, updateIntervalMs: updateIntervalMs, algorithmSeed: algorithmSeed)
 
+        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"], till: 12346))
         let notificationSentAt = Date()
         connectionManager.handleNotification(EvaluationUpdateNotification(channel: nil, timestamp: 0, changeNumber: 2, algorithmSeed: algorithmSeed, updateIntervalMs: updateIntervalMs))
 
@@ -126,6 +128,8 @@ final class StreamingE2ETest: XCTestCase {
 
         waitFor(ready1, ready2)
 
+        httpMock.fetchEvaluationsResultByKey["user-A"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"], till: 12346)))
+        httpMock.fetchEvaluationsResultByKey["user-B"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_b"], till: 12346)))
         connectionManager.handleNotification(EvaluationUpdateNotification(channel: nil, timestamp: 0, changeNumber: 2))
 
         waitFor(update1, update2)
@@ -151,6 +155,8 @@ final class StreamingE2ETest: XCTestCase {
 
         waitFor(ready1, ready2)
 
+        httpMock.fetchEvaluationsResultByKey["user-A"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["feature_x"], till: 12346)))
+        httpMock.fetchEvaluationsResultByKey["user-B"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["feature_y", "feature_z"], till: 12346)))
         connectionManager.handleNotification(EvaluationUpdateNotification(channel: nil, timestamp: 0, changeNumber: 2))
 
         waitFor(update1, update2)
@@ -253,5 +259,15 @@ final class StreamingE2ETest: XCTestCase {
         let bucket = Int64(bitPattern: UInt64(hash)) % updateIntervalMs
         let ms = bucket < 0 ? -bucket : bucket
         return Double(ms) / 1000.0
+    }
+
+    private static func cleanTestDatabase() {
+        let dbName = DefaultSplitFactoryBuilder.databaseName(prefix: nil, apiKey: "test-sdk-key")
+        let fileManager = FileManager.default
+        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let dir = appSupport.appendingPathComponent("SplitThin", isDirectory: true)
+        for suffix in ["", "-shm", "-wal"] {
+            try? fileManager.removeItem(at: dir.appendingPathComponent("\(dbName).sqlite\(suffix)"))
+        }
     }
 }

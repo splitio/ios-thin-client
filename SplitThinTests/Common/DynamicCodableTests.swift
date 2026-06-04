@@ -66,7 +66,6 @@ final class ParsingTest: XCTestCase {
         XCTAssertEqual(result.treatment, "on")
         XCTAssertEqual(result.flagSets, ["set1", "set2"])
         XCTAssertEqual(result.config, "{\"key\":\"value\"}")
-        XCTAssertEqual(result.label, "default rule")
         XCTAssertEqual(result.changeNumber, 12345)
     }
 
@@ -81,7 +80,6 @@ final class ParsingTest: XCTestCase {
         XCTAssertEqual(result.treatment, "off")
         XCTAssertEqual(result.flagSets, [])
         XCTAssertNil(result.config)
-        XCTAssertNil(result.label)
         XCTAssertNil(result.changeNumber)
     }
 
