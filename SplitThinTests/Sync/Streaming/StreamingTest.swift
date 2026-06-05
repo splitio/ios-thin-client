@@ -11,7 +11,7 @@ class DefaultStreamingTest: XCTestCase {
     override func setUp() {
         super.setUp()
         fetchCoordinatorMock = EvaluationFetchCoordinatorMock()
-        target = Target(matchingKey: "user1", bucketingKey: nil)
+        target = Target(matchingKey: "user1", bucketingKey: nil, trafficType: "user")
         streaming = DefaultStreaming(
             target: target,
             fetchCoordinator: fetchCoordinatorMock,

@@ -93,7 +93,7 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
         builder.setStreamingConnectionManagerFactory { _ in connectionManagerMock }
 
         guard let factory = builder.setSdkKey(SdkKey("api-key-123"))
-                                   .setTarget(Target(matchingKey: "user1"))
+                                   .setTarget(Target(matchingKey: "user1", trafficType: "user"))
                                    .setConfig(config)
                                    .build() else {
             XCTFail("Factory should build"); return

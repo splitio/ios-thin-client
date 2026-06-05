@@ -24,7 +24,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         authProviderMock.credentialToReturn = makeCredential(token: "jwt-token")
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
-        let target = Target(matchingKey: "user1")
+        let target = Target(matchingKey: "user1", trafficType: "user")
 
         try await client.fetchEvaluations(target: target)
 
@@ -37,7 +37,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
     func testFetchEvaluationsUrlContainsOnlySinceQueryParam() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
-        let target = Target(matchingKey: "lucrap")
+        let target = Target(matchingKey: "lucrap", trafficType: "user")
 
         try await client.fetchEvaluations(target: target)
 
@@ -52,7 +52,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
     func testFetchEvaluationsBodyIncludesKey() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
-        let target = Target(matchingKey: "lucrap")
+        let target = Target(matchingKey: "lucrap", trafficType: "user")
 
         try await client.fetchEvaluations(target: target)
 
@@ -63,7 +63,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
     func testFetchEvaluationsBodyIncludesBucketingKeyWhenSet() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
-        let target = Target(matchingKey: "user1", bucketingKey: "bucket-42")
+        let target = Target(matchingKey: "user1", bucketingKey: "bucket-42", trafficType: "user")
 
         try await client.fetchEvaluations(target: target)
 
@@ -74,7 +74,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
     func testFetchEvaluationsBodyIncludesNullBucketingKeyWhenNil() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
-        let target = Target(matchingKey: "user1")
+        let target = Target(matchingKey: "user1", trafficType: "user")
 
         try await client.fetchEvaluations(target: target)
 
@@ -85,7 +85,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
     func testFetchEvaluationsBodyIncludesFlagSetsAsArray() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
-        let target = Target(matchingKey: "user1")
+        let target = Target(matchingKey: "user1", trafficType: "user")
         let filters = EvaluationFilters(flagSets: ["setB", "setA"])
 
         try await client.fetchEvaluations(target: target, filters: filters)
@@ -97,7 +97,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
     func testFetchEvaluationsBodyIncludesEmptyFlagSetsWhenEmpty() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
-        let target = Target(matchingKey: "user1")
+        let target = Target(matchingKey: "user1", trafficType: "user")
 
         try await client.fetchEvaluations(target: target, filters: EvaluationFilters(flagSets: []))
 
@@ -108,7 +108,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
     func testFetchEvaluationsBodyExcludesNamesEvenWhenProvided() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
-        let target = Target(matchingKey: "user1")
+        let target = Target(matchingKey: "user1", trafficType: "user")
         let filters = EvaluationFilters(flagNames: ["flag1", "flag2"])
 
         try await client.fetchEvaluations(target: target, filters: filters)
@@ -120,7 +120,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
     func testFetchEvaluationsBodyIncludesEmptyAttributesWhenNoneProvided() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
-        let target = Target(matchingKey: "user1")
+        let target = Target(matchingKey: "user1", trafficType: "user")
 
         try await client.fetchEvaluations(target: target)
 
@@ -132,7 +132,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
         let configsClient = DefaultSecureHttpClient(retryableHttpClient: retryableHttpMock, authProvider: authProviderMock, serviceEndpoints: serviceEndpoints, configsEnabled: true, apiKey: "test-api-key")
 
-        let target = Target(matchingKey: "user1", bucketingKey: "bk-1", attributes: ["zebra": "z", "alpha": "a"])
+        let target = Target(matchingKey: "user1", bucketingKey: "bk-1", attributes: ["zebra": "z", "alpha": "a"], trafficType: "user")
         let filters = EvaluationFilters(flagSets: ["setA"])
 
         try await configsClient.fetchEvaluations(target: target, filters: filters)
@@ -159,7 +159,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
     func testFetchEvaluationsBodyIncludesAttributesWhenProvided() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
-        let target = Target(matchingKey: "user1", attributes: ["plan": "enterprise", "role": "admin"])
+        let target = Target(matchingKey: "user1", attributes: ["plan": "enterprise", "role": "admin"], trafficType: "user")
 
         try await client.fetchEvaluations(target: target)
 
@@ -172,7 +172,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
     func testFetchEvaluationsBodyIncludesAttributesListOrderedString() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
-        let target = Target(matchingKey: "user1", attributes: ["plan": ["lola", "pepe", "abacio"], "role": "admin"])
+        let target = Target(matchingKey: "user1", attributes: ["plan": ["lola", "pepe", "abacio"], "role": "admin"], trafficType: "user")
 
         try await client.fetchEvaluations(target: target)
 
@@ -184,7 +184,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
     func testFetchEvaluationsBodyIncludesAttributesListOrderedNumber() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
-        let target = Target(matchingKey: "user1", attributes: ["plan": [2, 1.5, 0], "role": "admin"])
+        let target = Target(matchingKey: "user1", attributes: ["plan": [2, 1.5, 0], "role": "admin"], trafficType: "user")
 
         try await client.fetchEvaluations(target: target)
 
@@ -196,7 +196,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
     func testFetchEvaluationsBodyIncludesAttributesListOrderedBool() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
-        let target = Target(matchingKey: "user1", attributes: ["plan": [true, false], "role": "admin"])
+        let target = Target(matchingKey: "user1", attributes: ["plan": [true, false], "role": "admin"], trafficType: "user")
 
         try await client.fetchEvaluations(target: target)
 
@@ -208,7 +208,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
     func testFetchEvaluationsIncludesContentDigestHeader() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
-        let target = Target(matchingKey: "Mauro", attributes: ["city": "mdp", "age": 150])
+        let target = Target(matchingKey: "Mauro", attributes: ["city": "mdp", "age": 150], trafficType: "user")
 
         try await client.fetchEvaluations(target: target)
 
@@ -219,7 +219,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
     func testFetchEvaluationsUsesEvaluationsCategory() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
-        let target = Target(matchingKey: "user1")
+        let target = Target(matchingKey: "user1", trafficType: "user")
 
         try await client.fetchEvaluations(target: target)
 
@@ -232,7 +232,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
         let configsClient = DefaultSecureHttpClient(retryableHttpClient: retryableHttpMock, authProvider: authProviderMock, serviceEndpoints: serviceEndpoints, configsEnabled: true, apiKey: "test-api-key")
 
-        let target = Target(matchingKey: "user1")
+        let target = Target(matchingKey: "user1", trafficType: "user")
 
         try await configsClient.fetchEvaluations(target: target)
 
@@ -243,7 +243,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
     func testBodyIncludesConfigsFalseWhenDisabled() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
-        let target = Target(matchingKey: "user1")
+        let target = Target(matchingKey: "user1", trafficType: "user")
 
         try await client.fetchEvaluations(target: target)
 
@@ -261,7 +261,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
             HttpResponse(code: 200, data: Data())
         ]
 
-        let target = Target(matchingKey: "user1")
+        let target = Target(matchingKey: "user1", trafficType: "user")
 
         try await client.fetchEvaluations(target: target)
 
@@ -279,7 +279,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
             HttpResponse(code: 401, data: nil)
         ]
 
-        let target = Target(matchingKey: "user1")
+        let target = Target(matchingKey: "user1", trafficType: "user")
 
         let response = try await client.fetchEvaluations(target: target)
 
@@ -290,7 +290,7 @@ final class DefaultSecureHttpClientTest: XCTestCase {
     func testFetchEvaluationsDoesNotRetryOnNon401Error() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 500, data: nil)]
 
-        let target = Target(matchingKey: "user1")
+        let target = Target(matchingKey: "user1", trafficType: "user")
 
         let response = try await client.fetchEvaluations(target: target)
 

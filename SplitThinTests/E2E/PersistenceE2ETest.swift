@@ -32,7 +32,7 @@ final class PersistenceE2ETest: XCTestCase {
 
         let sdkReady = expectation("SDK ready")
         let listener = TestEventListener(readyExpectation: sdkReady)
-        let target = Target(matchingKey: "user_a")
+        let target = Target(matchingKey: "user_a", trafficType: "user")
         factory = try buildFactoryWithPrefix(httpClient: httpMock, target: target, prefix: prefix)
         factory.client.addEventListener(listener)
         waitFor(sdkReady)
@@ -65,7 +65,7 @@ final class PersistenceE2ETest: XCTestCase {
 
         let sdkReady = expectation("SDK ready A")
         let listenerA = TestEventListener(readyExpectation: sdkReady)
-        let targetA = Target(matchingKey: "user_a", attributes: ["plan": "pro"])
+        let targetA = Target(matchingKey: "user_a", attributes: ["plan": "pro"], trafficType: "user")
         factory = try buildFactoryWithPrefix(httpClient: httpMock, target: targetA, prefix: prefix)
         factory.client.addEventListener(listenerA)
         waitFor(sdkReady)
@@ -82,7 +82,7 @@ final class PersistenceE2ETest: XCTestCase {
 
         let sdkReady2 = expectation("SDK ready B")
         let listenerB = TestEventListener(readyExpectation: sdkReady2)
-        let targetB = Target(matchingKey: "user_a", attributes: ["plan": "free"])
+        let targetB = Target(matchingKey: "user_a", attributes: ["plan": "free"], trafficType: "user")
         factory2 = try buildFactoryWithPrefix(httpClient: httpMock2, target: targetB, prefix: prefix)
         factory2.client.addEventListener(listenerB)
         waitFor(sdkReady2, timeout: 5)

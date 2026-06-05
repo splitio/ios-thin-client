@@ -6,7 +6,7 @@ final class DefaultSplitManagerTest: XCTestCase {
     private var repoMock: EvaluationRepositoryMock!
     private var manager: DefaultSplitManager!
 
-    private let target = Target(matchingKey: "user1")
+    private let target = Target(matchingKey: "user1", trafficType: "user")
 
     override func setUp() {
         super.setUp()

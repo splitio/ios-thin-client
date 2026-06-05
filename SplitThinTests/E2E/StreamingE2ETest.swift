@@ -25,7 +25,7 @@ final class StreamingE2ETest: XCTestCase {
 
     // Mirrors Android Test 4b: SDK emits onUpdate when evaluations change via streaming push
     func testStreamingPushTriggersEvaluationUpdateAndOnUpdate() async throws {
-        let target = Target(matchingKey: "user-123")
+        let target = Target(matchingKey: "user-123", trafficType: "user")
         httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"]))
 
         let sdkReady = expectation(description: "SDK ready")
@@ -93,7 +93,7 @@ final class StreamingE2ETest: XCTestCase {
         let listener = TestEventListener(readyExpectation: sdkReady)
 
         let connectionManagerMock = StreamingMock()
-        factory = try buildStreamingFactory(target: Target(key: Key(matchingKey: "user-123"))) { _ in connectionManagerMock }
+        factory = try buildStreamingFactory(target: Target(key: Key(matchingKey: "user-123"), trafficType: "user")) { _ in connectionManagerMock }
         factory.client.addEventListener(listener)
         waitFor(sdkReady)
 
@@ -175,7 +175,7 @@ final class StreamingE2ETest: XCTestCase {
     /// Builds a streaming factory with a real `DefaultStreaming`.
     /// The returned ref is populated lazily when the streaming manager starts (after SDK ready).
     private func buildStreamingFactory(target: String) throws -> (SplitFactory, ConnectionManagerRef) {
-        let t = Target(matchingKey: target)
+        let t = Target(matchingKey: target, trafficType: "user")
         let ref = ConnectionManagerRef()
         let factory = try buildStreamingFactory(target: t) { fetchCoordinator in
             let cm = DefaultStreaming(target: t, fetchCoordinator: fetchCoordinator, notificationParser: DefaultThinNotificationParser())
@@ -220,7 +220,7 @@ final class StreamingE2ETest: XCTestCase {
         let parseCalledAt = Box<Date?>(nil)
         let jwtParserSpy = SseJwtParserSpy { parseCalledAt.value = Date() }
 
-        let target = Target(matchingKey: "user-123")
+        let target = Target(matchingKey: "user-123", trafficType: "user")
         let cm = DefaultStreaming(target: target, authProvider: authProviderMock, streamingEndpoint: URL(string: "https://fake.endpoint")!, httpClient: DefaultHttpClient.shared, fetchCoordinator: EvaluationFetchCoordinatorMock(), notificationParser: DefaultThinNotificationParser(), jwtParser: jwtParserSpy, backoffCounter: DefaultBackoffCounter(backoffBase: 1))
 
         let startTime = Date()

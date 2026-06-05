@@ -137,17 +137,17 @@ final class CoreDataStorageTests: XCTestCase {
         let persistent = PersistentStorage(storage: coreData)
         let matchingKey = "user_hash2"
 
-        let proTarget = Target(matchingKey: matchingKey, attributes: ["plan": "pro"])
+        let proTarget = Target(matchingKey: matchingKey, attributes: ["plan": "pro"], trafficType: "user")
         let change = EvaluationChange(target: proTarget, changeNumber: 99, evaluations: [])
         try await persistent.upsert(change: change)
 
         // Same attributes — should return the stored change number
-        let sameAttrTarget = Target(matchingKey: matchingKey, attributes: ["plan": "pro"])
+        let sameAttrTarget = Target(matchingKey: matchingKey, attributes: ["plan": "pro"], trafficType: "user")
         let changeNumberSame = await persistent.lastChangeNumber(target: sameAttrTarget)
         XCTAssertEqual(changeNumberSame, 99, "Same attributes should return stored change number")
 
         // Different attributes — hash mismatch should return nil
-        let freeTarget = Target(matchingKey: matchingKey, attributes: ["plan": "free"])
+        let freeTarget = Target(matchingKey: matchingKey, attributes: ["plan": "free"], trafficType: "user")
         let changeNumberDiff = await persistent.lastChangeNumber(target: freeTarget)
         XCTAssertNil(changeNumberDiff, "Different attributes hash should cause nil change number")
     }

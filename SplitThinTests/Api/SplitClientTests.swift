@@ -36,7 +36,7 @@ final class DefaultSplitClientTest: XCTestCase {
     }
 
     func testSetTargetUpdatesTarget() {
-        client.setTarget(target: Target(matchingKey: "user2"))
+        client.setTarget(target: Target(matchingKey: "user2", trafficType: "user"))
 
         XCTAssertEqual(client.target.key.matchingKey, "user2")
     }

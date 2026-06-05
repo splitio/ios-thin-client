@@ -21,9 +21,9 @@ final class DefaultSplitFactoryTest: XCTestCase {
         fetchCoordinatorMock = EvaluationFetchCoordinatorMock()
         connectionManagerMock = StreamingMock()
         evaluationStorageMock = EvaluationStorageMock()
-        splitManager = DefaultSplitManager(evaluationRepository: evaluationRepositoryMock, target: Target(matchingKey: "user1"))
+        splitManager = DefaultSplitManager(evaluationRepository: evaluationRepositoryMock, target: Target(matchingKey: "user1", trafficType: "user"))
         let coreDataStorage = CoreDataStorage(databaseName: "test_factory_\(UUID().uuidString.prefix(8))")
-        factory = DefaultSplitFactory(sdkKey: SdkKey("api-key"), target: Target(matchingKey: "user1"), config: SplitClientConfig.builder().build(), evaluationFilters: nil, secureHttpClient: secureHttpClientMock, authProvider: authProviderMock, evaluationRepository: evaluationRepositoryMock, fetchCoordinator: fetchCoordinatorMock, streaming: connectionManagerMock, evaluationStorage: evaluationStorageMock, coreDataStorage: coreDataStorage, splitManager: splitManager, factoryObserver: ObserverSpy(), telemetryStorage: DefaultTelemetryStorage(storage: coreDataStorage))
+        factory = DefaultSplitFactory(sdkKey: SdkKey("api-key"), target: Target(matchingKey: "user1", trafficType: "user"), config: SplitClientConfig.builder().build(), evaluationFilters: nil, secureHttpClient: secureHttpClientMock, authProvider: authProviderMock, evaluationRepository: evaluationRepositoryMock, fetchCoordinator: fetchCoordinatorMock, streaming: connectionManagerMock, evaluationStorage: evaluationStorageMock, coreDataStorage: coreDataStorage, splitManager: splitManager, factoryObserver: ObserverSpy(), telemetryStorage: DefaultTelemetryStorage(storage: coreDataStorage))
     }
 
     override func tearDown() async throws {
@@ -66,7 +66,7 @@ final class DefaultSplitFactoryTest: XCTestCase {
     }
 
     func testGetClientReturnsSameInstanceForSameKey() {
-        let target = Target(matchingKey: "user2")
+        let target = Target(matchingKey: "user2", trafficType: "user")
 
         let client1 = factory.getClient(target)
         let client2 = factory.getClient(target)
@@ -75,8 +75,8 @@ final class DefaultSplitFactoryTest: XCTestCase {
     }
 
     func testGetClientReturnsSameInstanceForSameKeyDifferentAttributes() {
-        let client1 = factory.getClient(Target(matchingKey: "user2", attributes: ["env": "prod"]))
-        let client2 = factory.getClient(Target(matchingKey: "user2", attributes: ["env": "staging"]))
+        let client1 = factory.getClient(Target(matchingKey: "user2", attributes: ["env": "prod"], trafficType: "user"))
+        let client2 = factory.getClient(Target(matchingKey: "user2", attributes: ["env": "staging"], trafficType: "user"))
 
         XCTAssertIdentical(client1, client2, "Should return the same instance when matchingKey and bucketingKey match")
     }

@@ -3,7 +3,7 @@ import Http
 import Tracker
 @testable import SplitThin
 
-func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync, refreshRate: Int = 1, timeout: Int = -1, target: Target = Target(matchingKey: "user-123"), fallbackTreatments: FallbackTreatmentsConfig? = nil, observer: Observer? = nil) throws -> SplitFactory {
+func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync, refreshRate: Int = 1, timeout: Int = -1, target: Target = Target(matchingKey: "user-123", trafficType: "user"), fallbackTreatments: FallbackTreatmentsConfig? = nil, observer: Observer? = nil) throws -> SplitFactory {
 
     var configBuilder = SplitClientConfig.builder()
                                          .setMinEvaluationRefreshRate(1)
@@ -37,7 +37,7 @@ func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync
 }
 
 func buildClient(target: String = "user-123", treatmentsManager: TreatmentsManager? = nil, eventsManager: SplitEventsManager? = nil, authProvider: AuthProvider? = nil, observer: Observer? = nil, syncManager: SyncManager? = nil, tracker: Tracker? = nil, eventsTracker: EventsTracker? = nil, eventsScheduler: EventsPeriodicScheduler? = nil, telemetryObserver: TelemetryObserver? = nil, telemetrySubmitter: TelemetrySubmitter? = nil) -> DefaultSplitClient {
-    DefaultSplitClient(target: Target(matchingKey: target),
+    DefaultSplitClient(target: Target(matchingKey: target, trafficType: "user"),
                        treatmentsManager: treatmentsManager ?? TreatmentsManagerMock(),
                        eventsManager: eventsManager ?? SplitEventsManagerMock(),
                        authProvider: authProvider ?? AuthProviderMock(),
@@ -73,5 +73,5 @@ func mockEvaluationsData(flags: [String], treatment: String = "on", since: Int64
 
 // Convenience init for some tests
 func buildFactory(httpClient: SecureHttpClient, target: String = "user-123") throws -> SplitFactory {
-    try buildFactory(httpClient: httpClient, target: Target(matchingKey: target))
+    try buildFactory(httpClient: httpClient, target: Target(matchingKey: target, trafficType: "user"))
 }

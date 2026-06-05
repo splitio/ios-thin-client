@@ -30,8 +30,8 @@ final class FetchCoordinatorE2ETest: XCTestCase {
         factory = try buildFactory(httpClient: httpMock)
         factory.client.addEventListener(listener)
 
-        factory.client.setTarget(target: Target(matchingKey: "user-A"))
-        factory.client.setTarget(target: Target(matchingKey: "user-B"))
+        factory.client.setTarget(target: Target(matchingKey: "user-A", trafficType: "user"))
+        factory.client.setTarget(target: Target(matchingKey: "user-B", trafficType: "user"))
 
         waitFor(sdkReady)
 
@@ -52,7 +52,7 @@ final class FetchCoordinatorE2ETest: XCTestCase {
         factory = try buildFactory(httpClient: httpMock)
         factory.client.addEventListener(listener)
 
-        factory.client.setTarget(target: Target(matchingKey: "new-user"))
+        factory.client.setTarget(target: Target(matchingKey: "new-user", trafficType: "user"))
 
         waitFor(sdkReady)
 
@@ -72,9 +72,9 @@ final class FetchCoordinatorE2ETest: XCTestCase {
 
         waitFor(sdkReady)
 
-        factory.client.setTarget(target: Target(matchingKey: "user-A"))
+        factory.client.setTarget(target: Target(matchingKey: "user-A", trafficType: "user"))
         sleep(seconds: 0.03) // Give time for setTarget fetch
-        factory.client.setTarget(target: Target(matchingKey: "user-A"))
+        factory.client.setTarget(target: Target(matchingKey: "user-A", trafficType: "user"))
         sleep(seconds: 0.03) // Give time for second setTarget fetch
 
         let fetchesForUserA = httpMock.fetchEvaluationsCalls.filter { $0.target.matchingKey == "user-A" }.count

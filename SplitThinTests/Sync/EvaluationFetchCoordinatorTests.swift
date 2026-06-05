@@ -6,7 +6,7 @@ final class DefaultEvaluationFetchCoordinatorTest: XCTestCase {
     private var provider: EvaluationProviderMock!
     private var coordinator: DefaultEvaluationFetchCoordinator!
 
-    private let target = Target(matchingKey: "user1")
+    private let target = Target(matchingKey: "user1", trafficType: "user")
     private let filters = EvaluationFilters(flagNames: ["flag1"])
 
     override func setUp() {
@@ -57,7 +57,7 @@ final class DefaultEvaluationFetchCoordinatorTest: XCTestCase {
     }
 
     func testConcurrentDifferentTargetsExecuteBoth() async throws {
-        let target2 = Target(matchingKey: "user2")
+        let target2 = Target(matchingKey: "user2", trafficType: "user")
         let evaluations = [EvaluationResult(flag: "flag1", treatment: "on", flagSets: [])]
         provider.resultToReturn = EvaluationsResult(evaluations: evaluations, till: 1)
         provider.fetchDelay = 100_000_000 // 100ms
@@ -105,7 +105,7 @@ final class DefaultEvaluationFetchCoordinatorTest: XCTestCase {
     }
 
     func testRefetchAllRefetchesMultipleDistinctKeys() async throws {
-        let target2 = Target(matchingKey: "user2")
+        let target2 = Target(matchingKey: "user2", trafficType: "user")
         let evaluations = [EvaluationResult(flag: "flag1", treatment: "on", flagSets: [])]
         provider.resultToReturn = EvaluationsResult(evaluations: evaluations, till: 1)
 
@@ -119,7 +119,7 @@ final class DefaultEvaluationFetchCoordinatorTest: XCTestCase {
     // MARK: - refetchKeys
 
     func testRefetchKeysOnlyFetchesMatchingKeys() async throws {
-        let target2 = Target(matchingKey: "user2")
+        let target2 = Target(matchingKey: "user2", trafficType: "user")
         provider.resultToReturn = EvaluationsResult(evaluations: [], till: 1)
 
         _ = try await coordinator.fetchIfNeeded(target: target, filters: filters, reason: .initialization)

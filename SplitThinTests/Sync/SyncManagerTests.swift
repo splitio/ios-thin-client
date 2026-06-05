@@ -10,7 +10,7 @@ final class SyncManagerTests: XCTestCase {
     private var evaluationRepository: EvaluationRepositoryMock!
     private var eventsManager: SplitEventsManagerMock!
 
-    private let target = Target(matchingKey: "user1")
+    private let target = Target(matchingKey: "user1", trafficType: "user")
 
     override func setUp() {
         super.setUp()
