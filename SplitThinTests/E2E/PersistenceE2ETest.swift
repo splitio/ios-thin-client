@@ -33,7 +33,7 @@ final class PersistenceE2ETest: XCTestCase {
         let sdkReady = expectation("SDK ready")
         let listener = TestEventListener(readyExpectation: sdkReady)
         let target = Target(matchingKey: "user_a", trafficType: "user")
-        factory = try buildFactoryWithPrefix(httpClient: httpMock, target: target, prefix: prefix)
+        factory = try buildFactory(httpClient: httpMock, target: target, prefix: prefix)
         factory.client.addEventListener(listener)
         waitFor(sdkReady)
 
@@ -49,7 +49,7 @@ final class PersistenceE2ETest: XCTestCase {
 
         let sdkReady2 = expectation("SDK ready 2")
         let listener2 = TestEventListener(readyExpectation: sdkReady2)
-        factory2 = try buildFactoryWithPrefix(httpClient: httpMock2, target: target, prefix: prefix)
+        factory2 = try buildFactory(httpClient: httpMock2, target: target, prefix: prefix)
         factory2.client.addEventListener(listener2)
         waitFor(sdkReady2, timeout: 5)
 
@@ -66,7 +66,7 @@ final class PersistenceE2ETest: XCTestCase {
         let sdkReady = expectation("SDK ready A")
         let listenerA = TestEventListener(readyExpectation: sdkReady)
         let targetA = Target(matchingKey: "user_a", attributes: ["plan": "pro"], trafficType: "user")
-        factory = try buildFactoryWithPrefix(httpClient: httpMock, target: targetA, prefix: prefix)
+        factory = try buildFactory(httpClient: httpMock, target: targetA, prefix: prefix)
         factory.client.addEventListener(listenerA)
         waitFor(sdkReady)
 
@@ -83,7 +83,7 @@ final class PersistenceE2ETest: XCTestCase {
         let sdkReady2 = expectation("SDK ready B")
         let listenerB = TestEventListener(readyExpectation: sdkReady2)
         let targetB = Target(matchingKey: "user_a", attributes: ["plan": "free"], trafficType: "user")
-        factory2 = try buildFactoryWithPrefix(httpClient: httpMock2, target: targetB, prefix: prefix)
+        factory2 = try buildFactory(httpClient: httpMock2, target: targetB, prefix: prefix)
         factory2.client.addEventListener(listenerB)
         waitFor(sdkReady2, timeout: 5)
 
@@ -93,30 +93,86 @@ final class PersistenceE2ETest: XCTestCase {
         )
     }
 
-    // Storage-level isolation between nil and non-nil bucketingKey identities is covered in
-    // SplitThinTests/Storage/CoreDataStorageTests.swift (testNilAndNonNilBucketingKeysDontOverwriteEachOther
-    // and testClearDeletesByScopedIdentity). An E2E-level test would require fine-grained control
-    // over CoreData write timing that is not yet exposed in the E2E test harness.
+    func testEnablingConfigsOnSecondRunServesConfigFromResponse() async throws {
+        let prefix = "persist_e2e_configs_\(UUID().uuidString.prefix(8))"
+        let target = Target(matchingKey: "user_a", bucketingKey: "bucket_1", trafficType: "user")
+
+        // First run: configsEnabled = false. A full sync (since=-1) returns the flag without config.
+        let server1 = SinceAwareHttpClientMock(
+            authData: AuthE2ETest.mockAuthResponse(),
+            fullSyncData: mockEvaluationsData(flags: ["my_flag"], till: 1000),
+            upToDateData: mockEvaluationsData(flags: [], since: 1000, till: 1000)
+        )
+
+        let sdkReady = expectation("SDK ready")
+        let listener = TestEventListener(readyExpectation: sdkReady)
+        factory = try buildFactory(retryableHttpClient: server1, target: target, configsEnabled: false, prefix: prefix)
+        factory.client.addEventListener(listener)
+        waitFor(sdkReady)
+
+        let firstRun = factory.client.getTreatment("my_flag")
+        XCTAssertEqual(firstRun.treatment, "on")
+        XCTAssertNil(firstRun.config, "With configs disabled the flag should not carry a config")
+
+        // Give persistence a moment to write (it's non-blocking)
+        sleep(seconds: 0.5)
+
+        await factory.destroy()
+        factory = nil
+
+        // Second run: same matchingKey + bucketingKey, but now configsEnabled = true.
+        //
+        // The server only returns config on a full sync (since=-1). If enabling configs did NOT
+        // invalidate the stored changeNumber, the SDK would send since=<stored> and get an empty
+        // "you're up to date" response, keeping the config-less cache from run 1. That's exactly
+        // the bug this test guards against: only the cache invalidation makes run 2 send since=-1.
+        let server2 = SinceAwareHttpClientMock(
+            authData: AuthE2ETest.mockAuthResponse(),
+            fullSyncData: mockEvaluationsData(flags: ["my_flag"], config: "{\"color\":\"blue\"}", till: 1000),
+            upToDateData: mockEvaluationsData(flags: [], since: 1000, till: 1000),
+            // Make the fresh fetch land after the (stale) cache load so the assertion is deterministic.
+            evaluationsDelay: 0.3
+        )
+
+        let sdkReady2 = expectation("SDK ready 2")
+        let listener2 = TestEventListener(readyExpectation: sdkReady2)
+        factory2 = try buildFactory(retryableHttpClient: server2, target: target, configsEnabled: true, prefix: prefix)
+        factory2.client.addEventListener(listener2)
+        waitFor(sdkReady2, timeout: 5)
+
+        let secondRun = factory2.client.getTreatment("my_flag")
+        XCTAssertEqual(secondRun.treatment, "on")
+        XCTAssertEqual(secondRun.config, "{\"color\":\"blue\"}", "After enabling configs the response config should be served")
+    }
 }
 
-// MARK: - Helpers (private to this file)
+// Emulates the backend's since-based behavior for /evaluations
+private final class SinceAwareHttpClientMock: RetryableHttpClient, @unchecked Sendable {
 
-extension PersistenceE2ETest {
-    private func buildFactoryWithPrefix(httpClient: SecureHttpClient, target: Target, prefix: String) throws -> SplitFactory {
-        let config = SplitClientConfig.builder()
-            .setMinEvaluationRefreshRate(1)
-            .set(syncMode: .singleSync)
-            .set(prefix: prefix)
-            .build()
+    private let authData: Data
+    private let fullSyncData: Data
+    private let upToDateData: Data
+    private let evaluationsDelay: TimeInterval
 
-        let builder = DefaultSplitFactoryBuilder()
-        builder.setSecureHttpClient(httpClient)
-        builder.setCredentialStorage(DefaultCredentialStorage())
+    init(authData: Data, fullSyncData: Data, upToDateData: Data, evaluationsDelay: TimeInterval = 0) {
+        self.authData = authData
+        self.fullSyncData = fullSyncData
+        self.upToDateData = upToDateData
+        self.evaluationsDelay = evaluationsDelay
+    }
 
-        guard let factory = builder.setSdkKey("test-sdk-key").setTarget(target).setConfig(config).build() else {
-            throw NSError(domain: "E2ETest", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to build factory"])
+    func execute(_ endpoint: Endpoint, category: RequestCategory, body: Data?) async throws -> HttpResponse {
+        switch category {
+            case .auth:
+                return HttpResponse(code: 200, data: authData)
+            case .evaluations:
+                let isFullSync = endpoint.url.absoluteString.contains("since=-1")
+                if evaluationsDelay > 0 {
+                    try? await Task.sleep(nanoseconds: UInt64(evaluationsDelay * 1_000_000_000))
+                }
+                return HttpResponse(code: 200, data: isFullSync ? fullSyncData : upToDateData)
+            default:
+                return HttpResponse(code: 200, data: nil)
         }
-
-        return factory
     }
 }

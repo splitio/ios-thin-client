@@ -3,13 +3,15 @@ import Http
 import Tracker
 @testable import SplitThin
 
-func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync, refreshRate: Int = 1, timeout: Int = -1, target: Target = Target(matchingKey: "user-123", trafficType: "user"), fallbackTreatments: FallbackTreatmentsConfig? = nil, observer: Observer? = nil) throws -> SplitFactory {
+func buildFactory(httpClient: SecureHttpClient? = nil, retryableHttpClient: RetryableHttpClient? = nil, syncMode: SyncMode = .singleSync, refreshRate: Int = 1, timeout: Int = -1, target: Target = Target(matchingKey: "user-123", trafficType: "user"), configsEnabled: Bool = false, prefix: String? = nil, fallbackTreatments: FallbackTreatmentsConfig? = nil, observer: Observer? = nil) throws -> SplitFactory {
 
     var configBuilder = SplitClientConfig.builder()
                                          .setMinEvaluationRefreshRate(1)
                                          .set(syncMode: syncMode)
                                          .set(evaluationRefreshRate: refreshRate)
                                          .set(timeout: timeout)
+                                         .set(configsEnabled: configsEnabled)
+                                         .set(prefix: prefix)
 
     if let fallbacks = fallbackTreatments {
         configBuilder = configBuilder.set(fallbackTreatments: fallbacks)
@@ -20,8 +22,13 @@ func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync
     // Factory
     let builder = DefaultSplitFactoryBuilder()
 
-    // Inject httpClient (just possible on testing)
-    builder.setSecureHttpClient(httpClient)
+    // Inject the http layer (just possible on testing)
+    if let httpClient {
+        builder.setSecureHttpClient(httpClient)
+    }
+    if let retryableHttpClient {
+        builder.setRetryableHttpClient(retryableHttpClient)
+    }
     builder.setCredentialStorage(DefaultCredentialStorage())
 
     // Inject Observer (just possible on testing)
@@ -50,12 +57,21 @@ func buildClient(target: String = "user-123", treatmentsManager: TreatmentsManag
                        telemetrySubmitter: telemetrySubmitter ?? TelemetrySubmitterMock())
 }
 
-func mockEvaluationsData(flags: [String], treatment: String = "on", since: Int64 = -1, till: Int64 = 12345) -> Data {
+func mockEvaluationsData(flags: [String], treatment: String = "on", config: String? = nil, since: Int64 = -1, till: Int64 = 12345) -> Data {
+    let configField: String
+    if let config {
+        let escaped = config.replacingOccurrences(of: "\"", with: "\\\"")
+        configField = "\"config\": \"\(escaped)\","
+    } else {
+        configField = ""
+    }
+
     let evaluations = flags.map { flag in
         """
         {
             "featureName": "\(flag)",
             "treatment": "\(treatment)",
+            \(configField)
             "changeNumber": \(till),
             "sets": ["set-a"]
         }

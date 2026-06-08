@@ -21,9 +21,11 @@ protocol EvaluationWriteStorage: Sendable {
 final class PersistentStorage: EvaluationReadStorage, EvaluationWriteStorage, Sendable {
 
     private let storage: CoreDataStorage
+    private let cacheValidator: CacheValidator
 
-    init(storage: CoreDataStorage) {
+    init(storage: CoreDataStorage, cacheValidator: CacheValidator) {
         self.storage = storage
+        self.cacheValidator = cacheValidator
     }
 
     // MARK: - EvaluationWriteStorage
@@ -32,11 +34,10 @@ final class PersistentStorage: EvaluationReadStorage, EvaluationWriteStorage, Se
         let matchingKey = change.target.matchingKey
         let bucketingKey = change.target.bucketingKey
 
-        let attributesHash = Murmur3Hash.attributesHash(for: change.target.attributes)
         try await storage.upsertClientSession(
             matchingKey: matchingKey,
             bucketingKey: bucketingKey,
-            attributesHash: attributesHash,
+            attributesHash: cacheValidator.fingerprint(for: change.target),
             attributes: change.target.attributes,
             changeNumber: change.changeNumber
         )
@@ -93,9 +94,8 @@ final class PersistentStorage: EvaluationReadStorage, EvaluationWriteStorage, Se
     }
 
     func lastChangeNumber(target: Target) async -> Int64? {
-        let storedHash = await storage.getAttributesHash(matchingKey: target.matchingKey, bucketingKey: target.bucketingKey)
-        let freshHash = Murmur3Hash.attributesHash(for: target.attributes)
-        if let storedHash, storedHash != freshHash {
+        let storedFingerprint = await storage.getAttributesHash(matchingKey: target.matchingKey, bucketingKey: target.bucketingKey)
+        guard cacheValidator.isValid(storedAttrHash: storedFingerprint, for: target) else {
             return nil
         }
         return await storage.getChangeNumber(matchingKey: target.matchingKey, bucketingKey: target.bucketingKey)

@@ -28,7 +28,7 @@ public struct EvaluationResult: Sendable, DynamicDecodable {
         self.flag = flag
         self.treatment = treatment
         changeNumber = dict["changeNumber"] as? Int64
-        flagSets = dict["sets"] as! [String]
+        flagSets = dict["sets"] as? [String] ?? []
         config = dict["config"] as? String
     }
 }

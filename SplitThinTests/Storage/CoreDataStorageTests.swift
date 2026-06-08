@@ -134,7 +134,7 @@ final class CoreDataStorageTests: XCTestCase {
 
     func testAttributesHashDifferentFromStoredCausesNilChangeNumber() async throws {
         let coreData = makeStorage()
-        let persistent = PersistentStorage(storage: coreData)
+        let persistent = PersistentStorage(storage: coreData, cacheValidator: DefaultCacheValidator(configsEnabled: false))
         let matchingKey = "user_hash2"
 
         let proTarget = Target(matchingKey: matchingKey, attributes: ["plan": "pro"], trafficType: "user")
@@ -150,6 +150,26 @@ final class CoreDataStorageTests: XCTestCase {
         let freeTarget = Target(matchingKey: matchingKey, attributes: ["plan": "free"], trafficType: "user")
         let changeNumberDiff = await persistent.lastChangeNumber(target: freeTarget)
         XCTAssertNil(changeNumberDiff, "Different attributes hash should cause nil change number")
+    }
+
+    // MARK: - configsEnabled invalidation
+
+    func testTogglingConfigsEnabledCausesNilChangeNumber() async throws {
+        let coreData = makeStorage()
+        let target = Target(matchingKey: "user_configs", trafficType: "user")
+
+        // Data persisted while configs were disabled (the default).
+        let disabled = PersistentStorage(storage: coreData, cacheValidator: DefaultCacheValidator(configsEnabled: false))
+        try await disabled.upsert(change: EvaluationChange(target: target, changeNumber: 99, evaluations: []))
+
+        // Same configsEnabled — stored change number is reused.
+        let stillDisabled = await disabled.lastChangeNumber(target: target)
+        XCTAssertEqual(stillDisabled, 99, "Same configsEnabled should return stored change number")
+
+        // configsEnabled flipped on — must invalidate to force a full refetch (since = -1).
+        let enabled = PersistentStorage(storage: coreData, cacheValidator: DefaultCacheValidator(configsEnabled: true))
+        let afterToggle = await enabled.lastChangeNumber(target: target)
+        XCTAssertNil(afterToggle, "Changing configsEnabled should cause nil change number")
     }
 
     // MARK: - Clear scope

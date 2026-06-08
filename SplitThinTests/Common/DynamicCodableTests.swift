@@ -83,6 +83,16 @@ final class ParsingTest: XCTestCase {
         XCTAssertNil(result.changeNumber)
     }
 
+    func testEvaluationResultDefaultsSetsToEmptyWhenMissing() throws {
+        let json = """
+        {"featureName":"flag","treatment":"on"}
+        """.data(using: .utf8)!
+
+        let result = try Json.decode(from: json, to: EvaluationResult.self)
+
+        XCTAssertEqual(result.flagSets, [], "Missing sets must default to [] instead of crashing")
+    }
+
     func testEvaluationResultThrowsOnMissingFeatureName() {
         let json = """
         {"treatment":"on","sets":[]}

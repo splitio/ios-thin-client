@@ -84,7 +84,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         let resolvedObserver = buildObserver()
         let databaseName = Self.databaseName(prefix: config.prefix, apiKey: sdkKey.sdkKey)
         let coreDataStorage = CoreDataStorage(databaseName: databaseName)
-        let evaluationStorage = PersistentStorage(storage: coreDataStorage)
+        let evaluationStorage = PersistentStorage(storage: coreDataStorage, cacheValidator: DefaultCacheValidator(configsEnabled: config.configsEnabled))
         let (secureHttp, resolvedAuth) = buildSecureHttpClientAndAuth(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey, observer: resolvedObserver, evaluationStorage: evaluationStorage)
         let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttp)
 
