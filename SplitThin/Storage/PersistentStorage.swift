@@ -94,8 +94,8 @@ final class PersistentStorage: EvaluationReadStorage, EvaluationWriteStorage, Se
     }
 
     func lastChangeNumber(target: Target) async -> Int64? {
-        let storedFingerprint = await storage.getAttributesHash(matchingKey: target.matchingKey, bucketingKey: target.bucketingKey)
-        guard cacheValidator.isValid(storedAttrHash: storedFingerprint, for: target) else {
+        let storedCache = await storage.getAttributesHash(matchingKey: target.matchingKey, bucketingKey: target.bucketingKey)
+        guard cacheValidator.isValid(storedAttrHash: storedCache, for: target) else {
             return nil
         }
         return await storage.getChangeNumber(matchingKey: target.matchingKey, bucketingKey: target.bucketingKey)
