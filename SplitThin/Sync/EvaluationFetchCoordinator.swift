@@ -120,7 +120,7 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
 
     private func fetchKeys(_ keys: Set<FetchKey>, delay: RefetchDelay) async {
         for key in keys {
-            let keyDelay = computeKeyDelay(matchingKey: key.target.matchingKey, delay: delay)
+            let keyDelay = delay.delay(forKey: key.target.matchingKey)
             if keyDelay > 0 {
                 try? await Task.sleep(nanoseconds: UInt64(keyDelay * 1_000_000_000))
             }
@@ -134,6 +134,8 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
         let storedChangeNumber = await readStorage?.lastChangeNumber(target: target) ?? -1
 
         let result: EvaluationsResult
+
+        // Fetch 
         do {
             guard let fetched = try await provider.fetch(target: target, filters: filters) else {
                 Logger.d("EvaluationFetchCoordinator: Fetch failed for \(target.matchingKey) (reason: \(reason))")
@@ -149,31 +151,33 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
         let changeNumber = result.till ?? -1
         observer.notify(event: .evalFetchSucceeded(changeNumber: changeNumber))
 
-        // When till == stored changeNumber the server confirms we're up to date
+        // When till == stored, the server confirms we're up to date
         // and returns an empty evaluations array. Persisting it would erase existing data.
         let hasNewData = changeNumber > storedChangeNumber
 
-        if hasNewData, let storage {
+        // Server has no flags yet (since/till == -1, no evaluations).
+        // Nothing to persist, but the SDK must still be marked ready.
+        let isEmptyAccount = result.since == -1 && changeNumber == -1 && result.evaluations.isEmpty
+
+        // Persist 
+        if hasNewData {
             observer.notify(event: .evalStorageWriteScheduled)
 
-            Task { // Non-blocking persistence
+            Task { [self] in // Non-blocking persistence
                 do {
-                    try await storage.upsert(change: EvaluationChange(target: target, changeNumber: changeNumber, evaluations: result.evaluations))
+                    try await self.storage?.upsert(change: EvaluationChange(target: target, changeNumber: changeNumber, evaluations: result.evaluations))
                     self.observer.notify(event: .evalStorageWriteSucceeded)
+                    observer.notify(event: .evalStorageUpdated(names: result.evaluations.map { $0.flag }))
                 } catch {
                     self.observer.notify(event: .evalStorageWriteFailed)
                 }
             }
         }
 
-        if reason == .push, hasNewData {
-            let fetchResult = FetchResult(evaluations: result.evaluations, changeNumber: changeNumber)
+        // Trigger SDK_UPDATE
+        if reason == .push, hasNewData || isEmptyAccount {
             let updateAction = withLock(lock) { onUpdateActions[target.key] }
-            updateAction?(fetchResult) // Notifies the eventsManager of the client
-        }
-
-        if hasNewData {
-            observer.notify(event: .evalStorageUpdated(names: result.evaluations.map { $0.flag }))
+            updateAction?(FetchResult(evaluations: result.evaluations, changeNumber: changeNumber)) // Notifies the eventsManager of the client
         }
 
         Logger.d("EvaluationFetchCoordinator: Fetched \(result.evaluations.count) evaluations for \(target.matchingKey) (reason: \(reason), hasNewData: \(hasNewData))")

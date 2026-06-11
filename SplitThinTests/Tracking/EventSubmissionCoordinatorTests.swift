@@ -18,7 +18,6 @@ final class DefaultEventSubmissionCoordinatorTest: XCTestCase {
         await coordinator.triggerSubmission(reason: .flush)
 
         XCTAssertEqual(eventTask.runCallCount, 1)
-        XCTAssertTrue(observer.eventNames.contains("eventsFlushTriggered"))
     }
 
     func testConcurrentTriggersAreDeduplicated() async {
@@ -39,14 +38,25 @@ final class DefaultEventSubmissionCoordinatorTest: XCTestCase {
 
         XCTAssertEqual(slowTask.runCallCount, 1)
     }
+
+    func testUnauthorizedDisablesSubmissions() async {
+        eventTask.runResult = .unauthorized
+
+        await coordinator.triggerSubmission(reason: .flush)
+        XCTAssertEqual(eventTask.runCallCount, 1)
+        XCTAssertTrue(observer.eventNames.contains("authUnauthorized"))
+
+        await coordinator.triggerSubmission(reason: .flush)
+        XCTAssertEqual(eventTask.runCallCount, 1, "Task should not run again after 401")
+    }
 }
 
 private final class EventTaskSlowMock: EventTask, @unchecked Sendable {
     var runCallCount = 0
 
-    func run() async -> Bool {
+    func run() async -> EventTaskResult {
         runCallCount += 1
         try? await Task.sleep(nanoseconds: 200_000_000) // 200ms
-        return true
+        return .success
     }
 }

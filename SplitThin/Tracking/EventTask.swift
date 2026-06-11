@@ -4,8 +4,14 @@
 import Foundation
 import Logging
 
+enum EventTaskResult: Sendable {
+    case success
+    case failed
+    case unauthorized
+}
+
 protocol EventTask: Sendable {
-    func run() async -> Bool
+    func run() async -> EventTaskResult
 }
 
 final class DefaultEventTask: EventTask {
@@ -26,7 +32,7 @@ final class DefaultEventTask: EventTask {
         self.target = target
     }
 
-    func run() async -> Bool {
+    func run() async -> EventTaskResult {
         var totalSent = 0
 
         while true {
@@ -38,16 +44,20 @@ final class DefaultEventTask: EventTask {
                 try await submitter.submit(payload: payload, target: target)
                 await storage.remove(batch)
                 totalSent += batch.count
+            } catch CredentialFetcherError.unauthorized {
+                Logger.e("DefaultEventTask: Unauthorized (401), stopping")
+                observer.notify(event: .eventsPostFailed)
+                return .unauthorized
             } catch {
                 Logger.e("DefaultEventTask: Failed to submit \(batch.count) events")
                 observer.notify(event: .eventsPostFailed)
-                return false
+                return .failed
             }
         }
 
         if totalSent > 0 {
             observer.notify(event: .eventsPostSucceeded(count: totalSent))
         }
-        return true
+        return .success
     }
 }

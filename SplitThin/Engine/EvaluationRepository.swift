@@ -10,7 +10,8 @@ protocol EvaluationRepository: Sendable {
     func getEvaluationsByFlagSets(_ flagSets: [String], target: Target) -> [StoredEvaluation]
     func getFlagNames(target: Target) -> [String]
     func setTarget(_ target: Target)
-    func update(_ evaluations: [EvaluationResult], for target: Target)
+    @discardableResult
+    func update(_ evaluations: [EvaluationResult], for target: Target) -> [String]
     @discardableResult
     func initialize(target: Target) async throws -> FetchResult
 }
@@ -57,7 +58,7 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
             guard let self else { return }
             do {
                 let result = try await self.fetchCoordinator.fetchIfNeeded(target: target, filters: self.evaluationFilters, reason: .targetSwitch)
-                self.cacheEvaluations(result.evaluations, for: target)
+                self.update(result.evaluations, for: target)
             } catch {
                 Logger.e("EvaluationRepository: Failed to fetch evaluations for target \(target.matchingKey): \(error)")
             }
@@ -67,12 +68,37 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
     @discardableResult
     func initialize(target: Target) async throws -> FetchResult {
         let result = try await fetchCoordinator.fetchIfNeeded(target: target, filters: evaluationFilters, reason: .initialization)
-        cacheEvaluations(result.evaluations, for: target)
+        update(result.evaluations, for: target)
         return result
     }
 
-    func update(_ evaluations: [EvaluationResult], for target: Target) {
-        cacheEvaluations(evaluations, for: target)
+    @discardableResult
+    func update(_ evaluations: [EvaluationResult], for target: Target) -> [String] {
+        let userKey = target.key
+        return withLock(lock) {
+            let old = cache[userKey] ?? [:]
+            var newCache = [String: StoredEvaluation]()
+            var changed = [String]()
+
+            // 1. Add new evaluations to cache
+            for evaluation in evaluations {
+                newCache[evaluation.flag] = StoredEvaluation(evaluationResult: evaluation, flagSets: evaluation.flagSets)
+                if let existing = old[evaluation.flag] {
+                    if !Self.isUnchanged(evaluation, existing) { changed.append(evaluation.flag) }
+                } else {
+                    changed.append(evaluation.flag)
+                }
+            }
+
+            // 2 Flags present before but absent now were removed by the server.
+            for flag in old.keys where newCache[flag] == nil {
+                changed.append(flag)
+            }
+
+            // 3. Update cache and return changed flags
+            cache[userKey] = newCache
+            return changed
+        }
     }
 
     func clear() {
@@ -81,17 +107,9 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
 
     // MARK: - Private
 
-    private func cacheEvaluations(_ evaluations: [EvaluationResult], for target: Target) {
-        guard !evaluations.isEmpty else { return }
-
-        let userKey = target.key
-        withLock(lock) {
-            var targetCache = cache[userKey] ?? [:]
-            for evaluation in evaluations {
-                let stored = StoredEvaluation(evaluationResult: evaluation, flagSets: evaluation.flagSets)
-                targetCache[evaluation.flag] = stored
-            }
-            cache[userKey] = targetCache
-        }
+    private static func isUnchanged(_ new: EvaluationResult, _ old: StoredEvaluation) -> Bool {
+        new.treatment == old.evaluationResult.treatment
+            && new.config == old.evaluationResult.config
+            && Set(new.flagSets) == Set(old.flagSets)
     }
 }

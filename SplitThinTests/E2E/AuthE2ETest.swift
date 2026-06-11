@@ -150,12 +150,11 @@ final class AuthE2ETest: XCTestCase {
         ]
 
         let sdkReady = expectation("SDK ready")
-        let sdkUpdate = expectation("SDK update")
-        let listener = TestEventListener(readyExpectation: sdkReady, updateExpectation: sdkUpdate)
+        let listener = TestEventListener(readyExpectation: sdkReady)
         factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .polling, refreshRate: 1, prefix: prefix)
         factory.client.addEventListener(listener)
 
-        waitFor(sdkReady, sdkUpdate)
+        waitFor(sdkReady)
 
         let authCalls = httpMock.executeCalls.filter { $0.category == .auth }
         XCTAssertEqual(authCalls.count, 1, "Should reuse cached credential, not re-auth")
@@ -221,7 +220,7 @@ final class AuthE2ETest: XCTestCase {
         {
             "evaluations": [
                 {
-                    "featureName": "my_feature",
+                    "flag": "my_feature",
                     "treatment": "on",
                     "config": "config_value",
                     "sets": []

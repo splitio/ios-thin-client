@@ -170,6 +170,17 @@ final class DefaultEvaluationFetchCoordinatorTest: XCTestCase {
         XCTAssertEqual(writeStorage.upsertCalls.count, 1, "Storage should be written when evaluations is empty")
     }
 
+    func testPushWithEmptyFlagsAndSinceTillMinusOneStillNotifiesUpdate() async throws {
+        provider.resultToReturn = EvaluationsResult(since: -1, evaluations: [], till: -1)
+
+        let updateNotified = expectation("onUpdateAction invoked")
+        coordinator.registerOnUpdateAction(for: target.key) { _ in updateNotified.fulfill() }
+
+        _ = try await coordinator.fetchIfNeeded(target: target, filters: filters, reason: .push)
+
+        waitFor(updateNotified)
+    }
+
     func testFetchPersistsWhenTillDiffersFromStoredChangeNumber() async throws {
         let readStorage = EvaluationStorageMock()
         readStorage.changeNumberToReturn = 500

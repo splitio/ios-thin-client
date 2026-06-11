@@ -6,7 +6,7 @@ import Logging
 
 public final class ServiceEndpoints: Sendable {
 
-    private static let defaultSdkEndpoint = "https://sdk.split.io"
+    private static let defaultSdkEndpoint = "https://evaluator.split.io"
     private static let defaultEventsEndpoint = "https://events.split.io"
     private static let defaultAuthServiceEndpoint = "https://auth.split.io"
     private static let defaultStreamingEndpoint = "https://streaming.split.io"

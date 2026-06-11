@@ -16,6 +16,9 @@ final class DefaultHttpEventsSubmitter: HttpEventsSubmitter {
     }
 
     func submit(payload: Data, target: Target) async throws {
-        _ = try await secureHttpClient.postEvents(payload: payload)
+        let response = try await secureHttpClient.postEvents(payload: payload)
+        if response.code == 401 {
+            throw CredentialFetcherError.unauthorized
+        }
     }
 }

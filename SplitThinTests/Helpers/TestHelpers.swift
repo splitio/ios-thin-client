@@ -69,7 +69,7 @@ func mockEvaluationsData(flags: [String], treatment: String = "on", config: Stri
     let evaluations = flags.map { flag in
         """
         {
-            "featureName": "\(flag)",
+            "flag": "\(flag)",
             "treatment": "\(treatment)",
             \(configField)
             "changeNumber": \(till),
