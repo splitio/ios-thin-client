@@ -18,6 +18,17 @@ enum EvaluationFetchError: Error {
 struct FetchResult: Sendable {
     let evaluations: [EvaluationResult]
     let changeNumber: Int64?
+
+    /// Whether this result should replace the in-memory cache. `false` for an up-to-date
+    /// response (server returned empty because nothing changed), so applying it would wipe
+    /// existing data. Defaults to `true` to preserve behavior for callers that don't set it.
+    let shouldApplyToCache: Bool
+
+    init(evaluations: [EvaluationResult], changeNumber: Int64?, shouldApplyToCache: Bool = true) {
+        self.evaluations = evaluations
+        self.changeNumber = changeNumber
+        self.shouldApplyToCache = shouldApplyToCache
+    }
 }
 
 private struct FetchKey: Hashable {
@@ -153,14 +164,10 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
 
         // When till == stored, the server confirms we're up to date
         // and returns an empty evaluations array. Persisting it would erase existing data.
-        let hasNewData = changeNumber > storedChangeNumber
-
-        // Server has no flags yet (since/till == -1, no evaluations).
-        // Nothing to persist, but the SDK must still be marked ready.
-        let isEmptyAccount = result.since == -1 && changeNumber == -1 && result.evaluations.isEmpty
+        let biggerChangeNumber = changeNumber > storedChangeNumber
 
         // Persist 
-        if hasNewData {
+        if biggerChangeNumber {
             observer.notify(event: .evalStorageWriteScheduled)
 
             Task { [self] in // Non-blocking persistence
@@ -174,13 +181,23 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
             }
         }
 
+        // Edge case: Server has no flags yet (since/till == -1, no evaluations).
+        // Nothing to persist, but the SDK must still be marked ready.
+        let isEmptyAccount = result.since == -1 && changeNumber == -1 && result.evaluations.isEmpty
+
+        // Apply to the in-memory cache unless this is an up-to-date *empty* response (server returned
+        // nothing because nothing changed) — applying that would wipe existing data. Non-empty results
+        // are always applied; an empty result is applied only when it carries new data (all flags
+        // removed) or represents an empty account.
+        let shouldApplyToCache = result.evaluations.notEmpty || biggerChangeNumber || isEmptyAccount
+
         // Trigger SDK_UPDATE
-        if reason == .push, hasNewData || isEmptyAccount {
+        if reason == .push, shouldApplyToCache {
             let updateAction = withLock(lock) { onUpdateActions[target.key] }
-            updateAction?(FetchResult(evaluations: result.evaluations, changeNumber: changeNumber)) // Notifies the eventsManager of the client
+            updateAction?(FetchResult(evaluations: result.evaluations, changeNumber: changeNumber, shouldApplyToCache: true)) // Notifies the eventsManager of the client
         }
 
-        Logger.d("EvaluationFetchCoordinator: Fetched \(result.evaluations.count) evaluations for \(target.matchingKey) (reason: \(reason), hasNewData: \(hasNewData))")
-        return FetchResult(evaluations: result.evaluations, changeNumber: changeNumber)
+        Logger.d("EvaluationFetchCoordinator: Fetched \(result.evaluations.count) evaluations for \(target.matchingKey) (reason: \(reason), hasNewData: \(biggerChangeNumber))")
+        return FetchResult(evaluations: result.evaluations, changeNumber: changeNumber, shouldApplyToCache: shouldApplyToCache)
     }
 }

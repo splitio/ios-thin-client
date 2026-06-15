@@ -7,6 +7,7 @@ import Logging
 protocol EvaluationPeriodicScheduler: Sendable {
     func start()
     func stop()
+    func setTarget(_ target: Target)
 }
 
 final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @unchecked Sendable {
@@ -14,7 +15,7 @@ final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @un
     private let fetchCoordinator: EvaluationFetchCoordinator
     private let evaluationRepository: EvaluationRepository
     private let observer: Observer // For SDK events & logging
-    private let target: Target
+    private var target: Target
     private let filters: EvaluationFilters?
     private let intervalSeconds: Int
 
@@ -58,11 +59,13 @@ final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @un
                     break
                 }
 
+                // Read the current target each cycle so a setTarget mid-flight is picked up on the next poll.
+                let currentTarget = withLock(self.lock) { self.target }
                 self.observer.notify(event: .pollTriggered(rate: self.intervalSeconds))
 
                 do {
-                    let result = try await self.fetchCoordinator.fetchIfNeeded(target: self.target, filters: self.filters, reason: .periodic)
-                    let changedFlags = self.evaluationRepository.update(result.evaluations, for: self.target)
+                    let result = try await self.fetchCoordinator.fetchIfNeeded(target: currentTarget, filters: self.filters, reason: .periodic)
+                    let changedFlags = self.evaluationRepository.applyFetched(result, for: currentTarget)
                     if !changedFlags.isEmpty {
                         self.observer.notify(event: .evaluationsUpdated(SdkUpdateMetadata(type: .flagsUpdate, names: changedFlags, changeNumber: result.changeNumber)))
                     }
@@ -83,5 +86,9 @@ final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @un
         task = nil
 
         Logger.d("EvaluationPeriodicScheduler: Stopped")
+    }
+
+    func setTarget(_ target: Target) {
+        withLock(lock) { self.target = target }
     }
 }

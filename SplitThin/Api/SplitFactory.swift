@@ -65,6 +65,11 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         self.observer = factoryObserver
         self.telemetryStorage = telemetryStorage
 
+        splitManager.activeTargetsProvider = { [weak self] in
+            guard let self else { return [] }
+            return self.clients.values.map { $0.target }
+        }
+
         observer.notify(event: .factoryInitStarted)
         createClient(target: target)
         observer.notify(event: .factoryInitCompleted)
@@ -136,7 +141,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
             // Connect FetchCoordinator (that is factory wide) with per-client eventsManager to fire updates events
             (fetchCoordinator as? DefaultEvaluationFetchCoordinator)?.registerOnUpdateAction(for: target.key) { [weak eventDispatcher, evaluationRepository, target] fetchResult in
                 guard let eventDispatcher else { return }
-                let changedFlags = evaluationRepository.update(fetchResult.evaluations, for: target)
+                let changedFlags = evaluationRepository.applyFetched(fetchResult, for: target)
                 eventDispatcher.notify(event: .evaluationsUpdated(SdkUpdateMetadata(type: .flagsUpdate, names: changedFlags, changeNumber: fetchResult.changeNumber)))
             }
 
@@ -156,7 +161,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
             })
 
         // 2. Create
-        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager, authProvider: authProvider, observer: eventDispatcher, syncManager: syncManager, tracker: tracker, eventsTracker: eventsTracker, eventsScheduler: eventsScheduler, telemetryObserver: telemetryObserver, telemetrySubmitter: telemetrySubmitter)
+        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager, authProvider: authProvider, observer: eventDispatcher, syncManager: syncManager, tracker: tracker, eventsTracker: eventsTracker, eventsScheduler: eventsScheduler, telemetryObserver: telemetryObserver, telemetrySubmitter: telemetrySubmitter, fetchCoordinator: fetchCoordinator)
 
         // 3. Register
         clients[target.key] = client
