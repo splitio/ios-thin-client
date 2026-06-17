@@ -27,7 +27,7 @@ final class TelemetryObserverTests: XCTestCase {
     }
 
     func testEvaluationRequestedIncrementsCounter() async {
-        let target = Target(matchingKey: "user1")
+        let target = Target(matchingKey: "user1", trafficType: "user")
         sut.notify(event: .evaluationRequested(flagName: "flag1", target: target))
         sut.notify(event: .evaluationRequested(flagName: "flag2", target: target))
         sut.notify(event: .evaluationRequested(flagName: "flag3", target: target))

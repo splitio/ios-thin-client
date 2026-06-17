@@ -25,7 +25,7 @@ final class SplitClientEventsTest: XCTestCase {
     }
 
     func testSetTargetEmitsTargetSwitchEvents() {
-        client.setTarget(target: Target(matchingKey: "user2"))
+        client.setTarget(target: Target(matchingKey: "user2", trafficType: "user"))
 
         XCTAssertEqual(observerSpy.eventNames, ["targetSwitchStarted", "targetSwitchCompleted"])
     }

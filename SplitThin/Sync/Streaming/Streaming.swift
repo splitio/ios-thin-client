@@ -154,6 +154,9 @@ final class DefaultStreaming: Streaming, SseHandler, @unchecked Sendable {
     // MARK: - Evaluation update strategies
 
     private func handleEvaluationUpdate(_ notification: EvaluationUpdateNotification) async {
+        let typeName = notification.dataType.map(String.init(describing:)) ?? "unknown"
+        Logger.d("StreamingConnection: evaluation update received (dataType: \(typeName))")
+
         let delay = refetchDelay(from: notification)
 
         switch notification.updateStrategy {
@@ -199,7 +202,7 @@ final class DefaultStreaming: Streaming, SseHandler, @unchecked Sendable {
 
             let affectedKeys = fetchCoordinator.registeredMatchingKeys.filter { key in
                 affectedHashes.contains(payloadDecoder.hashKey(key))
-            }
+            } 
             await fetchCoordinator.refetchKeys(Set(affectedKeys), delay: delay)
         } catch {
             Logger.e("StreamingConnectionManager: error decoding keyList payload: \(error). Falling back to fetchAll")

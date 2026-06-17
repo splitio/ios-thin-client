@@ -65,7 +65,7 @@ final class SecureHttpClientMock: SecureHttpClient, @unchecked Sendable {
             postTelemetryResult = nil
             errorToThrow = nil
             fetchDelay = 0
-            fetchEvaluationsCalls = []
+            fetchEvaluationsCalls.removeAll()
             fetchEvaluationsCallTimestamps = []
             postEventsCalls = []
             postTelemetryCalls = []

@@ -12,6 +12,15 @@ enum Murmur3Hash {
     private static let m: UInt32 = 5
     private static let n: UInt32 = 0xE6546B64
 
+    static func attributesHash(for attributes: [String: Any]?) -> String {
+        guard let attributes, !attributes.isEmpty else { return "" }
+        guard let data = try? JSONSerialization.data(withJSONObject: attributes, options: .sortedKeys),
+              let json = String(data: data, encoding: .utf8) else {
+            return ""
+        }
+        return String(hashString(json, 0))
+    }
+
     static func hashString(_ s: String, _ seed: UInt32) -> UInt32 {
         let bytes = Array(s.utf8)
         return hashBytesLittleEndian(bytes, seed)

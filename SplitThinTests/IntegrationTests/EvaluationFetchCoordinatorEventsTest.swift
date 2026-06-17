@@ -7,7 +7,7 @@ final class EvaluationFetchCoordinatorEventsTest: XCTestCase {
     private var coordinator: DefaultEvaluationFetchCoordinator!
     private var observerSpy: ObserverSpy!
 
-    private let target = Target(matchingKey: "user1")
+    private let target = Target(matchingKey: "user1", trafficType: "user")
     private let filters = EvaluationFilters(flagNames: ["flag1"])
 
     override func setUp() {

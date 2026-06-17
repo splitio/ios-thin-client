@@ -3,10 +3,10 @@ import Foundation
 
 final class EventTaskMock: EventTask, @unchecked Sendable {
 
-    var runResult = true
+    var runResult: EventTaskResult = .success
     var runCallCount = 0
 
-    func run() async -> Bool {
+    func run() async -> EventTaskResult {
         runCallCount += 1
         return runResult
     }

@@ -12,41 +12,41 @@ final class TargetTest: XCTestCase {
     }
 
     func testEqualTargetsWithMixedAttributeTypes() {
-        let t1 = Target(matchingKey: "key1", attributes: ["env": "prod", "age": 30, "premium": true])
-        let t2 = Target(matchingKey: "key1", attributes: ["env": "prod", "age": 30, "premium": true])
+        let t1 = Target(matchingKey: "key1", attributes: ["env": "prod", "age": 30, "premium": true], trafficType: "user")
+        let t2 = Target(matchingKey: "key1", attributes: ["env": "prod", "age": 30, "premium": true], trafficType: "user")
 
         XCTAssertEqual(t1, t2)
     }
 
     func testDifferentMatchingKeyNotEqual() {
-        XCTAssertNotEqual(Target(matchingKey: "key1"), Target(matchingKey: "key2"))
+        XCTAssertNotEqual(Target(matchingKey: "key1", trafficType: "user"), Target(matchingKey: "key2", trafficType: "user"))
     }
 
     func testDifferentBucketingKeyNotEqual() {
         XCTAssertNotEqual(
-            Target(matchingKey: "key1", bucketingKey: "bk1"),
-            Target(matchingKey: "key1", bucketingKey: "bk2")
+            Target(matchingKey: "key1", bucketingKey: "bk1", trafficType: "user"),
+            Target(matchingKey: "key1", bucketingKey: "bk2", trafficType: "user")
         )
     }
 
     func testNilVsSetBucketingKeyNotEqual() {
         XCTAssertNotEqual(
-            Target(matchingKey: "key1"),
-            Target(matchingKey: "key1", bucketingKey: "bk1")
+            Target(matchingKey: "key1", trafficType: "user"),
+            Target(matchingKey: "key1", bucketingKey: "bk1", trafficType: "user")
         )
     }
 
     func testDifferentAttributesNotEqual() {
         XCTAssertNotEqual(
-            Target(matchingKey: "key1", attributes: ["env": "prod"]),
-            Target(matchingKey: "key1", attributes: ["env": "staging"])
+            Target(matchingKey: "key1", attributes: ["env": "prod"], trafficType: "user"),
+            Target(matchingKey: "key1", attributes: ["env": "staging"], trafficType: "user")
         )
     }
 
     func testNilVsEmptyAttributesNotEqual() {
         XCTAssertNotEqual(
-            Target(matchingKey: "key1", attributes: nil),
-            Target(matchingKey: "key1", attributes: [:])
+            Target(matchingKey: "key1", attributes: nil, trafficType: "user"),
+            Target(matchingKey: "key1", attributes: [:], trafficType: "user")
         )
     }
 
@@ -58,13 +58,13 @@ final class TargetTest: XCTestCase {
     }
 
     func testHashableInSet() {
-        let set: Set<Target> = [Target(matchingKey: "key1"), Target(matchingKey: "key1"), Target(matchingKey: "key2")]
+        let set: Set<Target> = [Target(matchingKey: "key1", trafficType: "user"), Target(matchingKey: "key1", trafficType: "user"), Target(matchingKey: "key2", trafficType: "user")]
         XCTAssertEqual(set.count, 2)
     }
 
     func testHashableAsDictionaryKey() {
-        let t1 = Target(matchingKey: "key1")
-        let t2 = Target(matchingKey: "key2")
+        let t1 = Target(matchingKey: "key1", trafficType: "user")
+        let t2 = Target(matchingKey: "key2", trafficType: "user")
 
         var dict = [Target: String]()
         dict[t1] = "client1"
