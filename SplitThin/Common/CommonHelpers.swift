@@ -10,6 +10,10 @@ func withLock<T>(_ lock: NSLock, _ block: () -> T) -> T {
     return block()
 }
 
+extension Collection {
+    var notEmpty: Bool { !isEmpty }
+}
+
 extension Array {
     mutating func removeElementByMemoryAddress(_ element: Element) {
         let targetId = ObjectIdentifier(element as AnyObject)

@@ -6,7 +6,7 @@ final class DefaultCredentialFetcherTest: XCTestCase {
 
     private var httpClientMock: RetryableHttpClientMock!
     private var fetcher: DefaultCredentialFetcher!
-    private let authEndpoint = URL(string: "https://auth.split.io/api/v3")!
+    private let authEndpoint = URL(string: "https://auth.split.io")!
     private let sdkKey = "test-sdk-key"
 
     override func setUp() {
@@ -45,7 +45,7 @@ final class DefaultCredentialFetcherTest: XCTestCase {
         let call = httpClientMock.executeCalls[0]
         XCTAssertEqual(call.category, .auth)
         XCTAssertTrue(call.endpoint.url.absoluteString.contains("/auth"))
-        XCTAssertTrue(call.endpoint.url.absoluteString.contains("users=user1"))
+        XCTAssertTrue(call.endpoint.url.absoluteString.contains("key=user1"))
         XCTAssertEqual(call.endpoint.headers["Authorization"], "Bearer \(sdkKey)")
     }
 
@@ -60,7 +60,7 @@ final class DefaultCredentialFetcherTest: XCTestCase {
         _ = try await fetcher.fetchCredential(for: ["user1", "user2"])
 
         let url = httpClientMock.executeCalls[0].endpoint.url.absoluteString
-        XCTAssertTrue(url.contains("users=user1,user2"))
+        XCTAssertTrue(url.contains("key=user1&key=user2"), "URL should contain a key param per user: \(url)")
     }
 
     func testThrowsUnauthorizedOn401() async throws {

@@ -108,7 +108,9 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
             case .evaluationsUpdated(let updateMetadata):
                 setEvaluationsUpdateReceived()
                 if isSdkReadyFired() {
-                    triggerUpdate(updateMetadata)
+                    if !updateMetadata.names.isEmpty {
+                        triggerUpdate(updateMetadata)
+                    }
                 } else {
                     checkAndTriggerReady(changeNumber: updateMetadata.changeNumber)
                 }

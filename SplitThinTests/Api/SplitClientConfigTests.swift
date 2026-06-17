@@ -8,13 +8,13 @@ final class SplitClientConfigTest: XCTestCase {
     func testDefaultValues() {
         let config = SplitClientConfig.builder().build()
 
-        XCTAssertEqual(config.evaluationRefreshRate, 3600)
+        XCTAssertEqual(config.evaluationsRefreshRate, 3600)
         XCTAssertEqual(config.logLevel, .none)
         XCTAssertEqual(config.timeout, -1)
         XCTAssertEqual(config.syncMode, .streaming)
         XCTAssertNil(config.serviceEndpoints)
         XCTAssertEqual(config.impressionsMode, .default)
-        XCTAssertFalse(config.dynamicConfig)
+        XCTAssertFalse(config.configsEnabled)
         XCTAssertNil(config.prefix)
         XCTAssertEqual(config.pushRate, 1800)
     }
@@ -26,7 +26,7 @@ final class SplitClientConfigTest: XCTestCase {
                                       .set(evaluationRefreshRate: 10)
                                       .build()
 
-        XCTAssertEqual(config.evaluationRefreshRate, 60)
+        XCTAssertEqual(config.evaluationsRefreshRate, 60)
     }
 
     func testEvaluationRefreshRateAcceptsValidValue() {
@@ -34,7 +34,7 @@ final class SplitClientConfigTest: XCTestCase {
                                       .set(evaluationRefreshRate: 120)
                                       .build()
 
-        XCTAssertEqual(config.evaluationRefreshRate, 120)
+        XCTAssertEqual(config.evaluationsRefreshRate, 120)
     }
 
     func testEvaluationRefreshRateAcceptsMinBoundary() {
@@ -42,7 +42,7 @@ final class SplitClientConfigTest: XCTestCase {
                                       .set(evaluationRefreshRate: 60)
                                       .build()
 
-        XCTAssertEqual(config.evaluationRefreshRate, 60)
+        XCTAssertEqual(config.evaluationsRefreshRate, 60)
     }
 
     // MARK: - timeout
@@ -187,7 +187,7 @@ final class SplitClientConfigTest: XCTestCase {
 
     func testServiceEndpointsCanBeSet() {
         let endpoints = ServiceEndpoints.builder()
-                                        .set(sdkEndpoint: "https://custom.sdk.io/api")
+                                        .set(sdkEndpoint: "https://custom.sdk.io")
                                         .build()
 
         let config = SplitClientConfig.builder()
@@ -197,14 +197,32 @@ final class SplitClientConfigTest: XCTestCase {
         XCTAssertNotNil(config.serviceEndpoints)
     }
 
-    // MARK: - dynamicConfig
+    // MARK: - configsEnabled
 
-    func testDynamicConfigCanBeEnabled() {
+    func testConfigsEnabledCanBeEnabled() {
         let config = SplitClientConfig.builder()
-                                      .set(dynamicConfig: true)
+                                      .set(configsEnabled: true)
                                       .build()
 
-        XCTAssertTrue(config.dynamicConfig)
+        XCTAssertTrue(config.configsEnabled)
+    }
+
+    // MARK: - evaluationFilters
+
+    func testEvaluationFiltersDefaultsToNil() {
+        let config = SplitClientConfig.builder().build()
+
+        XCTAssertNil(config.evaluationFilters)
+    }
+
+    func testEvaluationFiltersCanBeSet() {
+        let filters = EvaluationFilters(flagNames: ["flag_a"], flagSets: ["set_1"])
+
+        let config = SplitClientConfig.builder()
+                                      .set(evaluationFilters: filters)
+                                      .build()
+
+        XCTAssertEqual(config.evaluationFilters, filters)
     }
 
     // MARK: - Builder chaining
@@ -216,14 +234,14 @@ final class SplitClientConfigTest: XCTestCase {
                                       .set(timeout: 30)
                                       .set(pushRate: 60)
                                       .set(logLevel: .debug)
-                                      .set(dynamicConfig: true)
+                                      .set(configsEnabled: true)
                                       .build()
 
         XCTAssertEqual(config.syncMode, .polling)
-        XCTAssertEqual(config.evaluationRefreshRate, 120)
+        XCTAssertEqual(config.evaluationsRefreshRate, 120)
         XCTAssertEqual(config.timeout, 30)
         XCTAssertEqual(config.pushRate, 60)
         XCTAssertEqual(config.logLevel, .debug)
-        XCTAssertTrue(config.dynamicConfig)
+        XCTAssertTrue(config.configsEnabled)
     }
 }

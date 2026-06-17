@@ -6,11 +6,11 @@ import Logging
 
 public final class ServiceEndpoints: Sendable {
 
-    private static let defaultSdkEndpoint = "https://sdk.split.io/api"
-    private static let defaultEventsEndpoint = "https://events.split.io/api"
-    private static let defaultAuthServiceEndpoint = "https://auth.split.io/api/v3"
-    private static let defaultStreamingEndpoint = "https://streaming.split.io/sse"
-    private static let defaultTelemetryEndpoint = "https://telemetry.split.io/api/v1"
+    private static let defaultSdkEndpoint = "https://evaluator.split.io"
+    private static let defaultEventsEndpoint = "https://events.split.io"
+    private static let defaultAuthServiceEndpoint = "https://auth.split.io"
+    private static let defaultStreamingEndpoint = "https://streaming.split.io"
+    private static let defaultTelemetryEndpoint = "https://telemetry.split.io"
 
     public let sdkEndpoint: URL
     public let eventsEndpoint: URL
@@ -83,28 +83,22 @@ public final class ServiceEndpoints: Sendable {
         public func build() -> ServiceEndpoints {
             var invalidEndpoints = [String]()
 
-            let sdk = createUrl(string: sdkEndpoint, invalidEndpoints: &invalidEndpoints)
-            let events = createUrl(string: eventsEndpoint, invalidEndpoints: &invalidEndpoints)
-            let auth = createUrl(string: authServiceEndpoint, invalidEndpoints: &invalidEndpoints)
-            let streaming = createUrl(string: streamingServiceEndpoint, invalidEndpoints: &invalidEndpoints)
-            let telemetry = createUrl(string: telemetryServiceEndpoint, invalidEndpoints: &invalidEndpoints)
+            let sdk = createUrl(string: sdkEndpoint, default: defaultSdkEndpoint, invalidEndpoints: &invalidEndpoints)
+            let events = createUrl(string: eventsEndpoint, default: defaultEventsEndpoint, invalidEndpoints: &invalidEndpoints)
+            let auth = createUrl(string: authServiceEndpoint, default: defaultAuthServiceEndpoint, invalidEndpoints: &invalidEndpoints)
+            let streaming = createUrl(string: streamingServiceEndpoint, default: defaultStreamingEndpoint, invalidEndpoints: &invalidEndpoints)
+            let telemetry = createUrl(string: telemetryServiceEndpoint, default: defaultTelemetryEndpoint, invalidEndpoints: &invalidEndpoints)
 
-            return ServiceEndpoints(
-                sdkEndpoint: sdk,
-                eventsEndpoint: events,
-                authServiceEndpoint: auth,
-                streamingServiceEndpoint: streaming,
-                telemetryServiceEndpoint: telemetry,
-                invalidEndpoints: invalidEndpoints
-            )
+            return ServiceEndpoints(sdkEndpoint: sdk, eventsEndpoint: events, authServiceEndpoint: auth, streamingServiceEndpoint: streaming, telemetryServiceEndpoint: telemetry, invalidEndpoints: invalidEndpoints)
         }
 
-        private func createUrl(string: String, invalidEndpoints: inout [String]) -> URL {
-            if let url = URL(string: string), !string.isEmpty {
+        private func createUrl(string: String, default defaultEndpoint: String, invalidEndpoints: inout [String]) -> URL {
+            if !string.isEmpty, let url = URL(string: string) {
                 return url
             }
             invalidEndpoints.append(string)
-            return URL(string: "http://127.0.0.1")!
+            Logger.w("ServiceEndpoints: invalid endpoint '\(string)'. Falling back to default '\(defaultEndpoint)'.")
+            return URL(string: defaultEndpoint)!
         }
     }
 }

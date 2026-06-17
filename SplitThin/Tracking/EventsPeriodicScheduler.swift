@@ -43,10 +43,8 @@ final class DefaultEventsPeriodicScheduler: EventsPeriodicScheduler, @unchecked 
                 }
 
                 do {
-                    Logger.d("EventsPeriodicScheduler: Sleeping for \(self.intervalSeconds)s")
                     try await Task.sleep(nanoseconds: UInt64(self.intervalSeconds) * 1_000_000_000)
                 } catch {
-                    Logger.d("EventsPeriodicScheduler: Sleep cancelled, exiting")
                     break
                 }
 

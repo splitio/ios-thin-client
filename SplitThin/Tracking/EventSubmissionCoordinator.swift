@@ -30,15 +30,19 @@ final class DefaultEventSubmissionCoordinator: EventSubmissionCoordinator, @unch
         }
 
         guard shouldRun else {
-            Logger.d("DefaultEventSubmissionCoordinator: Submission already in progress, dropping trigger (\(reason))")
+            Logger.d("DefaultEventSubmissionCoordinator: Submission skipped (\(reason))")
             return
         }
 
         observer.notify(event: .eventsFlushTriggered(reason: reason))
-        _ = await eventTask.run()
+        let result = await eventTask.run()
 
-        withLock(lock) {
-            isSubmitting = false
+        if result == .unauthorized {
+            Logger.e("DefaultEventSubmissionCoordinator: Unauthorized (401)")
+            observer.notify(event: .authUnauthorized)
+            return
         }
+
+        withLock(lock) { isSubmitting = false }
     }
 }

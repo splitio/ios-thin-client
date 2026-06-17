@@ -20,25 +20,27 @@ public struct SplitClientConfig: Sendable {
     let syncMode: SyncMode
     let serviceEndpoints: ServiceEndpoints?
     let impressionsMode: ImpressionsMode
-    let dynamicConfig: Bool
+    let configsEnabled: Bool
     let logLevel: LogLevel
-    let evaluationRefreshRate: Int
+    let evaluationsRefreshRate: Int
     let timeout: Int
     let prefix: String?
     let pushRate: Int
     let fallbackTreatments: FallbackTreatmentsConfig
+    let evaluationFilters: EvaluationFilters?
 
-    fileprivate init(syncMode: SyncMode, serviceEndpoints: ServiceEndpoints?, impressionsMode: ImpressionsMode, dynamicConfig: Bool, logLevel: LogLevel, evaluationRefreshRate: Int, timeout: Int, prefix: String?, pushRate: Int, fallbackTreatments: FallbackTreatmentsConfig) {
+    fileprivate init(syncMode: SyncMode, serviceEndpoints: ServiceEndpoints?, impressionsMode: ImpressionsMode, configsEnabled: Bool, logLevel: LogLevel, evaluationRefreshRate: Int, timeout: Int, prefix: String?, pushRate: Int, fallbackTreatments: FallbackTreatmentsConfig, evaluationFilters: EvaluationFilters?) {
         self.syncMode = syncMode
         self.serviceEndpoints = serviceEndpoints
         self.impressionsMode = impressionsMode
-        self.dynamicConfig = dynamicConfig
+        self.configsEnabled = configsEnabled
         self.logLevel = logLevel
-        self.evaluationRefreshRate = evaluationRefreshRate
+        self.evaluationsRefreshRate = evaluationRefreshRate
         self.timeout = timeout
         self.prefix = prefix
         self.pushRate = pushRate
         self.fallbackTreatments = fallbackTreatments
+        self.evaluationFilters = evaluationFilters
     }
 
     /// Creates a new builder for `SplitClientConfig`.
@@ -53,13 +55,14 @@ public final class SplitConfigBuilder {
     private var syncMode: SyncMode = .streaming
     private var serviceEndpoints: ServiceEndpoints?
     private var impressionsMode: ImpressionsMode = .default
-    private var dynamicConfig: Bool = false
+    private var configsEnabled: Bool = false
     private var logLevel: LogLevel = .none
     private var evaluationRefreshRate: Int = 3600
     private var timeout: Int = -1
     private var prefix: String?
     private var pushRate: Int = 1800
     private var fallbackTreatments: FallbackTreatmentsConfig = FallbackTreatmentsConfig.builder().build()
+    private var evaluationFilters: EvaluationFilters?
 
     // Internal for testing
     var minEvaluationRefreshRateOverride: Int?
@@ -92,8 +95,8 @@ public final class SplitConfigBuilder {
 
     /// Enables or disables dynamic configuration updates from the server.
     @discardableResult
-    public func set(dynamicConfig: Bool) -> Self {
-        self.dynamicConfig = dynamicConfig
+    public func set(configsEnabled: Bool) -> Self {
+        self.configsEnabled = configsEnabled
         return self
     }
 
@@ -183,19 +186,30 @@ public final class SplitConfigBuilder {
         return self
     }
 
+    /// Sets the filters used to narrow the set of feature flags evaluated by the SDK.
+    ///
+    /// Filters are applied at fetch time so that the SDK only requests the flags
+    /// the application cares about, reducing payload size and processing.
+    @discardableResult
+    public func set(evaluationFilters: EvaluationFilters) -> Self {
+        self.evaluationFilters = evaluationFilters
+        return self
+    }
+
     /// Builds the `SplitClientConfig` with the configured values.
     public func build() -> SplitClientConfig {
         SplitClientConfig(
             syncMode: syncMode,
             serviceEndpoints: serviceEndpoints,
             impressionsMode: impressionsMode,
-            dynamicConfig: dynamicConfig,
+            configsEnabled: configsEnabled,
             logLevel: logLevel,
             evaluationRefreshRate: evaluationRefreshRate,
             timeout: timeout,
             prefix: prefix,
             pushRate: pushRate,
-            fallbackTreatments: fallbackTreatments
+            fallbackTreatments: fallbackTreatments,
+            evaluationFilters: evaluationFilters
         )
     }
 }

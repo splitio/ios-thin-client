@@ -12,7 +12,7 @@ final class CredentialFetcherEventsTest: XCTestCase {
         super.setUp()
         httpClientMock = RetryableHttpClientMock()
         observerSpy = ObserverSpy()
-        fetcher = DefaultCredentialFetcher(retryableHttpClient: httpClientMock, observer: observerSpy, authEndpoint: URL(string: "https://auth.split.io/api/v3")!, sdkKey: "test-sdk-key")
+        fetcher = DefaultCredentialFetcher(retryableHttpClient: httpClientMock, observer: observerSpy, authEndpoint: URL(string: "https://auth.split.io")!, sdkKey: "test-sdk-key")
     }
 
     override func tearDown() {

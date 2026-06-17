@@ -7,7 +7,7 @@ import Foundation
 final class FailedClient: SplitClient {
 
     var target: Target {
-        Target(matchingKey: "")
+        Target(matchingKey: "", trafficType: "")
     }
 
     func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) -> EvaluationResult {

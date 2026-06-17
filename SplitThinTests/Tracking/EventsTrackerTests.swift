@@ -20,16 +20,18 @@ final class DefaultEventsTrackerTest: XCTestCase {
         let event = EventEntity(trafficType: "user", eventType: "purchase")
 
         await tracker.track(event)
+        try? await Task.sleep(nanoseconds: 300_000_000) // Let the accumulation window drain the buffer
 
         XCTAssertEqual(storage.addedEvents.count, 1)
         XCTAssertEqual(storage.addedEvents[0].eventType, "purchase")
     }
 
     func testTrackTriggersQueueFlushWhenThresholdReached() async {
-        storage.countToReturn = 2000
+        storage.countToReturn = 5100
         let event = EventEntity(trafficType: "user", eventType: "click")
 
         await tracker.track(event)
+        try? await Task.sleep(nanoseconds: 300_000_000) // Let the accumulation window drain the buffer
 
         XCTAssertEqual(coordinator.triggerCalls.count, 1)
         XCTAssertEqual(coordinator.triggerCalls[0], .queue)
@@ -40,6 +42,7 @@ final class DefaultEventsTrackerTest: XCTestCase {
         let event = EventEntity(trafficType: "user", eventType: "click")
 
         await tracker.track(event)
+        try? await Task.sleep(nanoseconds: 300_000_000) // Let the accumulation window drain the buffer
 
         XCTAssertEqual(coordinator.triggerCalls.count, 0)
     }

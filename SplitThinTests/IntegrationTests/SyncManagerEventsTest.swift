@@ -22,7 +22,7 @@ final class SyncManagerEventsTest: XCTestCase {
     }
 
     private func createSyncManager(mode: SyncMode) -> DefaultSyncManager {
-        DefaultSyncManager(syncMode: mode, evaluationRepository: EvaluationRepositoryMock(), observer: observerSpy, evaluationStorage: EvaluationStorageMock(), eventsManager: SplitEventsManagerMock(), periodicScheduler: polling, streaming: streaming, target: Target(matchingKey: "user1"))
+        DefaultSyncManager(syncMode: mode, evaluationRepository: EvaluationRepositoryMock(), observer: observerSpy, evaluationStorage: EvaluationStorageMock(), eventsManager: SplitEventsManagerMock(), periodicScheduler: polling, streaming: streaming, target: Target(matchingKey: "user1", trafficType: "user"))
     }
 
 #if !os(macOS)

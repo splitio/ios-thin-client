@@ -10,14 +10,22 @@ public protocol SplitManager: AnyObject {
 final class DefaultSplitManager: SplitManager {
 
     private let evaluationRepository: EvaluationRepository
-    private let target: Target
+    var activeTargetsProvider: () -> [Target]
 
-    init(evaluationRepository: EvaluationRepository, target: Target) {
+    init(evaluationRepository: EvaluationRepository, activeTargetsProvider: @escaping () -> [Target] = { [] }) {
         self.evaluationRepository = evaluationRepository
-        self.target = target
+        self.activeTargetsProvider = activeTargetsProvider
     }
 
     func getFlagNames() -> [String] {
-        evaluationRepository.getFlagNames(target: target)
+        // Union across active clients, deduping while preserving first-seen order.
+        var seen = Set<String>()
+        var result = [String]()
+        for target in activeTargetsProvider() {
+            for name in evaluationRepository.getFlagNames(target: target) where seen.insert(name).inserted {
+                result.append(name)
+            }
+        }
+        return result
     }
 }
