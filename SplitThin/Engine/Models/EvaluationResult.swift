@@ -6,16 +6,12 @@ import Foundation
 public struct EvaluationResult: Sendable, DynamicDecodable {
     public let flag: String
     public let treatment: String
-    public let label: String?
-    public let changeNumber: Int64?
     public let flagSets: [String]
     public let config: String?
 
-    public init(flag: String, treatment: String, label: String? = nil, changeNumber: Int64? = nil, flagSets: [String], config: String? = nil) {
+    public init(flag: String, treatment: String, changeNumber: Int64? = nil, flagSets: [String], config: String? = nil) {
         self.flag = flag
         self.treatment = treatment
-        self.label = label
-        self.changeNumber = changeNumber
         self.flagSets = flagSets
         self.config = config
     }
@@ -24,14 +20,12 @@ public struct EvaluationResult: Sendable, DynamicDecodable {
         guard let dict = jsonObject as? [String: Any] else {
             throw JsonError.invalidData
         }
-        guard let flag = dict["featureName"] as? String, let treatment = dict["treatment"] as? String else {
+        guard let flag = dict["flag"] as? String, let treatment = dict["treatment"] as? String else {
             throw JsonError.parsingFailed
         }
         self.flag = flag
         self.treatment = treatment
-        label = dict["label"] as? String
-        changeNumber = dict["changeNumber"] as? Int64
-        flagSets = dict["sets"] as! [String]
+        flagSets = dict["sets"] as? [String] ?? []
         config = dict["config"] as? String
     }
 }

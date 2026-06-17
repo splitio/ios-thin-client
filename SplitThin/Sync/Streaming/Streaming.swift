@@ -202,7 +202,7 @@ final class DefaultStreaming: Streaming, SseHandler, @unchecked Sendable {
 
             let affectedKeys = fetchCoordinator.registeredMatchingKeys.filter { key in
                 affectedHashes.contains(payloadDecoder.hashKey(key))
-            }
+            } 
             await fetchCoordinator.refetchKeys(Set(affectedKeys), delay: delay)
         } catch {
             Logger.e("StreamingConnectionManager: error decoding keyList payload: \(error). Falling back to fetchAll")

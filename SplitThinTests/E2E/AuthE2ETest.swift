@@ -7,9 +7,13 @@ final class AuthE2ETest: XCTestCase {
     private var httpMock: RetryableHttpClientMock!
     private var factory: SplitFactory!
 
+    private var prefix: String! // Unique per test method so each test gets its
+                                // own CoreData DB, and they don't pollute each other.
+
     override func setUp() {
         super.setUp()
         httpMock = RetryableHttpClientMock()
+        prefix = "test_\(UUID().uuidString.prefix(8))"
     }
 
     override func tearDown() async throws {
@@ -23,13 +27,13 @@ final class AuthE2ETest: XCTestCase {
 
     func testAuthSuccessAllowsEvaluationFetch() async throws {
         httpMock.responses = [
-            HttpResponse(code: 200, data: mockAuthResponse()),
+            HttpResponse(code: 200, data: Self.mockAuthResponse()),
             HttpResponse(code: 200, data: mockEvaluationsData())
         ]
 
         let sdkReady = expectation("SDK ready")
         let listener = TestEventListener(readyExpectation: sdkReady)
-        factory = try buildFactory(syncMode: .singleSync)
+        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .singleSync, prefix: prefix)
         factory.client.addEventListener(listener)
 
         waitFor(sdkReady)
@@ -50,7 +54,7 @@ final class AuthE2ETest: XCTestCase {
 
         let sdkTimedOut = expectation("SDK timed out")
         let listener = TestEventListener(timeoutExpectation: sdkTimedOut)
-        factory = try buildFactory(syncMode: .singleSync, timeout: 1)
+        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .singleSync, timeout: 1, prefix: prefix)
         factory.client.addEventListener(listener)
 
         waitFor(sdkTimedOut)
@@ -68,7 +72,7 @@ final class AuthE2ETest: XCTestCase {
 
         let sdkTimedOut = expectation("SDK timed out")
         let listener = TestEventListener(timeoutExpectation: sdkTimedOut)
-        factory = try buildFactory(syncMode: .polling, refreshRate: 1, timeout: 1)
+        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .polling, refreshRate: 1, timeout: 1, prefix: prefix)
         factory.client.addEventListener(listener)
 
         waitFor(sdkTimedOut)
@@ -89,7 +93,7 @@ final class AuthE2ETest: XCTestCase {
 
         let sdkTimedOut = expectation("SDK timed out")
         let listener = TestEventListener(timeoutExpectation: sdkTimedOut)
-        factory = try buildFactory(syncMode: .singleSync, timeout: 1)
+        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .singleSync, timeout: 1, prefix: prefix)
         factory.client.addEventListener(listener)
 
         waitFor(sdkTimedOut)
@@ -110,7 +114,7 @@ final class AuthE2ETest: XCTestCase {
 
         let sdkTimedOut = expectation("SDK timed out")
         let listener = TestEventListener(timeoutExpectation: sdkTimedOut)
-        factory = try buildFactory(syncMode: .singleSync, timeout: 1)
+        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .singleSync, timeout: 1, prefix: prefix)
         factory.client.addEventListener(listener)
 
         waitFor(sdkTimedOut)
@@ -126,7 +130,7 @@ final class AuthE2ETest: XCTestCase {
 
         let sdkTimedOut = expectation("SDK timed out")
         let listener = TestEventListener(timeoutExpectation: sdkTimedOut)
-        factory = try buildFactory(syncMode: .singleSync, timeout: 1)
+        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .singleSync, timeout: 1, prefix: prefix)
         factory.client.addEventListener(listener)
 
         waitFor(sdkTimedOut)
@@ -140,18 +144,17 @@ final class AuthE2ETest: XCTestCase {
     func testAuthTokenExpirationIsParsedCorrectly() async throws {
         let futureExp = Int(Date().timeIntervalSince1970) + 3600
         httpMock.responses = [
-            HttpResponse(code: 200, data: mockAuthResponse(exp: futureExp)),
+            HttpResponse(code: 200, data: Self.mockAuthResponse(exp: futureExp)),
             HttpResponse(code: 200, data: mockEvaluationsData()),
             HttpResponse(code: 200, data: mockEvaluationsData())
         ]
 
         let sdkReady = expectation("SDK ready")
-        let sdkUpdate = expectation("SDK update")
-        let listener = TestEventListener(readyExpectation: sdkReady, updateExpectation: sdkUpdate)
-        factory = try buildFactory(syncMode: .polling, refreshRate: 1)
+        let listener = TestEventListener(readyExpectation: sdkReady)
+        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .polling, refreshRate: 1, prefix: prefix)
         factory.client.addEventListener(listener)
 
-        waitFor(sdkReady, sdkUpdate)
+        waitFor(sdkReady)
 
         let authCalls = httpMock.executeCalls.filter { $0.category == .auth }
         XCTAssertEqual(authCalls.count, 1, "Should reuse cached credential, not re-auth")
@@ -160,15 +163,15 @@ final class AuthE2ETest: XCTestCase {
     func testAuth401OnEvaluationTriggersReauth() async throws {
         let futureExp = Int(Date().timeIntervalSince1970) + 3600
         httpMock.responses = [
-            HttpResponse(code: 200, data: mockAuthResponse(exp: futureExp)),
+            HttpResponse(code: 200, data: Self.mockAuthResponse(exp: futureExp)),
             HttpResponse(code: 401, data: nil),
-            HttpResponse(code: 200, data: mockAuthResponse(exp: futureExp)),
+            HttpResponse(code: 200, data: Self.mockAuthResponse(exp: futureExp)),
             HttpResponse(code: 200, data: mockEvaluationsData())
         ]
 
         let sdkReady = expectation("SDK ready")
         let listener = TestEventListener(readyExpectation: sdkReady)
-        factory = try buildFactory(syncMode: .singleSync)
+        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .singleSync, prefix: prefix)
         factory.client.addEventListener(listener)
 
         waitFor(sdkReady)
@@ -177,15 +180,37 @@ final class AuthE2ETest: XCTestCase {
         XCTAssertEqual(authCalls.count, 2, "Should re-auth after 401 on evaluations")
     }
 
+    func testSetTargetRefreshesAuthForNewMatchingKey() async throws {
+        httpMock.responses = [
+            HttpResponse(code: 200, data: Self.mockAuthResponse()),
+            HttpResponse(code: 200, data: mockEvaluationsData()),
+            HttpResponse(code: 200, data: Self.mockAuthResponse()),
+            HttpResponse(code: 200, data: mockEvaluationsData())
+        ]
+
+        let sdkReady = expectation("SDK ready")
+        let listener = TestEventListener(readyExpectation: sdkReady)
+        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .singleSync, target: Target(matchingKey: "user-1", trafficType: "user"), prefix: prefix)
+        factory.client.addEventListener(listener)
+
+        waitFor(sdkReady)
+        XCTAssertEqual(httpMock.executeCalls.filter { $0.category == .auth }.count, 1, "exactly one auth at init")
+
+        factory.client.setTarget(target: Target(matchingKey: "user-2", trafficType: "user"))
+
+        waitUntil(timeout: 3) { self.httpMock.executeCalls.filter { $0.category == .auth }.count == 2 }
+        XCTAssertEqual(httpMock.executeCalls.filter { $0.category == .auth }.count, 2, "setTarget with a new matchingKey must trigger a fresh auth for it")
+    }
+
     func testSlowAuthDoesNotBlockSDKInitialization() async throws {
         httpMock.delaySeconds = 10
         httpMock.responses = [
-            HttpResponse(code: 200, data: mockAuthResponse()),
+            HttpResponse(code: 200, data: Self.mockAuthResponse()),
             HttpResponse(code: 200, data: mockEvaluationsData())
         ]
 
         let startTime = Date()
-        factory = try buildFactory(syncMode: .singleSync)
+        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .singleSync, prefix: prefix)
 
         let client = factory.client
         let treatment = client.getTreatment("my_feature").treatment
@@ -199,10 +224,10 @@ final class AuthE2ETest: XCTestCase {
     func testDestroyDuringPendingAuthDoesNotHang() async throws {
         httpMock.delaySeconds = 30
         httpMock.responses = [
-            HttpResponse(code: 200, data: mockAuthResponse())
+            HttpResponse(code: 200, data: Self.mockAuthResponse())
         ]
 
-        factory = try buildFactory(syncMode: .singleSync)
+        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .singleSync, prefix: prefix)
 
         let startTime = Date()
         let elapsed = Date().timeIntervalSince(startTime)
@@ -212,29 +237,23 @@ final class AuthE2ETest: XCTestCase {
 
     // MARK: - Helpers
 
-    private func buildFactory(syncMode: SyncMode, refreshRate: Int = 1, timeout: Int = -1) throws -> SplitFactory {
-        let config = SplitClientConfig.builder()
-                                      .setMinEvaluationRefreshRate(1)
-                                      .set(syncMode: syncMode)
-                                      .set(evaluationRefreshRate: refreshRate)
-                                      .set(timeout: timeout)
-                                      .set(prefix: "test_\(UUID().uuidString.prefix(8))")
-                                      .build()
-
-        let builder = DefaultSplitFactoryBuilder()
-        builder.setRetryableHttpClient(httpMock)
-
-        guard let factory = builder.setSdkKey("test-sdk-key")
-                                   .setTarget("user-123")
-                                   .setConfig(config)
-                                   .build() else {
-            throw NSError(domain: "AuthE2ETest", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to build factory"])
+    private func mockEvaluationsData() -> Data {
+        return """
+        {
+            "evaluations": [
+                {
+                    "flag": "my_feature",
+                    "treatment": "on",
+                    "config": "config_value",
+                    "sets": []
+                }
+            ]
         }
-
-        return factory
+        """.data(using: .utf8)!
     }
 
-    private func mockAuthResponse(exp: Int? = nil) -> Data {
+    // static + internal so other E2E tests can reuse it
+    static func mockAuthResponse(exp: Int? = nil) -> Data {
         let expiration = exp ?? Int(Date().timeIntervalSince1970) + 3600
         let header = base64UrlEncode("{\"alg\":\"HS256\",\"typ\":\"JWT\"}")
         let payload = base64UrlEncode("{\"exp\":\(expiration),\"sub\":\"user-123\"}")
@@ -246,22 +265,7 @@ final class AuthE2ETest: XCTestCase {
         """.data(using: .utf8)!
     }
 
-    private func mockEvaluationsData() -> Data {
-        return """
-        {
-            "evaluations": [
-                {
-                    "featureName": "my_feature",
-                    "treatment": "on",
-                    "config": "config_value",
-                    "sets": []
-                }
-            ]
-        }
-        """.data(using: .utf8)!
-    }
-
-    private func base64UrlEncode(_ string: String) -> String {
+    static func base64UrlEncode(_ string: String) -> String {
         let data = string.data(using: .utf8)!
         return data.base64EncodedString().replacingOccurrences(of: "+", with: "-")
                                          .replacingOccurrences(of: "/", with: "_")

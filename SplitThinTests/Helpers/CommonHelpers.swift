@@ -28,6 +28,13 @@ extension XCTestCase {
         }
         semaphore.wait()
     }
+
+    func waitUntil(timeout: Double = 3, _ condition: () -> Bool) {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition() && Date() < deadline {
+            sleep(seconds: 0.02)
+        }
+    }
 }
 
 extension XCTestExpectation {

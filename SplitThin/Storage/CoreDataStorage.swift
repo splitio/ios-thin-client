@@ -23,6 +23,8 @@ final class CoreDataStorage: @unchecked Sendable {
 
         let description = NSPersistentStoreDescription()
         description.url = Self.storeURL(for: databaseName)
+        description.shouldMigrateStoreAutomatically = true
+        description.shouldInferMappingModelAutomatically = true
         container.persistentStoreDescriptions = [description]
 
         container.loadPersistentStores { _, error in
@@ -34,47 +36,56 @@ final class CoreDataStorage: @unchecked Sendable {
 
     // MARK: - ClientSession Operations
 
-    func upsertClientSession(matchingKey: String, attributes: [String: Any]?, changeNumber: Int64) async throws {
+    func upsertClientSession(matchingKey: String, bucketingKey: String?, attributesHash: String, attributes: [String: Any]?, changeNumber: Int64) async throws {
         try await withContext { context in
-            // Delete existing session for this matchingKey (ensures single state per user)
             let deleteRequest = NSFetchRequest<NSManagedObject>(entityName: Self.clientSessionEntity)
-            deleteRequest.predicate = NSPredicate(format: "matchingKey == %@", matchingKey)
+            deleteRequest.predicate = self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey)
             for object in try context.fetch(deleteRequest) {
                 context.delete(object)
             }
 
-            // Create new session
             guard let entity = NSEntityDescription.entity(forEntityName: Self.clientSessionEntity, in: context) else {
                 throw StorageError.entityNotFound
             }
             let session = NSManagedObject(entity: entity, insertInto: context)
             session.setValue(matchingKey, forKey: "matchingKey")
+            session.setValue(bucketingKey, forKey: "bucketingKey")
             session.setValue(changeNumber, forKey: "changeNumber")
             session.setValue(self.encodeAttributes(attributes), forKey: "attributes")
+            session.setValue(attributesHash, forKey: "attributesHash")
 
             try context.save()
         }
     }
 
-    func getChangeNumber(matchingKey: String) async -> Int64? {
+    func getAttributesHash(matchingKey: String, bucketingKey: String?) async -> String? {
         try? await withContext { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.clientSessionEntity)
-            request.predicate = NSPredicate(format: "matchingKey == %@", matchingKey)
+            request.predicate = self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey)
+            request.fetchLimit = 1
+            return try context.fetch(request).first?.value(forKey: "attributesHash") as? String
+        }
+    }
+
+    func getChangeNumber(matchingKey: String, bucketingKey: String?) async -> Int64? {
+        try? await withContext { context in
+            let request = NSFetchRequest<NSManagedObject>(entityName: Self.clientSessionEntity)
+            request.predicate = self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey)
             request.fetchLimit = 1
             return try context.fetch(request).first?.value(forKey: "changeNumber") as? Int64
         }
     }
 
-    func deleteClientSession(matchingKey: String) async throws {
+    func deleteClientSession(matchingKey: String, bucketingKey: String?) async throws {
         try await withContext { context in
             let sessionRequest = NSFetchRequest<NSManagedObject>(entityName: Self.clientSessionEntity)
-            sessionRequest.predicate = NSPredicate(format: "matchingKey == %@", matchingKey)
+            sessionRequest.predicate = self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey)
             for object in try context.fetch(sessionRequest) {
                 context.delete(object)
             }
 
             let evalRequest = NSFetchRequest<NSManagedObject>(entityName: Self.evaluationEntity)
-            evalRequest.predicate = NSPredicate(format: "matchingKey == %@", matchingKey)
+            evalRequest.predicate = self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey)
             for object in try context.fetch(evalRequest) {
                 context.delete(object)
             }
@@ -85,22 +96,21 @@ final class CoreDataStorage: @unchecked Sendable {
 
     // MARK: - Evaluation Operations
 
-    func upsertEvaluations(matchingKey: String, evaluations: [(flagName: String, treatment: String, config: String?, sets: [String]?)]) async throws {
+    func upsertEvaluations(matchingKey: String, bucketingKey: String?, evaluations: [(flagName: String, treatment: String, config: String?, sets: [String]?)]) async throws {
         try await withContext { context in
-            // Delete all existing evaluations for this matchingKey (ensures single state per user)
             let deleteRequest = NSFetchRequest<NSManagedObject>(entityName: Self.evaluationEntity)
-            deleteRequest.predicate = NSPredicate(format: "matchingKey == %@", matchingKey)
+            deleteRequest.predicate = self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey)
             for object in try context.fetch(deleteRequest) {
                 context.delete(object)
             }
 
-            // Insert new evaluations
             for eval in evaluations {
                 guard let entity = NSEntityDescription.entity(forEntityName: Self.evaluationEntity, in: context) else {
                     throw StorageError.entityNotFound
                 }
                 let evaluation = NSManagedObject(entity: entity, insertInto: context)
                 evaluation.setValue(matchingKey, forKey: "matchingKey")
+                evaluation.setValue(bucketingKey, forKey: "bucketingKey")
                 evaluation.setValue(eval.flagName, forKey: "flagName")
                 evaluation.setValue(eval.treatment, forKey: "treatment")
                 evaluation.setValue(eval.config, forKey: "config")
@@ -111,10 +121,13 @@ final class CoreDataStorage: @unchecked Sendable {
         }
     }
 
-    func getEvaluation(matchingKey: String, flagName: String) async -> (treatment: String, config: String?, sets: [String]?)? {
+    func getEvaluation(matchingKey: String, bucketingKey: String?, flagName: String) async -> (treatment: String, config: String?, sets: [String]?)? {
         try? await withContext { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.evaluationEntity)
-            request.predicate = NSPredicate(format: "matchingKey == %@ AND flagName == %@", matchingKey, flagName)
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey),
+                NSPredicate(format: "flagName == %@", flagName)
+            ])
             request.fetchLimit = 1
 
             guard let result = try context.fetch(request).first else {
@@ -130,12 +143,15 @@ final class CoreDataStorage: @unchecked Sendable {
         }
     }
 
-    func getEvaluations(matchingKey: String, flagNames: [String]) async -> [(flagName: String, treatment: String, config: String?, sets: [String]?)] {
+    func getEvaluations(matchingKey: String, bucketingKey: String?, flagNames: [String]) async -> [(flagName: String, treatment: String, config: String?, sets: [String]?)] {
         guard !flagNames.isEmpty else { return [] }
 
         return (try? await withContext { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.evaluationEntity)
-            request.predicate = NSPredicate(format: "matchingKey == %@ AND flagName IN %@", matchingKey, flagNames)
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey),
+                NSPredicate(format: "flagName IN %@", flagNames)
+            ])
 
             return try context.fetch(request).map { result in
                 let flagName = result.value(forKey: "flagName") as? String ?? ""
@@ -148,10 +164,10 @@ final class CoreDataStorage: @unchecked Sendable {
         }) ?? []
     }
 
-    func getAllEvaluations(matchingKey: String) async -> [(flagName: String, treatment: String, config: String?, sets: [String]?)] {
+    func getAllEvaluations(matchingKey: String, bucketingKey: String?) async -> [(flagName: String, treatment: String, config: String?, sets: [String]?)] {
         (try? await withContext { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.evaluationEntity)
-            request.predicate = NSPredicate(format: "matchingKey == %@", matchingKey)
+            request.predicate = self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey)
 
             return try context.fetch(request).map { result in
                 let flagName = result.value(forKey: "flagName") as? String ?? ""
@@ -164,10 +180,10 @@ final class CoreDataStorage: @unchecked Sendable {
         }) ?? []
     }
 
-    func getFlagNames(matchingKey: String) async -> [String] {
+    func getFlagNames(matchingKey: String, bucketingKey: String?) async -> [String] {
         (try? await withContext { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.evaluationEntity)
-            request.predicate = NSPredicate(format: "matchingKey == %@", matchingKey)
+            request.predicate = self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey)
             request.propertiesToFetch = ["flagName"]
 
             return try context.fetch(request).compactMap { $0.value(forKey: "flagName") as? String }
@@ -347,6 +363,13 @@ final class CoreDataStorage: @unchecked Sendable {
 
     // MARK: - Private Helpers
 
+    private func sessionPredicate(matchingKey: String, bucketingKey: String?) -> NSPredicate {
+        if let bucketingKey {
+            return NSPredicate(format: "matchingKey == %@ AND bucketingKey == %@", matchingKey, bucketingKey)
+        }
+        return NSPredicate(format: "matchingKey == %@ AND bucketingKey == nil", matchingKey)
+    }
+
     private func encodeAttributes(_ attributes: [String: Any]?) -> String? {
         guard let attributes, !attributes.isEmpty else { return nil }
         
@@ -410,7 +433,17 @@ final class CoreDataStorage: @unchecked Sendable {
         changeNumberAttr.name = "changeNumber"
         changeNumberAttr.attributeType = .integer64AttributeType
 
-        clientSessionEntity.properties = [matchingKeyAttr, attributesAttr, changeNumberAttr]
+        let sessionBucketingKeyAttr = NSAttributeDescription()
+        sessionBucketingKeyAttr.name = "bucketingKey"
+        sessionBucketingKeyAttr.attributeType = .stringAttributeType
+        sessionBucketingKeyAttr.isOptional = true
+
+        let attributesHashAttr = NSAttributeDescription()
+        attributesHashAttr.name = "attributesHash"
+        attributesHashAttr.attributeType = .stringAttributeType
+        attributesHashAttr.isOptional = true
+
+        clientSessionEntity.properties = [matchingKeyAttr, attributesAttr, attributesHashAttr, changeNumberAttr, sessionBucketingKeyAttr]
 
         // Evaluation entity
         let evaluationEntity = NSEntityDescription()
@@ -439,11 +472,17 @@ final class CoreDataStorage: @unchecked Sendable {
         setsAttr.attributeType = .stringAttributeType
         setsAttr.isOptional = true
 
-        evaluationEntity.properties = [evalMatchingKeyAttr, flagNameAttr, treatmentAttr, configAttr, setsAttr]
+        let evalBucketingKeyAttr = NSAttributeDescription()
+        evalBucketingKeyAttr.name = "bucketingKey"
+        evalBucketingKeyAttr.attributeType = .stringAttributeType
+        evalBucketingKeyAttr.isOptional = true
+
+        evaluationEntity.properties = [evalMatchingKeyAttr, flagNameAttr, treatmentAttr, configAttr, setsAttr, evalBucketingKeyAttr]
 
         // Compound index for efficient queries
         let compoundIndex = NSFetchIndexDescription(name: "byMatchingKeyAndFlagName", elements: [
             NSFetchIndexElementDescription(property: evalMatchingKeyAttr, collationType: .binary),
+            NSFetchIndexElementDescription(property: evalBucketingKeyAttr, collationType: .binary),
             NSFetchIndexElementDescription(property: flagNameAttr, collationType: .binary)
         ])
         evaluationEntity.indexes = [compoundIndex]

@@ -7,18 +7,18 @@ public struct Target: Hashable, @unchecked Sendable {
 
     let key: Key
     let attributes: [String: Any]?
-    let trafficType: String?
+    let trafficType: String
 
     var matchingKey: String { key.matchingKey }
     var bucketingKey: String? { key.bucketingKey }
 
-    public init(key: Key, attributes: [String: Any]? = nil, trafficType: String? = nil) {
+    public init(key: Key, attributes: [String: Any]? = nil, trafficType: String) {
         self.key = key
         self.attributes = attributes
         self.trafficType = trafficType
     }
 
-    public init(matchingKey: String, bucketingKey: String? = nil, attributes: [String: Any]? = nil, trafficType: String? = nil) {
+    public init(matchingKey: String, bucketingKey: String? = nil, attributes: [String: Any]? = nil, trafficType: String) {
         self.key = Key(matchingKey: matchingKey, bucketingKey: bucketingKey)
         self.attributes = attributes
         self.trafficType = trafficType

@@ -3,13 +3,15 @@ import Http
 import Tracker
 @testable import SplitThin
 
-func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync, refreshRate: Int = 1, timeout: Int = -1, target: Target = Target(matchingKey: "user-123"), fallbackTreatments: FallbackTreatmentsConfig? = nil, observer: Observer? = nil) throws -> SplitFactory {
+func buildFactory(httpClient: SecureHttpClient? = nil, retryableHttpClient: RetryableHttpClient? = nil, syncMode: SyncMode = .singleSync, refreshRate: Int = 1, timeout: Int = -1, target: Target = Target(matchingKey: "user-123", trafficType: "user"), configsEnabled: Bool = false, prefix: String? = nil, fallbackTreatments: FallbackTreatmentsConfig? = nil, observer: Observer? = nil) throws -> SplitFactory {
 
     var configBuilder = SplitClientConfig.builder()
                                          .setMinEvaluationRefreshRate(1)
                                          .set(syncMode: syncMode)
                                          .set(evaluationRefreshRate: refreshRate)
                                          .set(timeout: timeout)
+                                         .set(configsEnabled: configsEnabled)
+                                         .set(prefix: prefix)
 
     if let fallbacks = fallbackTreatments {
         configBuilder = configBuilder.set(fallbackTreatments: fallbacks)
@@ -20,8 +22,13 @@ func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync
     // Factory
     let builder = DefaultSplitFactoryBuilder()
 
-    // Inject httpClient (just possible on testing)
-    builder.setSecureHttpClient(httpClient)
+    // Inject the http layer (just possible on testing)
+    if let httpClient {
+        builder.setSecureHttpClient(httpClient)
+    }
+    if let retryableHttpClient {
+        builder.setRetryableHttpClient(retryableHttpClient)
+    }
     builder.setCredentialStorage(DefaultCredentialStorage())
 
     // Inject Observer (just possible on testing)
@@ -36,8 +43,8 @@ func buildFactory(httpClient: SecureHttpClient, syncMode: SyncMode = .singleSync
     return factory
 }
 
-func buildClient(target: String = "user-123", treatmentsManager: TreatmentsManager? = nil, eventsManager: SplitEventsManager? = nil, authProvider: AuthProvider? = nil, observer: Observer? = nil, syncManager: SyncManager? = nil, tracker: Tracker? = nil, eventsTracker: EventsTracker? = nil, eventsScheduler: EventsPeriodicScheduler? = nil, telemetryObserver: TelemetryObserver? = nil, telemetrySubmitter: TelemetrySubmitter? = nil) -> DefaultSplitClient {
-    DefaultSplitClient(target: Target(matchingKey: target),
+func buildClient(target: String = "user-123", treatmentsManager: TreatmentsManager? = nil, eventsManager: SplitEventsManager? = nil, authProvider: AuthProvider? = nil, observer: Observer? = nil, syncManager: SyncManager? = nil, tracker: Tracker? = nil, eventsTracker: EventsTracker? = nil, eventsScheduler: EventsPeriodicScheduler? = nil, telemetryObserver: TelemetryObserver? = nil, telemetrySubmitter: TelemetrySubmitter? = nil, fetchCoordinator: EvaluationFetchCoordinator? = nil) -> DefaultSplitClient {
+    DefaultSplitClient(target: Target(matchingKey: target, trafficType: "user"),
                        treatmentsManager: treatmentsManager ?? TreatmentsManagerMock(),
                        eventsManager: eventsManager ?? SplitEventsManagerMock(),
                        authProvider: authProvider ?? AuthProviderMock(),
@@ -47,17 +54,26 @@ func buildClient(target: String = "user-123", treatmentsManager: TreatmentsManag
                        eventsTracker: eventsTracker ?? EventsTrackerMock(),
                        eventsScheduler: eventsScheduler ?? EventsPeriodicSchedulerMock(),
                        telemetryObserver: telemetryObserver ?? TelemetryObserver(storage: TelemetryStorageMock(), sessionId: "test", config: SplitClientConfig.builder().build()),
-                       telemetrySubmitter: telemetrySubmitter ?? TelemetrySubmitterMock())
+                       telemetrySubmitter: telemetrySubmitter ?? TelemetrySubmitterMock(),
+                       fetchCoordinator: fetchCoordinator ?? EvaluationFetchCoordinatorMock())
 }
 
-func mockEvaluationsData(flags: [String], treatment: String = "on") -> Data {
+func mockEvaluationsData(flags: [String], treatment: String = "on", config: String? = nil, since: Int64 = -1, till: Int64 = 12345) -> Data {
+    let configField: String
+    if let config {
+        let escaped = config.replacingOccurrences(of: "\"", with: "\\\"")
+        configField = "\"config\": \"\(escaped)\","
+    } else {
+        configField = ""
+    }
+
     let evaluations = flags.map { flag in
         """
         {
-            "featureName": "\(flag)",
+            "flag": "\(flag)",
             "treatment": "\(treatment)",
-            "label": "default rule",
-            "changeNumber": 12345,
+            \(configField)
+            "changeNumber": \(till),
             "sets": ["set-a"]
         }
         """
@@ -66,13 +82,13 @@ func mockEvaluationsData(flags: [String], treatment: String = "on") -> Data {
     return """
     {
         "evaluations": [\(evaluations)],
-        "since": -1,
-        "till": 12345
+        "since": \(since),
+        "till": \(till)
     }
     """.data(using: .utf8)!
 }
 
 // Convenience init for some tests
 func buildFactory(httpClient: SecureHttpClient, target: String = "user-123") throws -> SplitFactory {
-    try buildFactory(httpClient: httpClient, target: Target(matchingKey: target))
+    try buildFactory(httpClient: httpClient, target: Target(matchingKey: target, trafficType: "user"))
 }
