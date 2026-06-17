@@ -79,6 +79,42 @@ final class TrackingE2ETest: XCTestCase {
         XCTAssertGreaterThanOrEqual(httpMock.postEventsCalls.count, 1)
     }
 
+    func testTrackIsNoOpAfterClientDestroyedButOthersKeepWorking() async throws {
+        let client1 = factory.client // user-123
+        let client2 = factory.getClient("user-B")
+
+        let ready1 = expectation("Client 1 ready")
+        let ready2 = expectation("Client 2 ready")
+        client1.addEventListener(TestEventListener(readyExpectation: ready1))
+        client2.addEventListener(TestEventListener(readyExpectation: ready2))
+        waitFor(ready1, ready2)
+
+        // Both clients can track before any destroy
+        XCTAssertTrue(client1.track(eventType: "before", value: nil, properties: nil))
+        XCTAssertTrue(client2.track(eventType: "before", value: nil, properties: nil))
+
+        await client1.destroy()
+
+        // A destroyed client is a no-op; the surviving client still tracks
+        XCTAssertFalse(client1.track(eventType: "after", value: nil, properties: nil), "track on a destroyed client must be a no-op")
+        XCTAssertTrue(client2.track(eventType: "after", value: nil, properties: nil))
+
+        sleep(seconds: 0.3) // Exceeds the evetns accumulation window so the buffered write commits
+        await client2.flush()
+
+        let posted = httpMock.postEventsCalls.flatMap { data in
+            (try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]) ?? []
+        }
+        XCTAssertTrue(
+            posted.contains { $0["key"] as? String == "user-B" && $0["eventTypeId"] as? String == "after" },
+            "Surviving client's event should be submitted"
+        )
+        XCTAssertFalse(
+            posted.contains { $0["key"] as? String == "user-123" && $0["eventTypeId"] as? String == "after" },
+            "Destroyed client's post-destroy event must never be submitted"
+        )
+    }
+
     func testTrackAfterDestroyDoesNotSubmit() async throws {
         waitUntilReady()
 

@@ -61,6 +61,35 @@ final class FetchCoordinatorE2ETest: XCTestCase {
 
     }
 
+    func testSetTargetSwitchesEvaluation() async throws {
+        httpMock.fetchEvaluationsResultByKey["user-1"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"], treatment: "on")))
+        httpMock.fetchEvaluationsResultByKey["user-2"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"], treatment: "off", till: 12346)))
+        httpMock.fetchDelay = 300_000_000 // 0.3s: keeps user-2's fetch in flight so we can observe the control window
+
+        let sdkReady = expectation("SDK ready")
+        let listener = TestEventListener(readyExpectation: sdkReady)
+        factory = try buildFactory(httpClient: httpMock, target: Target(matchingKey: "user-1", trafficType: "user"))
+        factory.client.addEventListener(listener)
+
+        waitFor(sdkReady, timeout: 5)
+        XCTAssertEqual(factory.client.getTreatment("flag_a").treatment, "on")
+
+        factory.client.setTarget(target: Target(matchingKey: "user-2", trafficType: "user"))
+
+        // Check that the evaluation is CONTROL, until the new target's fetch lands. 
+        let deadline = Date().addingTimeInterval(3)
+        var treatment = factory.client.getTreatment("flag_a").treatment
+        while treatment != "off" && Date() < deadline {
+            XCTAssertEqual(treatment, "control", "While the new target's fetch is in flight, the flag must be control, not the previous target's value")
+            sleep(seconds: 0.05)
+            treatment = factory.client.getTreatment("flag_a").treatment
+        }
+
+        // Then it changes to OFF.
+        XCTAssertEqual(treatment, "off", "getTreatment should reflect the new target after setTarget")
+        XCTAssertTrue(httpMock.fetchEvaluationsCalls.contains { $0.target.matchingKey == "user-2" }, "evaluations should be fetched for the new target")
+    }
+
     func testSetTargetTriggersNewFetchForSameTarget() async throws {
         httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["my-flag"]))
         httpMock.fetchDelay = 10_000_000 // 10ms
@@ -104,15 +133,15 @@ final class FetchCoordinatorE2ETest: XCTestCase {
         httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["my-flag"]))
 
         let sdkReady = expectation("SDK ready")
-        let sdkUpdate = expectation("SDK update")
-        let listener = TestEventListener(readyExpectation: sdkReady, updateExpectation: sdkUpdate)
+        let listener = TestEventListener(readyExpectation: sdkReady)
         factory = try buildFactory(httpClient: httpMock, syncMode: .polling, refreshRate: 1)
         factory.client.addEventListener(listener)
 
-        waitFor(sdkReady, sdkUpdate)
+        waitFor(sdkReady)
+        
+        sleep(seconds: 3)
 
         let callCount = httpMock.fetchEvaluationsCalls.count
         XCTAssertGreaterThanOrEqual(callCount, 2, "Polling should execute multiple fetches, got \(callCount)")
-
     }
 }

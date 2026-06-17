@@ -18,6 +18,17 @@ enum EvaluationFetchError: Error {
 struct FetchResult: Sendable {
     let evaluations: [EvaluationResult]
     let changeNumber: Int64?
+
+    /// Whether this result should replace the in-memory cache. `false` for an up-to-date
+    /// response (server returned empty because nothing changed), so applying it would wipe
+    /// existing data. Defaults to `true` to preserve behavior for callers that don't set it.
+    let shouldApplyToCache: Bool
+
+    init(evaluations: [EvaluationResult], changeNumber: Int64?, shouldApplyToCache: Bool = true) {
+        self.evaluations = evaluations
+        self.changeNumber = changeNumber
+        self.shouldApplyToCache = shouldApplyToCache
+    }
 }
 
 private struct FetchKey: Hashable {
@@ -120,7 +131,7 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
 
     private func fetchKeys(_ keys: Set<FetchKey>, delay: RefetchDelay) async {
         for key in keys {
-            let keyDelay = computeKeyDelay(matchingKey: key.target.matchingKey, delay: delay)
+            let keyDelay = delay.delay(forKey: key.target.matchingKey)
             if keyDelay > 0 {
                 try? await Task.sleep(nanoseconds: UInt64(keyDelay * 1_000_000_000))
             }
@@ -134,6 +145,8 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
         let storedChangeNumber = await readStorage?.lastChangeNumber(target: target) ?? -1
 
         let result: EvaluationsResult
+
+        // Fetch 
         do {
             guard let fetched = try await provider.fetch(target: target, filters: filters) else {
                 Logger.d("EvaluationFetchCoordinator: Fetch failed for \(target.matchingKey) (reason: \(reason))")
@@ -149,34 +162,42 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
         let changeNumber = result.till ?? -1
         observer.notify(event: .evalFetchSucceeded(changeNumber: changeNumber))
 
-        // When till == stored changeNumber the server confirms we're up to date
+        // When till == stored, the server confirms we're up to date
         // and returns an empty evaluations array. Persisting it would erase existing data.
-        let hasNewData = changeNumber > storedChangeNumber
+        let biggerChangeNumber = changeNumber > storedChangeNumber
 
-        if hasNewData, let storage {
+        // Persist 
+        if biggerChangeNumber {
             observer.notify(event: .evalStorageWriteScheduled)
 
-            Task { // Non-blocking persistence
+            Task { [self] in // Non-blocking persistence
                 do {
-                    try await storage.upsert(change: EvaluationChange(target: target, changeNumber: changeNumber, evaluations: result.evaluations))
+                    try await self.storage?.upsert(change: EvaluationChange(target: target, changeNumber: changeNumber, evaluations: result.evaluations))
                     self.observer.notify(event: .evalStorageWriteSucceeded)
+                    observer.notify(event: .evalStorageUpdated(names: result.evaluations.map { $0.flag }))
                 } catch {
                     self.observer.notify(event: .evalStorageWriteFailed)
                 }
             }
         }
 
-        if reason == .push, hasNewData {
-            let fetchResult = FetchResult(evaluations: result.evaluations, changeNumber: changeNumber)
+        // Edge case: Server has no flags yet (since/till == -1, no evaluations).
+        // Nothing to persist, but the SDK must still be marked ready.
+        let isEmptyAccount = result.since == -1 && changeNumber == -1 && result.evaluations.isEmpty
+
+        // Apply to the in-memory cache unless this is an up-to-date *empty* response (server returned
+        // nothing because nothing changed) — applying that would wipe existing data. Non-empty results
+        // are always applied; an empty result is applied only when it carries new data (all flags
+        // removed) or represents an empty account.
+        let shouldApplyToCache = result.evaluations.notEmpty || biggerChangeNumber || isEmptyAccount
+
+        // Trigger SDK_UPDATE
+        if reason == .push, shouldApplyToCache {
             let updateAction = withLock(lock) { onUpdateActions[target.key] }
-            updateAction?(fetchResult) // Notifies the eventsManager of the client
+            updateAction?(FetchResult(evaluations: result.evaluations, changeNumber: changeNumber, shouldApplyToCache: true)) // Notifies the eventsManager of the client
         }
 
-        if hasNewData {
-            observer.notify(event: .evalStorageUpdated(names: result.evaluations.map { $0.flag }))
-        }
-
-        Logger.d("EvaluationFetchCoordinator: Fetched \(result.evaluations.count) evaluations for \(target.matchingKey) (reason: \(reason), hasNewData: \(hasNewData))")
-        return FetchResult(evaluations: result.evaluations, changeNumber: changeNumber)
+        Logger.d("EvaluationFetchCoordinator: Fetched \(result.evaluations.count) evaluations for \(target.matchingKey) (reason: \(reason), hasNewData: \(biggerChangeNumber))")
+        return FetchResult(evaluations: result.evaluations, changeNumber: changeNumber, shouldApplyToCache: shouldApplyToCache)
     }
 }

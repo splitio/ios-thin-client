@@ -3,6 +3,10 @@ import Http
 import BackoffCounter
 @testable import SplitThin
 
+#if canImport(UIKit)
+import UIKit
+#endif
+
 final class StreamingE2ETest: XCTestCase {
 
     private var httpMock: SecureHttpClientMock!
@@ -69,7 +73,7 @@ final class StreamingE2ETest: XCTestCase {
         let algorithmSeed = 42
         let expectedDelay = computeExpectedDelay(key: targetKey, updateIntervalMs: updateIntervalMs, algorithmSeed: algorithmSeed)
 
-        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"], till: 12346))
+        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"], treatment: "off", till: 12346))
         let notificationSentAt = Date()
         connectionManager.handleNotification(EvaluationUpdateNotification(channel: nil, timestamp: 0, changeNumber: 2, algorithmSeed: algorithmSeed, updateIntervalMs: updateIntervalMs))
 
@@ -106,6 +110,52 @@ final class StreamingE2ETest: XCTestCase {
     }
     #endif
 
+    // Real app lifecycle (background/foreground) drives pause/resume.
+    #if os(iOS) || os(tvOS)
+    func testStreamingPausesAndResumesViaAppLifecycle() async throws {
+        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"]))
+
+        let sdkReady = expectation(description: "SDK ready")
+        let listener = TestEventListener(readyExpectation: sdkReady)
+
+        let connectionManagerMock = StreamingMock()
+        factory = try buildStreamingFactory(target: Target(key: Key(matchingKey: "user-123"), trafficType: "user")) { _ in connectionManagerMock }
+        factory.client.addEventListener(listener)
+        waitFor(sdkReady)
+
+        // Host app backgrounds: the SyncManager observes the lifecycle notification and pauses streaming.
+        // The observer runs on the main queue, so give it a moment before asserting.
+        NotificationCenter.default.post(name: UIApplication.didEnterBackgroundNotification, object: nil)
+        sleep(seconds: 0.5)
+        XCTAssertEqual(connectionManagerMock.pauseCallCount, 1, "Streaming should pause when the app enters background")
+
+        // Host app foregrounds: streaming resumes.
+        NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+        sleep(seconds: 0.5)
+        XCTAssertEqual(connectionManagerMock.resumeCallCount, 1, "Streaming should resume when the app becomes active")
+    }
+    #endif
+
+    func testDestroyingLastClientStopsStreaming() async throws {
+        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"]))
+
+        let sdkReady = expectation(description: "SDK ready")
+        let listener = TestEventListener(readyExpectation: sdkReady)
+
+        let connectionManagerMock = StreamingMock()
+        factory = try buildStreamingFactory(target: Target(key: Key(matchingKey: "user-123"), trafficType: "user")) { _ in connectionManagerMock }
+        factory.client.addEventListener(listener)
+        waitFor(sdkReady)
+
+        XCTAssertEqual(connectionManagerMock.startCallCount, 1, "Streaming should connect once the SDK is ready")
+
+        // Destroy via client.destroy() (not factory.destroy()): the last client owns the only
+        // sync manager, so its streaming connection must be stopped.
+        await factory.client.destroy()
+
+        XCTAssertEqual(connectionManagerMock.stopCallCount, 1, "Streaming must stop after the last client is destroyed via client.destroy()")
+    }
+
     // MARK: - Multi-Client Push Updates
 
     func testPushUpdateNotifiesBothClientsIndependently() async throws {
@@ -128,8 +178,8 @@ final class StreamingE2ETest: XCTestCase {
 
         waitFor(ready1, ready2)
 
-        httpMock.fetchEvaluationsResultByKey["user-A"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"], till: 12346)))
-        httpMock.fetchEvaluationsResultByKey["user-B"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_b"], till: 12346)))
+        httpMock.fetchEvaluationsResultByKey["user-A"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"], treatment: "off", till: 12346)))
+        httpMock.fetchEvaluationsResultByKey["user-B"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_b"], treatment: "off", till: 12346)))
         connectionManager.handleNotification(EvaluationUpdateNotification(channel: nil, timestamp: 0, changeNumber: 2))
 
         waitFor(update1, update2)
@@ -155,8 +205,8 @@ final class StreamingE2ETest: XCTestCase {
 
         waitFor(ready1, ready2)
 
-        httpMock.fetchEvaluationsResultByKey["user-A"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["feature_x"], till: 12346)))
-        httpMock.fetchEvaluationsResultByKey["user-B"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["feature_y", "feature_z"], till: 12346)))
+        httpMock.fetchEvaluationsResultByKey["user-A"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["feature_x"], treatment: "off", till: 12346)))
+        httpMock.fetchEvaluationsResultByKey["user-B"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["feature_y", "feature_z"], treatment: "off", till: 12346)))
         connectionManager.handleNotification(EvaluationUpdateNotification(channel: nil, timestamp: 0, changeNumber: 2))
 
         waitFor(update1, update2)
@@ -255,10 +305,7 @@ final class StreamingE2ETest: XCTestCase {
     }
 
     private func computeExpectedDelay(key: String, updateIntervalMs: Int64, algorithmSeed: Int) -> TimeInterval {
-        let hash = Murmur3Hash.hashString(key, UInt32(truncatingIfNeeded: algorithmSeed))
-        let bucket = Int64(bitPattern: UInt64(hash)) % updateIntervalMs
-        let ms = bucket < 0 ? -bucket : bucket
-        return Double(ms) / 1000.0
+        RefetchDelay(intervalMs: updateIntervalMs, seed: algorithmSeed).delay(forKey: key)
     }
 
     private static func cleanTestDatabase() {

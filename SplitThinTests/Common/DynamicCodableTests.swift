@@ -57,7 +57,7 @@ final class ParsingTest: XCTestCase {
 
     func testEvaluationResultParsesValidJson() throws {
         let json = """
-        {"featureName":"my_flag","treatment":"on","sets":["set1","set2"],"config":"{\\"key\\":\\"value\\"}","label":"default rule","changeNumber":12345}
+        {"flag":"my_flag","treatment":"on","sets":["set1","set2"],"config":"{\\"key\\":\\"value\\"}","label":"default rule","changeNumber":12345}
         """.data(using: .utf8)!
 
         let result = try Json.decode(from: json, to: EvaluationResult.self)
@@ -66,12 +66,11 @@ final class ParsingTest: XCTestCase {
         XCTAssertEqual(result.treatment, "on")
         XCTAssertEqual(result.flagSets, ["set1", "set2"])
         XCTAssertEqual(result.config, "{\"key\":\"value\"}")
-        XCTAssertEqual(result.changeNumber, 12345)
     }
 
     func testEvaluationResultParsesMinimalJson() throws {
         let json = """
-        {"featureName":"flag","treatment":"off","sets":[]}
+        {"flag":"flag","treatment":"off","sets":[]}
         """.data(using: .utf8)!
 
         let result = try Json.decode(from: json, to: EvaluationResult.self)
@@ -80,12 +79,11 @@ final class ParsingTest: XCTestCase {
         XCTAssertEqual(result.treatment, "off")
         XCTAssertEqual(result.flagSets, [])
         XCTAssertNil(result.config)
-        XCTAssertNil(result.changeNumber)
     }
 
     func testEvaluationResultDefaultsSetsToEmptyWhenMissing() throws {
         let json = """
-        {"featureName":"flag","treatment":"on"}
+        {"flag":"flag","treatment":"on"}
         """.data(using: .utf8)!
 
         let result = try Json.decode(from: json, to: EvaluationResult.self)
@@ -103,7 +101,7 @@ final class ParsingTest: XCTestCase {
 
     func testEvaluationResultThrowsOnMissingTreatment() {
         let json = """
-        {"featureName":"flag","sets":[]}
+        {"flag":"flag","sets":[]}
         """.data(using: .utf8)!
 
         XCTAssertThrowsError(try Json.decode(from: json, to: EvaluationResult.self))
@@ -113,7 +111,7 @@ final class ParsingTest: XCTestCase {
 
     func testEvaluationsResultParsesValidJson() throws {
         let json = """
-        {"since":-1,"till":1772129027764,"evaluations":[{"featureName":"flag1","treatment":"on","sets":[]},{"featureName":"flag2","treatment":"off","sets":["setA"]}]}
+        {"since":-1,"till":1772129027764,"evaluations":[{"flag":"flag1","treatment":"on","sets":[]},{"flag":"flag2","treatment":"off","sets":["setA"]}]}
         """.data(using: .utf8)!
 
         let result = try Json.decode(from: json, to: EvaluationsResult.self)
@@ -150,7 +148,7 @@ final class ParsingTest: XCTestCase {
 
     func testEvaluationsResultParsesWithNullSinceAndTill() throws {
         let json = """
-        {"since":null,"till":null,"evaluations":[{"featureName":"flag","treatment":"on","sets":[]}]}
+        {"since":null,"till":null,"evaluations":[{"flag":"flag","treatment":"on","sets":[]}]}
         """.data(using: .utf8)!
 
         let result = try Json.decode(from: json, to: EvaluationsResult.self)
@@ -162,7 +160,7 @@ final class ParsingTest: XCTestCase {
 
     func testEvaluationsResultThrowsOnInvalidEvaluation() {
         let json = """
-        {"evaluations":[{"featureName":"flag"}]}
+        {"evaluations":[{"flag":"flag"}]}
         """.data(using: .utf8)!
 
         XCTAssertThrowsError(try Json.decode(from: json, to: EvaluationsResult.self))

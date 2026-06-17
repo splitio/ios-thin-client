@@ -89,8 +89,8 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttp)
 
         let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider, observer: resolvedObserver, storage: evaluationStorage, readStorage: evaluationStorage)
-        let evaluationRepository = DefaultEvaluationRepository(fetchCoordinator: fetchCoordinator, evaluationFilters: config.evaluationFilters)
-        let splitManager = DefaultSplitManager(evaluationRepository: evaluationRepository, target: target)
+        let evaluationRepository = DefaultEvaluationRepository(fetchCoordinator: fetchCoordinator, evaluationFilters: config.evaluationFilters, readStorage: evaluationStorage)
+        let splitManager = DefaultSplitManager(evaluationRepository: evaluationRepository)
 
         // Streaming
         let streaming: Streaming

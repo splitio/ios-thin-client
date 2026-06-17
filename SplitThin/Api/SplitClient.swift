@@ -32,10 +32,11 @@ final class DefaultSplitClient: SplitClient {
     private let eventsScheduler: EventsPeriodicScheduler
     private let telemetryObserver: TelemetryObserver
     private let telemetrySubmitter: TelemetrySubmitter
+    private let fetchCoordinator: EvaluationFetchCoordinator
     private var clientListeners = [SplitEventListener]()
     private var isDestroyed = false
 
-    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, authProvider: AuthProvider, observer: Observer, syncManager: SyncManager, tracker: Tracker, eventsTracker: EventsTracker, eventsScheduler: EventsPeriodicScheduler, telemetryObserver: TelemetryObserver, telemetrySubmitter: TelemetrySubmitter) {
+    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, authProvider: AuthProvider, observer: Observer, syncManager: SyncManager, tracker: Tracker, eventsTracker: EventsTracker, eventsScheduler: EventsPeriodicScheduler, telemetryObserver: TelemetryObserver, telemetrySubmitter: TelemetrySubmitter, fetchCoordinator: EvaluationFetchCoordinator) {
         self.target = target
         self.treatmentsManager = treatmentsManager
         self.eventsManager = eventsManager
@@ -47,6 +48,7 @@ final class DefaultSplitClient: SplitClient {
         self.eventsScheduler = eventsScheduler
         self.telemetryObserver = telemetryObserver
         self.telemetrySubmitter = telemetrySubmitter
+        self.fetchCoordinator = fetchCoordinator
     }
 
     // MARK: - Evaluations
@@ -67,7 +69,19 @@ final class DefaultSplitClient: SplitClient {
     // MARK: - Target switching
     func setTarget(target: Target) {
         observer.notify(event: .targetSwitchStarted)
+        let previousTarget = self.target
         self.target = target
+
+        if previousTarget.matchingKey != target.matchingKey {
+            // Register the new key to get a valid auth token for it.
+            authProvider.unregister(target: previousTarget.matchingKey)
+            authProvider.register(target: target.matchingKey)
+
+            // Stop refetching/bitmap-checking the old key on the factory-wide coordinator.
+            fetchCoordinator.unregister(target: previousTarget)
+        }
+
+        syncManager.setTarget(target)
         treatmentsManager.setTarget(target)
         observer.notify(event: .targetSwitchCompleted)
     }
