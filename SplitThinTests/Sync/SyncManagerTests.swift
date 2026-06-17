@@ -108,6 +108,8 @@ final class SyncManagerTests: XCTestCase {
 final class PeriodicSchedulerMock: EvaluationPeriodicScheduler, @unchecked Sendable {
     var startCalls = 0
     var stopCalls = 0
+    var setTargetCalls = 0
+    var lastTargetSet: Target?
 
     func start() {
         startCalls += 1
@@ -115,6 +117,11 @@ final class PeriodicSchedulerMock: EvaluationPeriodicScheduler, @unchecked Senda
 
     func stop() {
         stopCalls += 1
+    }
+
+    func setTarget(_ target: Target) {
+        setTargetCalls += 1
+        lastTargetSet = target
     }
 }
 

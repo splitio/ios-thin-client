@@ -73,6 +73,24 @@ final class EventsE2ETest: XCTestCase {
         XCTAssertEqual(listener.onReadyCallCount, 0)
     }
 
+    func testSdkBecomesReadyAfterTimeout() async throws {
+        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag1"]))
+        httpMock.fetchDelay = 1_500_000_000 // 1.5s > timeout
+
+        let sdkTimedOut = expectation("SDK timed out")
+        let sdkReady = expectation("SDK ready")
+        let listener = TestEventListener(readyExpectation: sdkReady, timeoutExpectation: sdkTimedOut)
+        factory = try buildFactory(httpClient: httpMock, timeout: 1)
+        factory.client.addEventListener(listener)
+
+        waitFor(sdkTimedOut, timeout: 3)
+        waitFor(sdkReady, timeout: 3)
+
+        XCTAssertEqual(listener.onReadyTimedOutCallCount, 1)
+        XCTAssertEqual(listener.onReadyCallCount, 1, "READY must still fire once the late response arrives")
+        XCTAssertEqual(factory.client.getTreatment("flag1").treatment, "on", "the recovered evaluations should be served")
+    }
+
     func testSdkReadyTimedOutDoesNotFireIfAlreadyReady() async throws {
         httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag1"]))
 

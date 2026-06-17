@@ -136,6 +136,26 @@ final class StreamingE2ETest: XCTestCase {
     }
     #endif
 
+    func testDestroyingLastClientStopsStreaming() async throws {
+        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"]))
+
+        let sdkReady = expectation(description: "SDK ready")
+        let listener = TestEventListener(readyExpectation: sdkReady)
+
+        let connectionManagerMock = StreamingMock()
+        factory = try buildStreamingFactory(target: Target(key: Key(matchingKey: "user-123"), trafficType: "user")) { _ in connectionManagerMock }
+        factory.client.addEventListener(listener)
+        waitFor(sdkReady)
+
+        XCTAssertEqual(connectionManagerMock.startCallCount, 1, "Streaming should connect once the SDK is ready")
+
+        // Destroy via client.destroy() (not factory.destroy()): the last client owns the only
+        // sync manager, so its streaming connection must be stopped.
+        await factory.client.destroy()
+
+        XCTAssertEqual(connectionManagerMock.stopCallCount, 1, "Streaming must stop after the last client is destroyed via client.destroy()")
+    }
+
     // MARK: - Multi-Client Push Updates
 
     func testPushUpdateNotifiesBothClientsIndependently() async throws {

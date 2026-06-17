@@ -7,6 +7,7 @@ import Logging
 protocol SyncManager: Sendable {
     func start()
     func stop() async
+    func setTarget(_ target: Target)
 }
 
 protocol MobileSync: Sendable {
@@ -23,7 +24,7 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
     private let eventsManager: SplitEventsManager
     private let polling: EvaluationPeriodicScheduler
     private let streaming: Streaming
-    private let target: Target
+    private var target: Target
 
     // BG sync (just for mobile) 
     private var isPaused = false
@@ -79,7 +80,9 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
 
         Logger.d("SyncManager: Loaded \(cachedEvaluations.count) evaluations from cache for \(target.matchingKey)")
 
-        evaluationRepository.update(cachedEvaluations, for: target)
+        if cachedEvaluations.notEmpty {
+            evaluationRepository.loadFromCache(cachedEvaluations, for: target)
+        }
 
         let metadata = SdkReadyFromCacheMetadata(lastUpdateTimestamp: changeNumber, isInitialCacheLoad: true)
         eventsManager.notifyInternalEvent(.evaluationsLoadedFromCache(metadata))
@@ -90,6 +93,11 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
 
         polling.stop()
         await streaming.stop()
+    }
+
+    func setTarget(_ target: Target) {
+        withLock(lock) { self.target = target }
+        polling.setTarget(target)
     }
 
     private func establishLink() {

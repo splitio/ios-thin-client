@@ -9,6 +9,7 @@ final class EvaluationFetchCoordinatorMock: EvaluationFetchCoordinator, @uncheck
     var unregisterCalls: [Target] = []
     var evaluationsToReturn: [EvaluationResult] = []
     var changeNumberToReturn: Int64? = nil
+    var shouldApplyToCacheToReturn = true
     var errorToThrow: Error?
     var onFetchCallback: (() -> Void)?
     var onRefetchAllCallback: (() -> Void)?
@@ -21,7 +22,7 @@ final class EvaluationFetchCoordinatorMock: EvaluationFetchCoordinator, @uncheck
         withLock(lock) { fetchCalls.append((target, filters, reason)) }
         onFetchCallback?()
         if let error = errorToThrow { throw error }
-        return FetchResult(evaluations: evaluationsToReturn, changeNumber: changeNumberToReturn)
+        return FetchResult(evaluations: evaluationsToReturn, changeNumber: changeNumberToReturn, shouldApplyToCache: shouldApplyToCacheToReturn)
     }
 
     func refetchAll(delay: RefetchDelay) async {

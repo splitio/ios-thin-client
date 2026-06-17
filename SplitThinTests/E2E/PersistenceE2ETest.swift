@@ -144,6 +144,90 @@ final class PersistenceE2ETest: XCTestCase {
         XCTAssertEqual(secondRun.treatment, "on")
         XCTAssertEqual(secondRun.config, "{\"color\":\"blue\"}", "After enabling configs the response config should be served")
     }
+
+    func testWarmStartUpToDateResponseKeepsPersistedCache() async throws {
+        let prefix = "persist_e2e_uptodate_\(UUID().uuidString.prefix(8))"
+        let target = Target(matchingKey: "user_a", trafficType: "user")
+
+        // Run 1: full sync persists my_flag at changeNumber 1000.
+        let server1 = SinceAwareHttpClientMock(
+            authData: AuthE2ETest.mockAuthResponse(),
+            fullSyncData: mockEvaluationsData(flags: ["my_flag"], till: 1000),
+            upToDateData: mockEvaluationsData(flags: [], since: 1000, till: 1000)
+        )
+        let sdkReady = expectation("SDK ready")
+        factory = try buildFactory(retryableHttpClient: server1, target: target, prefix: prefix)
+        factory.client.addEventListener(TestEventListener(readyExpectation: sdkReady))
+        waitFor(sdkReady)
+        XCTAssertEqual(factory.client.getTreatment("my_flag").treatment, "on")
+
+        sleep(seconds: 0.5) // let persistence write (non-blocking)
+        await factory.destroy()
+        factory = nil
+
+        // Run 2: same key, cache still valid. The SDK sends since=1000 and the server replies
+        // "up to date" with an empty payload. That empty response must NOT wipe the hydrated cache.
+        let server2 = SinceAwareHttpClientMock(
+            authData: AuthE2ETest.mockAuthResponse(),
+            fullSyncData: mockEvaluationsData(flags: ["my_flag"], till: 1000),
+            upToDateData: mockEvaluationsData(flags: [], since: 1000, till: 1000),
+            evaluationsDelay: 0.3 // let the empty fetch land and be processed before asserting
+        )
+        let sdkReady2 = expectation("SDK ready 2")
+        factory2 = try buildFactory(retryableHttpClient: server2, target: target, prefix: prefix)
+        factory2.client.addEventListener(TestEventListener(readyExpectation: sdkReady2))
+        waitFor(sdkReady2, timeout: 5)
+
+        sleep(seconds: 0.5) // ensure the up-to-date fetch has landed
+        XCTAssertEqual(
+            factory2.client.getTreatment("my_flag").treatment, "on",
+            "An up-to-date (empty) warm-start response must not wipe the persisted cache"
+        )
+    }
+
+    func testSetTargetHydratesPersistedCacheForNewTarget() async throws {
+        let prefix = "persist_e2e_settarget_\(UUID().uuidString.prefix(8))"
+
+        // Prior session: persist flag_b = "b_cached" for user-B at changeNumber 1000.
+        let httpB = SecureHttpClientMock()
+        httpB.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_b"], treatment: "b_cached", till: 1000))
+        let readyB = expectation("SDK ready B")
+        factory = try buildFactory(httpClient: httpB, target: Target(matchingKey: "user-B", trafficType: "user"), prefix: prefix)
+        factory.client.addEventListener(TestEventListener(readyExpectation: readyB))
+        waitFor(readyB)
+        sleep(seconds: 0.5) // let persistence write (non-blocking)
+        await factory.destroy()
+        factory = nil
+
+        // New session: start on user-A, then switch to user-B. Every treatment is distinct so no value
+        // can coincide and mask a bug:
+        //   user-A flag_a           -> "a_treatment"
+        //   user-B persisted (disk) -> "b_cached"
+        //   user-B network (fetch)  -> "b_network"  (changeNumber 1001, behind a 1s delay)
+        let http = SecureHttpClientMock()
+        http.fetchEvaluationsResultByKey["user-A"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"], treatment: "a_treatment")))
+        http.fetchEvaluationsResultByKey["user-B"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_b"], treatment: "b_network", till: 1001)))
+        http.fetchDelay = 1_000_000_000 // 1s: keep the user-B fetch in flight
+
+        let readyA = expectation("SDK ready A")
+        factory2 = try buildFactory(httpClient: http, target: Target(matchingKey: "user-A", trafficType: "user"), prefix: prefix)
+        factory2.client.addEventListener(TestEventListener(readyExpectation: readyA))
+        waitFor(readyA, timeout: 5)
+
+        factory2.client.setTarget(target: Target(matchingKey: "user-B", trafficType: "user"))
+
+        // Hydration is async: wait until it lands (flag_b stops being control). The network fetch is
+        // still in flight behind the 1s delay, so the value now must be the persisted "b_cached" and
+        // must NOT yet be the pending network "b_network".
+        waitUntil(timeout: 0.6) { self.factory2.client.getTreatment("flag_b").treatment != "control" }
+        let inFlight = factory2.client.getTreatment("flag_b").treatment
+        XCTAssertEqual(inFlight, "b_cached", "setTarget must serve the persisted cache via hydration during the in-flight window")
+        XCTAssertNotEqual(inFlight, "b_network", "the pending network value must not be served while its fetch is still in flight")
+
+        // Once the fetch lands, the fresh network value takes over.
+        waitUntil(timeout: 3) { self.factory2.client.getTreatment("flag_b").treatment == "b_network" }
+        XCTAssertEqual(factory2.client.getTreatment("flag_b").treatment, "b_network", "after the fetch lands, the fresh network value takes over")
+    }
 }
 
 // Emulates the backend's since-based behavior for /evaluations

@@ -129,6 +129,63 @@ final class PollingE2ETest: XCTestCase {
         XCTAssertEqual(callCountAfterDestroy, httpMock.fetchEvaluationsCalls.count, "Polling must stop after the last client is destroyed via client.destroy()")
     }
 
+    func testDestroyingOneClientKeepsOthersPolling() async throws {
+        httpMock.fetchEvaluationsResultByKey["user-A"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"])))
+        httpMock.fetchEvaluationsResultByKey["user-B"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_b"])))
+
+        let readyA = expectation("Client A ready")
+        let readyB = expectation("Client B ready")
+        factory = try buildFactory(httpClient: httpMock, syncMode: .polling, refreshRate: 1, target: Target(matchingKey: "user-A", trafficType: "user"))
+        let clientB = factory.getClient("user-B")
+        factory.client.addEventListener(TestEventListener(readyExpectation: readyA))
+        clientB.addEventListener(TestEventListener(readyExpectation: readyB))
+
+        waitFor(readyA, readyB)
+
+        // Destroy only client A. Each client owns its own polling scheduler, so A must stop
+        // while B keeps polling on the shared (but per-target) infrastructure.
+        await factory.client.destroy()
+        let aCallsAtDestroy = httpMock.fetchEvaluationsCalls.filter { $0.target.matchingKey == "user-A" }.count
+        let bCallsAtDestroy = httpMock.fetchEvaluationsCalls.filter { $0.target.matchingKey == "user-B" }.count
+
+        sleep(seconds: 2.5) // Spans 2+ poll cycles
+
+        let aCallsAfter = httpMock.fetchEvaluationsCalls.filter { $0.target.matchingKey == "user-A" }.count
+        let bCallsAfter = httpMock.fetchEvaluationsCalls.filter { $0.target.matchingKey == "user-B" }.count
+
+        XCTAssertEqual(aCallsAfter, aCallsAtDestroy, "Destroyed client A must stop polling")
+        XCTAssertGreaterThan(bCallsAfter, bCallsAtDestroy, "Surviving client B must keep polling")
+    }
+
+    // setTarget must move the polling loop onto the new key: the old key stops being polled
+    // and the new one starts getting periodic refreshes.
+    func testSetTargetSwitchesPolledTarget() async throws {
+        httpMock.fetchEvaluationsResultByKey["user-A"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"])))
+        httpMock.fetchEvaluationsResultByKey["user-B"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_b"])))
+
+        let sdkReady = expectation("SDK ready")
+        let listener = TestEventListener(readyExpectation: sdkReady)
+        factory = try buildFactory(httpClient: httpMock, syncMode: .polling, refreshRate: 1, target: Target(matchingKey: "user-A", trafficType: "user"))
+        factory.client.addEventListener(listener)
+
+        waitFor(sdkReady)
+
+        factory.client.setTarget(target: Target(matchingKey: "user-B", trafficType: "user"))
+
+        sleep(seconds: 0.5) // Let any in-flight user-A cycle finish and the switch take hold
+
+        let aCallsAtSwitch = httpMock.fetchEvaluationsCalls.filter { $0.target.matchingKey == "user-A" }.count
+        let bCallsAtSwitch = httpMock.fetchEvaluationsCalls.filter { $0.target.matchingKey == "user-B" }.count
+
+        sleep(seconds: 2.5) // Spans 2+ poll cycles
+
+        let aCallsAfter = httpMock.fetchEvaluationsCalls.filter { $0.target.matchingKey == "user-A" }.count
+        let bCallsAfter = httpMock.fetchEvaluationsCalls.filter { $0.target.matchingKey == "user-B" }.count
+
+        XCTAssertEqual(aCallsAfter, aCallsAtSwitch, "Polling must stop fetching the old target after setTarget")
+        XCTAssertGreaterThan(bCallsAfter, bCallsAtSwitch, "Polling must keep fetching the new target after setTarget")
+    }
+
     // MARK: - SDK_UPDATE via Polling
 
     func testSdkReadyFiresOnlyOnce() async throws {

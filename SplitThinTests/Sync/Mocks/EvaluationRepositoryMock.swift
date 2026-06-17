@@ -28,10 +28,11 @@ final class EvaluationRepositoryMock: EvaluationRepository, @unchecked Sendable 
     }
 
     var flagNamesToReturn = [String]()
+    var flagNamesByKey = [String: [String]]()
     var updateCalls = [(evaluations: [EvaluationResult], target: Target)]()
 
     func getFlagNames(target: Target) -> [String] {
-        flagNamesToReturn
+        flagNamesByKey[target.matchingKey] ?? flagNamesToReturn
     }
 
     var changedFlagsToReturn = [String]()
@@ -39,6 +40,23 @@ final class EvaluationRepositoryMock: EvaluationRepository, @unchecked Sendable 
     @discardableResult
     func update(_ evaluations: [EvaluationResult], for target: Target) -> [String] {
         updateCalls.append((evaluations, target))
+        return changedFlagsToReturn
+    }
+
+    var applyFetchedCalls = [(result: FetchResult, target: Target)]()
+
+    @discardableResult
+    func applyFetched(_ result: FetchResult, for target: Target) -> [String] {
+        applyFetchedCalls.append((result, target))
+        guard result.shouldApplyToCache else { return [] }
+        return update(result.evaluations, for: target)
+    }
+
+    var loadFromCacheCalls = [(evaluations: [EvaluationResult], target: Target)]()
+
+    @discardableResult
+    func loadFromCache(_ evaluations: [EvaluationResult], for target: Target) -> [String] {
+        loadFromCacheCalls.append((evaluations, target))
         return changedFlagsToReturn
     }
 

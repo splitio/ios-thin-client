@@ -10,7 +10,6 @@ final class DefaultSplitFactoryTest: XCTestCase {
     private var fetchCoordinatorMock: EvaluationFetchCoordinatorMock!
     private var connectionManagerMock: StreamingMock!
     private var evaluationStorageMock: EvaluationStorageMock!
-    private var splitManager: DefaultSplitManager!
 
     override func setUp() {
         super.setUp()
@@ -21,7 +20,7 @@ final class DefaultSplitFactoryTest: XCTestCase {
         fetchCoordinatorMock = EvaluationFetchCoordinatorMock()
         connectionManagerMock = StreamingMock()
         evaluationStorageMock = EvaluationStorageMock()
-        splitManager = DefaultSplitManager(evaluationRepository: evaluationRepositoryMock, target: Target(matchingKey: "user1", trafficType: "user"))
+        let splitManager = DefaultSplitManager(evaluationRepository: evaluationRepositoryMock)
         let coreDataStorage = CoreDataStorage(databaseName: "test_factory_\(UUID().uuidString.prefix(8))")
         factory = DefaultSplitFactory(sdkKey: SdkKey("api-key"), target: Target(matchingKey: "user1", trafficType: "user"), config: SplitClientConfig.builder().build(), evaluationFilters: nil, secureHttpClient: secureHttpClientMock, authProvider: authProviderMock, evaluationRepository: evaluationRepositoryMock, fetchCoordinator: fetchCoordinatorMock, streaming: connectionManagerMock, evaluationStorage: evaluationStorageMock, coreDataStorage: coreDataStorage, splitManager: splitManager, factoryObserver: ObserverSpy(), telemetryStorage: DefaultTelemetryStorage(storage: coreDataStorage))
     }
@@ -35,7 +34,6 @@ final class DefaultSplitFactoryTest: XCTestCase {
         fetchCoordinatorMock = nil
         connectionManagerMock = nil
         evaluationStorageMock = nil
-        splitManager = nil
     }
 
     // MARK: - client property
