@@ -10,6 +10,7 @@ protocol EventsReadStorage: Sendable {
 
 protocol EventsWriteStorage: Sendable {
     func add(_ event: EventEntity) async
+    func add(_ events: [EventEntity]) async
     func remove(_ events: [EventEntity]) async
     func clear() async
 }
@@ -25,8 +26,14 @@ final class DefaultEventsStorage: EventsReadStorage, EventsWriteStorage, Sendabl
     // MARK: - EventsWriteStorage
 
     func add(_ event: EventEntity) async {
-        let dto = EventDTO(id: event.id, key: event.key, trafficType: event.trafficType, eventType: event.eventType, value: event.value, properties: encodeProperties(event.properties), timestamp: event.timestamp.timeIntervalSince1970)
-        try? await storage.addEvent(dto)
+        await add([event])
+    }
+
+    func add(_ events: [EventEntity]) async {
+        let dtos = events.map { event in
+            EventDTO(id: event.id, key: event.key, trafficType: event.trafficType, eventType: event.eventType, value: event.value, properties: encodeProperties(event.properties), timestamp: event.timestamp.timeIntervalSince1970)
+        }
+        try? await storage.addEvents(dtos)
     }
 
     func remove(_ events: [EventEntity]) async {

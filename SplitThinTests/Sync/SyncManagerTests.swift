@@ -10,7 +10,7 @@ final class SyncManagerTests: XCTestCase {
     private var evaluationRepository: EvaluationRepositoryMock!
     private var eventsManager: SplitEventsManagerMock!
 
-    private let target = Target(matchingKey: "user1")
+    private let target = Target(matchingKey: "user1", trafficType: "user")
 
     override func setUp() {
         super.setUp()
@@ -108,6 +108,8 @@ final class SyncManagerTests: XCTestCase {
 final class PeriodicSchedulerMock: EvaluationPeriodicScheduler, @unchecked Sendable {
     var startCalls = 0
     var stopCalls = 0
+    var setTargetCalls = 0
+    var lastTargetSet: Target?
 
     func start() {
         startCalls += 1
@@ -115,6 +117,11 @@ final class PeriodicSchedulerMock: EvaluationPeriodicScheduler, @unchecked Senda
 
     func stop() {
         stopCalls += 1
+    }
+
+    func setTarget(_ target: Target) {
+        setTargetCalls += 1
+        lastTargetSet = target
     }
 }
 

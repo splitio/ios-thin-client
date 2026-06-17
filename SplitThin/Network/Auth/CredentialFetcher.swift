@@ -42,16 +42,16 @@ final class DefaultCredentialFetcher: CredentialFetcher, @unchecked Sendable {
         } else {
             queryString += "&capabilities=evaluator"
         }
+        queryString += users.map { "&key=\($0)" }.joined()
         if let flagSets = evaluationFilters?.flagSets, !flagSets.isEmpty {
             queryString += "&sets=\(flagSets.sorted().joined(separator: ","))"
         }
-        let usersParam = users.joined(separator: ",")
-        queryString += "&users=\(usersParam)"
 
-        let endpoint = Endpoint.builder(baseUrl: authEndpoint, path: "api/v3/auth/thin-client", defaultQueryString: queryString)
+        let endpoint = Endpoint.builder(baseUrl: authEndpoint, path: "api/v3/auth", defaultQueryString: queryString)
                                .set(method: .get)
                                .add(header: "Authorization", withValue: "Bearer \(sdkKey)")
                                .add(header: "Content-Type", withValue: "application/json")
+                               .add(header: "X-Harness-FME-SDK-Version", withValue: "ios-\(Version.semantic)")
                                .build()
 
         let response = try await retryableHttpClient.execute(endpoint, category: .auth)

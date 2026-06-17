@@ -11,7 +11,7 @@ final class LoggingObserverTests: XCTestCase {
     }
 
     func testAllEventsHandledWithoutCrash() {
-        let target = Target(matchingKey: "key")
+        let target = Target(matchingKey: "key", trafficType: "user")
         let allEvents: [ObservableEvent] = [
             // Existing
             .evaluationsUpdated(SdkUpdateMetadata(type: .flagsUpdate, names: ["f1"])),

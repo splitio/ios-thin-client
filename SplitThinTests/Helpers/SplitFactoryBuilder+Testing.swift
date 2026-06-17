@@ -48,8 +48,8 @@ extension SplitConfigBuilder {
 
 extension SplitFactory {
     @discardableResult
-    func getClient(_ matchingKey: String) -> SplitClient {
-        getClient(Target(matchingKey: matchingKey))
+    func getClient(_ matchingKey: String, trafficType: String = "user") -> SplitClient {
+        getClient(Target(matchingKey: matchingKey, trafficType: trafficType))
     }
 }
 
@@ -83,8 +83,8 @@ extension RetryableHttpClient {
 
 extension SplitFactoryBuilder {
     @discardableResult
-    func setTarget(_ matchingKey: String) -> SplitFactoryBuilder {
-        setTarget(Target(matchingKey: matchingKey))
+    func setTarget(_ matchingKey: String, trafficType: String = "user") -> SplitFactoryBuilder {
+        setTarget(Target(matchingKey: matchingKey, trafficType: trafficType))
     }
 
     @discardableResult

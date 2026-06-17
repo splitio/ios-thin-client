@@ -12,6 +12,7 @@ final class DefaultSplitClientTest: XCTestCase {
     private var trackerMock: TrackerMock!
     private var eventsTrackerMock: EventsTrackerMock!
     private var eventsSchedulerMock: EventsPeriodicSchedulerMock!
+    private var fetchCoordinatorMock: EvaluationFetchCoordinatorMock!
 
     override func setUp() {
         super.setUp()
@@ -22,7 +23,8 @@ final class DefaultSplitClientTest: XCTestCase {
         trackerMock = TrackerMock()
         eventsTrackerMock = EventsTrackerMock()
         eventsSchedulerMock = EventsPeriodicSchedulerMock()
-        client = buildClient(target: "user1", treatmentsManager: treatmentsManagerMock, eventsManager: eventsManagerMock, authProvider: authProviderMock, syncManager: syncManagerMock, tracker: trackerMock, eventsTracker: eventsTrackerMock, eventsScheduler: eventsSchedulerMock)
+        fetchCoordinatorMock = EvaluationFetchCoordinatorMock()
+        client = buildClient(target: "user1", treatmentsManager: treatmentsManagerMock, eventsManager: eventsManagerMock, authProvider: authProviderMock, syncManager: syncManagerMock, tracker: trackerMock, eventsTracker: eventsTrackerMock, eventsScheduler: eventsSchedulerMock, fetchCoordinator: fetchCoordinatorMock)
     }
 
     override func tearDown() {
@@ -36,9 +38,40 @@ final class DefaultSplitClientTest: XCTestCase {
     }
 
     func testSetTargetUpdatesTarget() {
-        client.setTarget(target: Target(matchingKey: "user2"))
+        client.setTarget(target: Target(matchingKey: "user2", trafficType: "user"))
 
         XCTAssertEqual(client.target.key.matchingKey, "user2")
+    }
+
+    func testSetTargetReRegistersKeyForAuth() {
+        client.setTarget(target: Target(matchingKey: "user2", trafficType: "user"))
+
+        XCTAssertEqual(authProviderMock.lastTargetUnregistered, "user1", "Previous key must be unregistered")
+        XCTAssertEqual(authProviderMock.lastTargetRegistered, "user2", "New key must be registered so its token authorizes it")
+    }
+
+    func testSetTargetForwardsToSyncManager() {
+        client.setTarget(target: Target(matchingKey: "user2", trafficType: "user"))
+
+        XCTAssertEqual(syncManagerMock.setTargetCallCount, 1)
+        XCTAssertEqual(syncManagerMock.lastTargetSet?.matchingKey, "user2", "Background sync must move onto the new target")
+    }
+
+    func testSetTargetSameKeyDoesNotChurnAuth() {
+        client.setTarget(target: Target(matchingKey: "user1", trafficType: "user"))
+
+        XCTAssertEqual(authProviderMock.registerCallCount, 0, "Re-targeting the same key must not re-register")
+        XCTAssertEqual(authProviderMock.unregisterCallCount, 0, "Re-targeting the same key must not unregister")
+    }
+
+    func testSetTargetUnregistersOldTargetFromCoordinator() {
+        client.setTarget(target: Target(matchingKey: "user2", trafficType: "user"))
+        XCTAssertEqual(fetchCoordinatorMock.unregisterCalls.first?.matchingKey, "user1", "Old key must be unregistered from the fetch coordinator so it stops being refetched and bitmap-checked")
+    }
+
+    func testSetTargetSameKeyDoesNotUnregisterFromCoordinator() {
+        client.setTarget(target: Target(matchingKey: "user1", trafficType: "user"))
+        XCTAssertTrue(fetchCoordinatorMock.unregisterCalls.isEmpty, "Re-targeting the same key must not unregister it from the coordinator")
     }
 
     func testGetTreatmentReturnsControl() {

@@ -6,7 +6,7 @@ final class ServiceEndpointsTest: XCTestCase {
     func testDefaultEndpoints() {
         let endpoints = ServiceEndpoints.builder().build()
 
-        XCTAssertEqual(endpoints.sdkEndpoint.absoluteString, "https://sdk.split.io")
+        XCTAssertEqual(endpoints.sdkEndpoint.absoluteString, "https://evaluator.split.io")
         XCTAssertEqual(endpoints.eventsEndpoint.absoluteString, "https://events.split.io")
         XCTAssertEqual(endpoints.authServiceEndpoint.absoluteString, "https://auth.split.io")
         XCTAssertEqual(endpoints.streamingServiceEndpoint.absoluteString, "https://streaming.split.io")
@@ -97,7 +97,7 @@ final class ServiceEndpointsTest: XCTestCase {
                                         .build()
 
         XCTAssertFalse(endpoints.allEndpointsValid)
-        XCTAssertEqual(endpoints.sdkEndpoint.absoluteString, "https://sdk.split.io")
+        XCTAssertEqual(endpoints.sdkEndpoint.absoluteString, "https://evaluator.split.io")
     }
 
     func testInvalidEventsEndpointFallsBackToDefault() {
@@ -143,7 +143,7 @@ final class ServiceEndpointsTest: XCTestCase {
                                         .build()
 
         XCTAssertFalse(endpoints.allEndpointsValid)
-        XCTAssertEqual(endpoints.sdkEndpoint.absoluteString, "https://sdk.split.io")
+        XCTAssertEqual(endpoints.sdkEndpoint.absoluteString, "https://evaluator.split.io")
         XCTAssertEqual(endpoints.eventsEndpoint.absoluteString, "https://custom.events.io")
         XCTAssertEqual(endpoints.authServiceEndpoint.absoluteString, "https://auth.split.io")
         XCTAssertEqual(endpoints.streamingServiceEndpoint.absoluteString, "https://streaming.split.io")
