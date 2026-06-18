@@ -1,53 +1,97 @@
-# ios-thin-client
+# Harness FME Thin Client SDK for iOS
 
-## Requirements
+## Overview
+This SDK is designed to work with Harness FME, the platform for controlled rollouts, which serves features to your users via feature flags to manage your complete customer experience.
 
-- Xcode 15+ or Swift 5.5+
-- macOS (for local CLI test/coverage commands)
+The thin client delegates flag evaluation to the Remote Evaluator service.
 
-## Build & Test
+## Compatibility
+This SDK is compatible with iOS 13 and later, and macOS 10.15 and later. It requires Swift 5.5 or later.
 
-From the repository root:
+## Installation
 
-```bash
-swift build
-swift test
+Add the SDK as a Swift Package Manager dependency.
+
+In Xcode: **File → Add Package Dependencies…** and enter the repository URL, or add it to your `Package.swift`:
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/splitio/ios-thin-client.git", from: "1.0.0"),
+],
+targets: [
+    .target(
+        name: "YourApp",
+        dependencies: [
+            .product(name: "SplitThin", package: "ios-thin-client"),
+        ]
+    ),
+]
 ```
 
-## Usage
+## Getting started
+
+Below is a simple example that describes the instantiation and most basic usage of the SDK.
 
 ```swift
 import SplitThin
+import UIKit
 
-SplitThinMain.main()
+final class SplitListener: SplitEventListener {
+    weak var client: SplitClient?
+    weak var viewController: ViewController?
+
+    init(client: SplitClient, viewController: ViewController) {
+        self.client = client
+        self.viewController = viewController
+    }
+
+    func onReady(_ metadata: SdkReadyMetadata) {
+        print("Split SDK Ready")
+        let result = client?.getTreatment(flag: "FEATURE_FLAG_NAME")
+        viewController?.updateUI(treatment: result?.treatment ?? "control")
+    }
+
+    func onUpdate(_ metadata: SdkUpdateMetadata) {
+        print("Flag \(metadata.names.first.flag) updated, new treatment: \(result.treatment)")
+    }
+}
+
+final class ViewController: UIViewController {
+
+    private var client: SplitClient?
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+
+        let config = SplitClientConfig.builder()
+                                      .set(logLevel: .verbose)
+                                      .set(syncMode: .streaming)
+                                      .set(evaluationRefreshRate: 60)
+                                      .build()
+
+        let target = Target(key: Key(matchingKey: "CUSTOMER_ID"), trafficType: "user")
+
+        let factory = DefaultSplitFactoryBuilder().setSdkKey(SdkKey("YOUR_SDK_KEY"))
+                                                  .setTarget(target)
+                                                  .setConfig(config)
+                                                  .build()
+
+        guard let client = factory?.client else { return }
+        client = client
+
+        let listener = SplitListener(client: client, viewController: self)
+        client.addEventListener(listener)
+    }
+
+    func updateUI(treatment: String) {
+        // someButton.setTitle(treatment, for: .normal)
+    }
+}
 ```
 
-## Local Coverage Report
+## Submitting issues
 
-```bash
-swift test --enable-code-coverage
-PROFDATA=$(find .build -type f -name default.profdata | head -n 1)
-TEST_BIN=$(find .build -type f -name '*PackageTests' -perm -111 | head -n 1)
-xcrun llvm-cov report "$TEST_BIN" -instr-profile "$PROFDATA"
-```
+The team monitors all issues submitted to this [issue tracker](https://github.com/splitio/ios-thin-client/issues). We encourage you to use this issue tracker to submit any bug reports, feedback, and feature enhancements. We'll do our best to respond in a timely manner.
 
-## Pre-commit Coverage Gate
-
-Set repository hooks path once:
-
-```bash
-git config core.hooksPath .githooks
-```
-
-Run manually:
-
-```bash
-.githooks/pre-commit
-```
-
-Default threshold is `80%`. Override with:
-
-```bash
-COVERAGE_THRESHOLD=85 .githooks/pre-commit
-```
-
+## License
+Licensed under the Apache License, Version 2.0. See: [Apache License](http://www.apache.org/licenses/).
