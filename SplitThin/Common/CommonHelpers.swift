@@ -1,0 +1,24 @@
+//  Created by Martin Cardozo
+//  Copyright © 2026 Harness. All rights reserved
+
+import Foundation
+
+@discardableResult
+func withLock<T>(_ lock: NSLock, _ block: () -> T) -> T {
+    lock.lock()
+    defer { lock.unlock() }
+    return block()
+}
+
+extension Collection {
+    var notEmpty: Bool { !isEmpty }
+}
+
+extension Array {
+    mutating func removeElementByMemoryAddress(_ element: Element) {
+        let targetId = ObjectIdentifier(element as AnyObject)
+        if let index = firstIndex(where: { ObjectIdentifier($0 as AnyObject) == targetId }) {
+            remove(at: index)
+        }
+    }
+}
