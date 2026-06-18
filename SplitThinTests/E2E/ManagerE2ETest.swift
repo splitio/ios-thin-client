@@ -60,6 +60,6 @@ final class ManagerE2ETest: XCTestCase {
         waitUntil(timeout: 3) { self.factory.manager().getFlagNames().contains("flag_b") }
         let names = factory.manager().getFlagNames()
         XCTAssert(names.notEmpty, "setTarget must not leave the manager with no flag names")
-        XCTAssert(names.contains(["flag_b", "flag_a"]), "the manager must reflect the new target's flags after setTarget")
+        XCTAssertTrue(Set(names).isSuperset(of: ["flag_b", "flag_a"]), "the manager must reflect the new target's flags after setTarget")
     }
 }
