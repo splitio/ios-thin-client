@@ -34,7 +34,37 @@ Below is a simple example that describes the instantiation and most basic usage 
 
 ```swift
 import SplitThin
-import UIKit
+
+final class ViewController: UIViewController {
+
+    private var client: SplitClient?
+
+    func setupSplit() {
+        let config = SplitClientConfig.builder()
+                                      .set(logLevel: .verbose)
+                                      .set(syncMode: .streaming)
+                                      .set(evaluationRefreshRate: 60)
+                                      .build()
+
+        let target = Target(key: Key(matchingKey: "CUSTOMER_ID"), trafficType: "user")
+
+        let factory = DefaultSplitFactoryBuilder().setSdkKey(SdkKey("YOUR_SDK_KEY"))
+                                                  .setTarget(target)
+                                                  .setConfig(config)
+                                                  .build()
+
+        guard let client = factory?.client else { return }
+        self.client = client
+
+        // Receive events from the SDK (ready, update, etc)
+        let listener = SplitListener(client: client, viewController: self)
+        client.addEventListener(listener)
+    }
+
+    func updateUI(treatment: String) {
+        // someButton.setTitle(treatment, for: .normal)
+    }
+}
 
 final class SplitListener: SplitEventListener {
     weak var client: SplitClient?
@@ -58,38 +88,6 @@ final class SplitListener: SplitEventListener {
         
         let result = client.getTreatment(flag: updatedFlag)
         print("Flag \(updatedFlag) updated, new treatment: \(result.treatment)")
-    }
-}
-
-final class ViewController: UIViewController {
-
-    private var client: SplitClient?
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
-
-        let config = SplitClientConfig.builder()
-                                      .set(logLevel: .verbose)
-                                      .set(syncMode: .streaming)
-                                      .set(evaluationRefreshRate: 60)
-                                      .build()
-
-        let target = Target(key: Key(matchingKey: "CUSTOMER_ID"), trafficType: "user")
-
-        let factory = DefaultSplitFactoryBuilder().setSdkKey(SdkKey("YOUR_SDK_KEY"))
-                                                  .setTarget(target)
-                                                  .setConfig(config)
-                                                  .build()
-
-        guard let client = factory?.client else { return }
-        self.client = client
-
-        let listener = SplitListener(client: client, viewController: self)
-        client.addEventListener(listener)
-    }
-
-    func updateUI(treatment: String) {
-        // someButton.setTitle(treatment, for: .normal)
     }
 }
 ```
