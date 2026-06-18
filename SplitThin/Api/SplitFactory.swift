@@ -110,10 +110,6 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         syncManagers.removeAll()
 
         splitManager = nil
-
-        // Close SQLite connection
-        coreDataStorage.close()
-
         observer.notify(event: .destroyCompleted)
     }
 
