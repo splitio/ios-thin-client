@@ -34,6 +34,22 @@ final class CoreDataStorage: @unchecked Sendable {
         }
     }
 
+    /// Closes the SQLite connection by removing the persistent stores from the coordinator. This
+    /// releases the file descriptors on the `.sqlite`/`-wal`/`-shm` files so the database can be
+    /// deleted safely afterwards — otherwise libsqlite3 logs a "vnode unlinked while in use"
+    /// integrity warning when something removes the files while the connection is still open
+    /// (e.g. the simulator wiping data between test runs). Called from `SplitFactory.destroy()`.
+    func close() {
+        let coordinator = container.persistentStoreCoordinator
+        for store in coordinator.persistentStores {
+            do {
+                try coordinator.remove(store)
+            } catch {
+                Logger.e("CoreDataStorage: Failed to remove store on close: \(error)")
+            }
+        }
+    }
+
     // MARK: - ClientSession Operations
 
     func upsertClientSession(matchingKey: String, bucketingKey: String?, attributesHash: String, attributes: [String: Any]?, changeNumber: Int64) async throws {

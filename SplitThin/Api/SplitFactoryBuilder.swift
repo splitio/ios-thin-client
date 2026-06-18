@@ -71,6 +71,10 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
             return nil
         }
 
+        if target.trafficType.isEmpty {
+            Logger.w("Target trafficType is mandatory")
+        }
+
         let serviceEndpoints = config.serviceEndpoints ?? ServiceEndpoints.builder().build()
 
         if !serviceEndpoints.allEndpointsValid {

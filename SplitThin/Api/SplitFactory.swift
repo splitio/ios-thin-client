@@ -110,6 +110,10 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         syncManagers.removeAll()
 
         splitManager = nil
+
+        // Close SQLite connection
+        coreDataStorage.close()
+
         observer.notify(event: .destroyCompleted)
     }
 
@@ -156,6 +160,11 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
             // onEventPush bridges validated TrackerEvents into our storage+submission pipeline.
             // It's set here because DefaultTracker only accepts it via constructor (private let).
             let tracker = DefaultTracker(defaultTrafficType: target.trafficType, initialEventSizeInBytes: 1024, eventValidator: ThinEventValidator(), propertyValidator: ThinPropertyValidator(), logger: ThinTrackerLogger(), onEventPush: { trackerEvent in
+                guard trackerEvent.trafficType != nil && trackerEvent.trafficType != "" else {
+                    Logger.e("Tracker event not tracked because trafficType is empty")
+                    return
+                }
+                
                 let event = EventEntity(key: trackerEvent.key ?? "", trafficType: trackerEvent.trafficType, eventType: trackerEvent.eventType, value: trackerEvent.value, properties: trackerEvent.properties, timestamp: Date(timeIntervalSince1970: Double(trackerEvent.timestamp ?? 0) / 1000.0))
                 Task { await eventsTracker.track(event) }
             })
