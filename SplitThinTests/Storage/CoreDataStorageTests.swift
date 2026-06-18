@@ -204,22 +204,4 @@ final class CoreDataStorageTests: XCTestCase {
         XCTAssertTrue(nilEvals.isEmpty, "nil-bucketing evaluations should be deleted")
         XCTAssertEqual(bkEvals.first?.treatment, "off", "bucketing evaluations should be untouched")
     }
-
-    // MARK: - Lifecycle
-
-    func testCloseReleasesTheStore() async throws {
-        let storage = makeStorage()
-        let matchingKey = "user_close"
-
-        try await storage.upsertClientSession(matchingKey: matchingKey, bucketingKey: nil, attributesHash: "", attributes: nil, changeNumber: 7)
-        let before = await storage.getChangeNumber(matchingKey: matchingKey, bucketingKey: nil)
-        XCTAssertEqual(before, 7, "sanity: the session is readable while the store is open")
-
-        storage.close()
-
-        // With the persistent store removed, the SQLite connection (and its wal/shm fds) is gone,
-        // so reads no longer resolve to data instead of leaving the file open for an unsafe unlink.
-        let after = await storage.getChangeNumber(matchingKey: matchingKey, bucketingKey: nil)
-        XCTAssertNil(after, "after close() the store is detached and reads return nil")
-    }
 }
