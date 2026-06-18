@@ -9,7 +9,10 @@ let package = Package(
         .library(name: "Api", targets: ["Api"]),
     ],
     dependencies: [
-        .package(path: "ios-client"),
+        .package(
+            url: "https://github.com/splitio/ios-client.git",
+            branch: "development"
+        )
     ],
     targets: [
         .target(
