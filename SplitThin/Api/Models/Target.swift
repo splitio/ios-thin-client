@@ -14,14 +14,12 @@ public struct Target: Hashable, @unchecked Sendable {
 
     public init(key: Key, attributes: [String: Any]? = nil, trafficType: String) {
         self.key = key
-        self.attributes = attributes
+        self.attributes = AttributeSanitizer.sanitize(attributes)
         self.trafficType = trafficType
     }
 
     public init(matchingKey: String, bucketingKey: String? = nil, attributes: [String: Any]? = nil, trafficType: String) {
-        self.key = Key(matchingKey: matchingKey, bucketingKey: bucketingKey)
-        self.attributes = attributes
-        self.trafficType = trafficType
+        self.init(key: Key(matchingKey: matchingKey, bucketingKey: bucketingKey), attributes: attributes, trafficType: trafficType)
     }
 
     // MARK: - Hashable

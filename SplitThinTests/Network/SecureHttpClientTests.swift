@@ -169,6 +169,22 @@ final class DefaultSecureHttpClientTest: XCTestCase {
         XCTAssertEqual(attributes?["role"], "admin")
     }
 
+    func testFetchEvaluationsBodyDropsOnlyInvalidAttribute() async throws {
+        retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
+
+        // `joined` (a Date) is not JSON-serializable. Previously it would have nuked the whole map;
+        // now only that entry is dropped and the valid attributes still reach the server.
+        let target = Target(matchingKey: "user1", attributes: ["plan": "enterprise", "joined": Date()], trafficType: "user")
+
+        try await client.fetchEvaluations(target: target)
+
+        let body = try parseBody(retryableHttpMock.executeCalls[0].body)
+        let attributes = body["attributes"] as? [String: Any]
+        XCTAssertEqual(attributes?.count, 1, "the valid attribute must survive the invalid one")
+        XCTAssertEqual(attributes?["plan"] as? String, "enterprise")
+        XCTAssertNil(attributes?["joined"])
+    }
+
     func testFetchEvaluationsBodyIncludesAttributesListOrderedString() async throws {
         retryableHttpMock.responses = [HttpResponse(code: 200, data: Data())]
 
