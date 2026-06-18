@@ -52,7 +52,12 @@ final class SplitListener: SplitEventListener {
     }
 
     func onUpdate(_ metadata: SdkUpdateMetadata) {
-        print("Flag \(metadata.names.first.flag) updated, new treatment: \(result.treatment)")
+        guard let client = client, let updatedFlag = metadata.names.first else {
+            return
+        }
+        
+        let result = client.getTreatment(flag: updatedFlag)
+        print("Flag \(updatedFlag) updated, new treatment: \(result.treatment)")
     }
 }
 
