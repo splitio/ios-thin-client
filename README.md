@@ -82,7 +82,7 @@ final class ViewController: UIViewController {
                                                   .build()
 
         guard let client = factory?.client else { return }
-        client = client
+        self.client = client
 
         let listener = SplitListener(client: client, viewController: self)
         client.addEventListener(listener)
