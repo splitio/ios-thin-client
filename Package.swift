@@ -6,7 +6,6 @@ let package = Package(
     platforms: [.iOS(.v13), .macOS(.v10_15)],
     products: [
         .library(name: "SplitThin", targets: ["SplitThin"]),
-        .library(name: "Api", targets: ["Api"]),
     ],
     dependencies: [
         .package(
@@ -16,20 +15,8 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "Api",
-            dependencies: [],
-            path: "Sources/Api",
-            exclude: ["Tests", "README.md"]
-        ),
-        .testTarget(
-            name: "ApiTests",
-            dependencies: ["Api"],
-            path: "Sources/Api/Tests"
-        ),
-        .target(
             name: "SplitThin",
             dependencies: [
-                "Api",
                 .product(name: "SplitCommons", package: "ios-client"),
             ],
             path: "SplitThin"

@@ -35,22 +35,16 @@ Below is a simple example that describes the instantiation and most basic usage 
 ```swift
 import SplitThin
 
-final class ViewController: UIViewController {
+class YourViewController: UIViewController {
 
     private var client: SplitClient?
 
     func setupSplit() {
-        let config = SplitClientConfig.builder()
-                                      .set(logLevel: .verbose)
-                                      .set(syncMode: .streaming)
-                                      .set(evaluationRefreshRate: 60)
-                                      .build()
 
         let target = Target(key: Key(matchingKey: "CUSTOMER_ID"), trafficType: "user")
 
         let factory = DefaultSplitFactoryBuilder().setSdkKey(SdkKey("YOUR_SDK_KEY"))
                                                   .setTarget(target)
-                                                  .setConfig(config)
                                                   .build()
 
         guard let client = factory?.client else { return }
@@ -68,17 +62,17 @@ final class ViewController: UIViewController {
 
 final class SplitListener: SplitEventListener {
     weak var client: SplitClient?
-    weak var viewController: ViewController?
+    weak var vc: ViewController?
 
-    init(client: SplitClient, viewController: ViewController) {
+    init(client: SplitClient, vc: ViewController) {
         self.client = client
-        self.viewController = viewController
+        self.vc = viewController
     }
 
     func onReady(_ metadata: SdkReadyMetadata) {
         print("Split SDK Ready")
         let result = client?.getTreatment(flag: "FEATURE_FLAG_NAME")
-        viewController?.updateUI(treatment: result?.treatment ?? "control")
+        vc?.updateUI(treatment: result?.treatment ?? "control")
     }
 
     func onUpdate(_ metadata: SdkUpdateMetadata) {
