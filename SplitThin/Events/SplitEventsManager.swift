@@ -31,7 +31,7 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
     private let timeoutSeconds: Int
 
     init(config: SplitClientConfig) {
-        timeoutSeconds = config.timeout
+        timeoutSeconds = config.readyTimeout
     }
 
     func start() {
