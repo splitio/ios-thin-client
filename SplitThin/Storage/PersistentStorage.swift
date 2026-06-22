@@ -43,7 +43,7 @@ final class PersistentStorage: EvaluationReadStorage, EvaluationWriteStorage, Se
         )
 
         let evaluations = change.evaluations.map { eval in
-            (flagName: eval.flag, treatment: eval.treatment, config: eval.config, sets: eval.flagSets)
+            (flagName: eval.flag, treatment: eval.treatment, config: eval.config, sets: eval.flagSets, changeNumber: eval.changeNumber)
         }
         try await storage.upsertEvaluations(matchingKey: matchingKey, bucketingKey: bucketingKey, evaluations: evaluations)
     }
@@ -58,13 +58,13 @@ final class PersistentStorage: EvaluationReadStorage, EvaluationWriteStorage, Se
         guard let eval = await storage.getEvaluation(matchingKey: target.matchingKey, bucketingKey: target.bucketingKey, flagName: flag) else {
             return nil
         }
-        return EvaluationResult(flag: flag, treatment: eval.treatment, flagSets: eval.sets ?? [], config: eval.config)
+        return EvaluationResult(flag: flag, treatment: eval.treatment, changeNumber: eval.changeNumber, flagSets: eval.sets ?? [], config: eval.config)
     }
 
     func get(target: Target, flags: [String]) async -> [EvaluationResult] {
         let evaluations = await storage.getEvaluations(matchingKey: target.matchingKey, bucketingKey: target.bucketingKey, flagNames: flags)
         return evaluations.map { eval in
-            EvaluationResult(flag: eval.flagName, treatment: eval.treatment, flagSets: eval.sets ?? [], config: eval.config)
+            EvaluationResult(flag: eval.flagName, treatment: eval.treatment, changeNumber: eval.changeNumber, flagSets: eval.sets ?? [], config: eval.config)
         }
     }
 
@@ -76,7 +76,7 @@ final class PersistentStorage: EvaluationReadStorage, EvaluationWriteStorage, Se
             guard let sets = eval.sets, !Set(sets).isDisjoint(with: requestedSets) else {
                 return nil
             }
-            return EvaluationResult(flag: eval.flagName, treatment: eval.treatment, flagSets: sets, config: eval.config)
+            return EvaluationResult(flag: eval.flagName, treatment: eval.treatment, changeNumber: eval.changeNumber, flagSets: sets, config: eval.config)
         }
     }
 
@@ -85,7 +85,7 @@ final class PersistentStorage: EvaluationReadStorage, EvaluationWriteStorage, Se
         let flagNames = evaluations.map { $0.flagName }.joined(separator: ", ")
         Logger.d("PersistentStorage: Loaded \(evaluations.count) flags for '\(target.matchingKey)': [\(flagNames)]")
         return evaluations.map { eval in
-            EvaluationResult(flag: eval.flagName, treatment: eval.treatment, flagSets: eval.sets ?? [], config: eval.config)
+            EvaluationResult(flag: eval.flagName, treatment: eval.treatment, changeNumber: eval.changeNumber, flagSets: eval.sets ?? [], config: eval.config)
         }
     }
 

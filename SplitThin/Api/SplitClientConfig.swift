@@ -19,23 +19,21 @@ public struct SplitClientConfig: Sendable {
 
     let syncMode: SyncMode
     let serviceEndpoints: ServiceEndpoints?
-    let impressionsMode: ImpressionsMode
     let configsEnabled: Bool
     let logLevel: LogLevel
-    let evaluationsRefreshRate: Int
+    let pollingRate: Int
     let readyTimeout: Int
     let prefix: String?
     let pushRate: Int
     let fallbackTreatments: FallbackTreatmentsConfig
     let evaluationFilters: EvaluationFilters?
 
-    fileprivate init(syncMode: SyncMode, serviceEndpoints: ServiceEndpoints?, impressionsMode: ImpressionsMode, configsEnabled: Bool, logLevel: LogLevel, evaluationRefreshRate: Int, readyTimeout: Int, prefix: String?, pushRate: Int, fallbackTreatments: FallbackTreatmentsConfig, evaluationFilters: EvaluationFilters?) {
+    fileprivate init(syncMode: SyncMode, serviceEndpoints: ServiceEndpoints?, configsEnabled: Bool, logLevel: LogLevel, evaluationRefreshRate: Int, readyTimeout: Int, prefix: String?, pushRate: Int, fallbackTreatments: FallbackTreatmentsConfig, evaluationFilters: EvaluationFilters?) {
         self.syncMode = syncMode
         self.serviceEndpoints = serviceEndpoints
-        self.impressionsMode = impressionsMode
         self.configsEnabled = configsEnabled
         self.logLevel = logLevel
-        self.evaluationsRefreshRate = evaluationRefreshRate
+        self.pollingRate = evaluationRefreshRate
         self.readyTimeout = readyTimeout
         self.prefix = prefix
         self.pushRate = pushRate
@@ -54,7 +52,6 @@ public final class SplitConfigBuilder {
 
     private var syncMode: SyncMode = .streaming
     private var serviceEndpoints: ServiceEndpoints?
-    private var impressionsMode: ImpressionsMode = .default
     private var configsEnabled: Bool = false
     private var logLevel: LogLevel = .none
     private var evaluationRefreshRate: Int = 3600
@@ -81,15 +78,6 @@ public final class SplitConfigBuilder {
     @discardableResult
     public func set(serviceEndpoints: ServiceEndpoints) -> Self {
         self.serviceEndpoints = serviceEndpoints
-        return self
-    }
-
-    /// Sets how impressions (evaluation events) are recorded and sent.
-    /// - `.default`: Standard impression tracking
-    /// - `.none`: Disable impression tracking
-    @discardableResult
-    public func set(impressionsMode: ImpressionsMode) -> Self {
-        self.impressionsMode = impressionsMode
         return self
     }
 
@@ -201,7 +189,6 @@ public final class SplitConfigBuilder {
         SplitClientConfig(
             syncMode: syncMode,
             serviceEndpoints: serviceEndpoints,
-            impressionsMode: impressionsMode,
             configsEnabled: configsEnabled,
             logLevel: logLevel,
             evaluationRefreshRate: evaluationRefreshRate,

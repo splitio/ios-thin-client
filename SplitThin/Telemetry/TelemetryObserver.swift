@@ -21,7 +21,7 @@ final class TelemetryObserver: Observer, @unchecked Sendable {
             config: .init(
                 syncMode: String(describing: config.syncMode),
                 pushRate: config.pushRate,
-                evaluationRefreshRate: config.evaluationsRefreshRate
+                evaluationRefreshRate: config.pollingRate
             ),
             runtime: .init(),
             platform: .init()

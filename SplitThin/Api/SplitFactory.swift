@@ -134,7 +134,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
             let telemetrySubmitter = DefaultTelemetrySubmitter(storage: telemetryStorage, secureHttpClient: secureHttpClient, activeSessionId: telemetryObserver.sessionId)
 
             // Sync
-            let periodicScheduler = DefaultEvaluationPeriodicScheduler(fetchCoordinator: fetchCoordinator, evaluationRepository: evaluationRepository, observer: eventDispatcher, target: target, filters: evaluationFilters, intervalSeconds: config.evaluationsRefreshRate)
+            let periodicScheduler = DefaultEvaluationPeriodicScheduler(fetchCoordinator: fetchCoordinator, evaluationRepository: evaluationRepository, observer: eventDispatcher, target: target, filters: evaluationFilters, intervalSeconds: config.pollingRate)
             let syncManager = DefaultSyncManager(syncMode: config.syncMode, evaluationRepository: evaluationRepository, observer: eventDispatcher, evaluationStorage: evaluationStorage, eventsManager: eventsManager, periodicScheduler: periodicScheduler, streaming: streaming, target: target)
             let fallbackCalculator = DefaultFallbackTreatmentsCalculator(fallbacksConfig: config.fallbackTreatments)
             let treatmentsManager = DefaultTreatmentsManager(target: target, evaluationRepository: evaluationRepository, fallbackCalculator: fallbackCalculator)

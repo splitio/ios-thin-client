@@ -16,12 +16,12 @@ final class CoreDataStorageTests: XCTestCase {
         try await storage.upsertEvaluations(
             matchingKey: matchingKey,
             bucketingKey: nil,
-            evaluations: [(flagName: "flag", treatment: "on", config: nil, sets: nil)]
+            evaluations: [(flagName: "flag", treatment: "on", config: nil, sets: nil, changeNumber: nil)]
         )
         try await storage.upsertEvaluations(
             matchingKey: matchingKey,
             bucketingKey: "bucketing",
-            evaluations: [(flagName: "flag", treatment: "off", config: nil, sets: nil)]
+            evaluations: [(flagName: "flag", treatment: "off", config: nil, sets: nil, changeNumber: nil)]
         )
 
         let nilResult = await storage.getAllEvaluations(matchingKey: matchingKey, bucketingKey: nil)
@@ -38,12 +38,12 @@ final class CoreDataStorageTests: XCTestCase {
         try await storage.upsertEvaluations(
             matchingKey: matchingKey,
             bucketingKey: nil,
-            evaluations: [(flagName: "my_flag", treatment: "on", config: nil, sets: nil)]
+            evaluations: [(flagName: "my_flag", treatment: "on", config: nil, sets: nil, changeNumber: nil)]
         )
         try await storage.upsertEvaluations(
             matchingKey: matchingKey,
             bucketingKey: "bk",
-            evaluations: [(flagName: "my_flag", treatment: "off", config: nil, sets: nil)]
+            evaluations: [(flagName: "my_flag", treatment: "off", config: nil, sets: nil, changeNumber: nil)]
         )
 
         let nilEval = await storage.getEvaluation(matchingKey: matchingKey, bucketingKey: nil, flagName: "my_flag")
@@ -60,12 +60,12 @@ final class CoreDataStorageTests: XCTestCase {
         try await storage.upsertEvaluations(
             matchingKey: matchingKey,
             bucketingKey: nil,
-            evaluations: [(flagName: "f1", treatment: "on", config: nil, sets: nil)]
+            evaluations: [(flagName: "f1", treatment: "on", config: nil, sets: nil, changeNumber: nil)]
         )
         try await storage.upsertEvaluations(
             matchingKey: matchingKey,
             bucketingKey: "bk",
-            evaluations: [(flagName: "f1", treatment: "off", config: nil, sets: nil)]
+            evaluations: [(flagName: "f1", treatment: "off", config: nil, sets: nil, changeNumber: nil)]
         )
 
         let nilEvals = await storage.getEvaluations(matchingKey: matchingKey, bucketingKey: nil, flagNames: ["f1"])
@@ -82,12 +82,12 @@ final class CoreDataStorageTests: XCTestCase {
         try await storage.upsertEvaluations(
             matchingKey: matchingKey,
             bucketingKey: nil,
-            evaluations: [(flagName: "flag_nil", treatment: "on", config: nil, sets: nil)]
+            evaluations: [(flagName: "flag_nil", treatment: "on", config: nil, sets: nil, changeNumber: nil)]
         )
         try await storage.upsertEvaluations(
             matchingKey: matchingKey,
             bucketingKey: "bk",
-            evaluations: [(flagName: "flag_bk", treatment: "on", config: nil, sets: nil)]
+            evaluations: [(flagName: "flag_bk", treatment: "on", config: nil, sets: nil, changeNumber: nil)]
         )
 
         let nilNames = await storage.getFlagNames(matchingKey: matchingKey, bucketingKey: nil)
@@ -95,6 +95,29 @@ final class CoreDataStorageTests: XCTestCase {
 
         XCTAssertEqual(nilNames, ["flag_nil"])
         XCTAssertEqual(bkNames,  ["flag_bk"])
+    }
+
+    // MARK: - Per-evaluation changeNumber
+
+    func testEvaluationChangeNumberRoundTrips() async throws {
+        let storage = makeStorage()
+        let matchingKey = "user_cn"
+
+        try await storage.upsertEvaluations(
+            matchingKey: matchingKey,
+            bucketingKey: nil,
+            evaluations: [
+                (flagName: "with_cn", treatment: "on", config: nil, sets: nil, changeNumber: 4242),
+                (flagName: "without_cn", treatment: "off", config: nil, sets: nil, changeNumber: nil)
+            ]
+        )
+
+        let single = await storage.getEvaluation(matchingKey: matchingKey, bucketingKey: nil, flagName: "with_cn")
+        XCTAssertEqual(single?.changeNumber, 4242, "Per-evaluation changeNumber must survive a round-trip")
+
+        let all = await storage.getAllEvaluations(matchingKey: matchingKey, bucketingKey: nil)
+        XCTAssertEqual(all.first(where: { $0.flagName == "with_cn" })?.changeNumber, 4242)
+        XCTAssertNil(all.first(where: { $0.flagName == "without_cn" })?.changeNumber, "A nil changeNumber must stay nil")
     }
 
     // MARK: - Session isolation
@@ -183,12 +206,12 @@ final class CoreDataStorageTests: XCTestCase {
         try await storage.upsertEvaluations(
             matchingKey: matchingKey,
             bucketingKey: nil,
-            evaluations: [(flagName: "flag", treatment: "on", config: nil, sets: nil)]
+            evaluations: [(flagName: "flag", treatment: "on", config: nil, sets: nil, changeNumber: nil)]
         )
         try await storage.upsertEvaluations(
             matchingKey: matchingKey,
             bucketingKey: "bucketing",
-            evaluations: [(flagName: "flag", treatment: "off", config: nil, sets: nil)]
+            evaluations: [(flagName: "flag", treatment: "off", config: nil, sets: nil, changeNumber: nil)]
         )
 
         // Clear only the nil-bucketing identity

@@ -57,6 +57,45 @@ final class PersistenceE2ETest: XCTestCase {
         XCTAssertEqual(result.treatment, "on", "Cached flag should be available after rehydration")
     }
 
+    func testPersistedEvaluationChangeNumberRehydrates() async throws {
+        let prefix = "persist_e2e_cn_\(UUID().uuidString.prefix(8))"
+        let target = Target(matchingKey: "user_cn", trafficType: "user")
+        let persistedCN: Int64 = 7777
+        let networkCN: Int64 = 8888 // distinct from the persisted value so disk vs network is unambiguous
+
+        // Run 1: persist cn_flag with per-evaluation changeNumber = persistedCN.
+        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["cn_flag"], till: persistedCN))
+        let sdkReady = expectation("SDK ready")
+        factory = try buildFactory(httpClient: httpMock, target: target, prefix: prefix)
+        factory.client.addEventListener(TestEventListener(readyExpectation: sdkReady))
+        waitFor(sdkReady)
+        XCTAssertEqual(factory.client.getTreatment("cn_flag").changeNumber, persistedCN)
+
+        sleep(seconds: 0.5) // let persistence write (non-blocking)
+        await factory.destroy()
+        factory = nil
+
+        // Run 2: the network returns a *different* changeNumber, held in flight behind a long delay.
+        // We gate on SDK_READY_FROM_CACHE: at that point only the disk load can have populated the cache
+        // (the network hasn't responded yet), so the value served proves it was rehydrated from storage.
+        let httpMock2 = SecureHttpClientMock()
+        httpMock2.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["cn_flag"], till: networkCN))
+        httpMock2.fetchDelay = 2_000_000_000 // 2s: keep the network fetch in flight while we assert the disk value
+
+        let cacheReady = expectation("SDK ready from cache")
+        factory2 = try buildFactory(httpClient: httpMock2, target: target, prefix: prefix)
+        factory2.client.addEventListener(TestEventListener(cacheExpectation: cacheReady))
+        waitFor(cacheReady, timeout: 5)
+
+        let hydrated = factory2.client.getTreatment("cn_flag")
+        XCTAssertEqual(hydrated.changeNumber, persistedCN, "changeNumber must be rehydrated from persisted storage")
+        XCTAssertNotEqual(hydrated.changeNumber, networkCN, "the in-flight network changeNumber must not be served yet")
+
+        // Once the network fetch lands, the fresh changeNumber takes over (proving run 2 actually hit the network).
+        waitUntil(timeout: 4) { self.factory2.client.getTreatment("cn_flag").changeNumber == networkCN }
+        XCTAssertEqual(factory2.client.getTreatment("cn_flag").changeNumber, networkCN, "after the fetch lands, the fresh network changeNumber takes over")
+    }
+
     func testCacheInvalidatedWhenAttributesChange() async throws {
         let prefix = "persist_e2e_attr_\(UUID().uuidString.prefix(8))"
 
