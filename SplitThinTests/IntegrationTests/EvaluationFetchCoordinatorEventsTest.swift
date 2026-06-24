@@ -33,7 +33,7 @@ final class EvaluationFetchCoordinatorEventsTest: XCTestCase {
         XCTAssertEqual(names[0], "evalFetchRequested")
         XCTAssertEqual(names[1], "evalFetchStarted")
         XCTAssertEqual(names[2], "evalFetchSucceeded")
-        XCTAssertTrue(names.contains("evalStorageUpdated"))
+        waitUntil(timeout: 2) { self.observerSpy.eventNames.contains("evalStorageUpdated") } // evalStorageUpdated is emitted from a Task
     }
 
     func testFailedFetchEmitsRequestedStartedAndFailed() async {

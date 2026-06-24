@@ -33,10 +33,11 @@ final class DefaultSplitClient: SplitClient {
     private let telemetryObserver: TelemetryObserver
     private let telemetrySubmitter: TelemetrySubmitter
     private let fetchCoordinator: EvaluationFetchCoordinator
+    private let evaluationRepository: EvaluationRepository
     private var clientListeners = [SplitEventListener]()
     private var isDestroyed = false
 
-    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, authProvider: AuthProvider, observer: Observer, syncManager: SyncManager, tracker: Tracker, eventsTracker: EventsTracker, eventsScheduler: EventsPeriodicScheduler, telemetryObserver: TelemetryObserver, telemetrySubmitter: TelemetrySubmitter, fetchCoordinator: EvaluationFetchCoordinator) {
+    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, authProvider: AuthProvider, observer: Observer, syncManager: SyncManager, tracker: Tracker, eventsTracker: EventsTracker, eventsScheduler: EventsPeriodicScheduler, telemetryObserver: TelemetryObserver, telemetrySubmitter: TelemetrySubmitter, fetchCoordinator: EvaluationFetchCoordinator, evaluationRepository: EvaluationRepository) {
         self.target = target
         self.treatmentsManager = treatmentsManager
         self.eventsManager = eventsManager
@@ -49,20 +50,23 @@ final class DefaultSplitClient: SplitClient {
         self.telemetryObserver = telemetryObserver
         self.telemetrySubmitter = telemetrySubmitter
         self.fetchCoordinator = fetchCoordinator
+        self.evaluationRepository = evaluationRepository
+
+        registerUpdateAction(for: target)
     }
 
     // MARK: - Evaluations
 
-    func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) -> EvaluationResult {
+    func getTreatment(flag: String, evaluationOptions: EvaluationOptions? = nil) -> EvaluationResult {
         observer.notify(event: .evaluationRequested(flagName: flag, target: target))
         return treatmentsManager.getTreatment(flag: flag, evaluationOptions: evaluationOptions)
     }
 
-    func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult] {
+    func getTreatments(flags: [String], evaluationOptions: EvaluationOptions? = nil) -> [EvaluationResult] {
         treatmentsManager.getTreatments(flags: flags, evaluationOptions: evaluationOptions)
     }
 
-    func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult] {
+    func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions? = nil) -> [EvaluationResult] {
         treatmentsManager.getTreatmentsByFlagSets(flagSets: flagSets, evaluationOptions: evaluationOptions)
     }
 
@@ -79,11 +83,20 @@ final class DefaultSplitClient: SplitClient {
 
             // Stop refetching/bitmap-checking the old key on the factory-wide coordinator.
             fetchCoordinator.unregister(target: previousTarget)
+            registerUpdateAction(for: target)
         }
 
         syncManager.setTarget(target)
         treatmentsManager.setTarget(target)
         observer.notify(event: .targetSwitchCompleted)
+    }
+
+    private func registerUpdateAction(for target: Target) {
+        fetchCoordinator.registerOnUpdateAction(for: target.key) { [weak self, target] fetchResult in
+            guard let self else { return }
+            let changedFlags = self.evaluationRepository.applyFetched(fetchResult, for: target)
+            self.observer.notify(event: .evaluationsUpdated(SdkUpdateMetadata(type: .flagsUpdate, names: changedFlags, changeNumber: fetchResult.changeNumber)))
+        }
     }
 
     // MARK: - Events
@@ -103,7 +116,7 @@ final class DefaultSplitClient: SplitClient {
     // MARK: - Tracking
 
     @discardableResult
-    func track(eventType: String, value: Double?, properties: EventProperties?) -> Bool {
+    func track(eventType: String, value: Double? = nil, properties: EventProperties? = nil) -> Bool {
         guard !isDestroyed else {
             observer.notify(event: .trackDropped(reason: .destroyed))
             return false

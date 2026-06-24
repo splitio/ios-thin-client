@@ -40,6 +40,9 @@ protocol EvaluationFetchCoordinator: Sendable {
     func fetchIfNeeded(target: Target, filters: EvaluationFilters?, reason: FetchReason) async throws -> FetchResult
     func refetchAll(delay: RefetchDelay) async
     func refetchKeys(_ matchingKeys: Set<String>, delay: RefetchDelay) async
+
+    // Bridge with clients
+    func registerOnUpdateAction(for key: Key, action: @escaping (FetchResult) -> Void)
     func unregister(target: Target)
 
     /// The matching keys that have been registered via fetchIfNeeded (and not unregistered).
@@ -190,9 +193,9 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
         // are always applied; an empty result is applied only when it carries new data (all flags
         // removed) or represents an empty account.
         let shouldApplyToCache = result.evaluations.notEmpty || biggerChangeNumber || isEmptyAccount
-
+        
         // Trigger SDK_UPDATE
-        if reason == .push, shouldApplyToCache {
+        if (reason == .push || reason == .targetSwitch), shouldApplyToCache {
             let updateAction = withLock(lock) { onUpdateActions[target.key] }
             updateAction?(FetchResult(evaluations: result.evaluations, changeNumber: changeNumber, shouldApplyToCache: true)) // Notifies the eventsManager of the client
         }

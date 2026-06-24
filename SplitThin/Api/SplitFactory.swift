@@ -79,6 +79,9 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         let resolvedTarget = target ?? defaultTarget
 
         if let existing = clients[resolvedTarget.key] {
+            if existing.target != resolvedTarget {
+                Task { [weak existing] in existing?.setTarget(target: resolvedTarget) }
+            }
             return existing
         }
 
@@ -138,13 +141,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
             let syncManager = DefaultSyncManager(syncMode: config.syncMode, evaluationRepository: evaluationRepository, observer: eventDispatcher, evaluationStorage: evaluationStorage, eventsManager: eventsManager, periodicScheduler: periodicScheduler, streaming: streaming, target: target)
             let fallbackCalculator = DefaultFallbackTreatmentsCalculator(fallbacksConfig: config.fallbackTreatments)
             let treatmentsManager = DefaultTreatmentsManager(target: target, evaluationRepository: evaluationRepository, fallbackCalculator: fallbackCalculator)
-            // Connect FetchCoordinator (that is factory wide) with per-client eventsManager to fire updates events
-            (fetchCoordinator as? DefaultEvaluationFetchCoordinator)?.registerOnUpdateAction(for: target.key) { [weak eventDispatcher, evaluationRepository, target] fetchResult in
-                guard let eventDispatcher else { return }
-                let changedFlags = evaluationRepository.applyFetched(fetchResult, for: target)
-                eventDispatcher.notify(event: .evaluationsUpdated(SdkUpdateMetadata(type: .flagsUpdate, names: changedFlags, changeNumber: fetchResult.changeNumber)))
-            }
-
+            
             // Tracking
             let eventsStorage = DefaultEventsStorage(storage: coreDataStorage)
             let eventSerializer = DefaultEventSerializer()
@@ -153,8 +150,6 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
             let submissionCoordinator = DefaultEventSubmissionCoordinator(eventTask: eventTask, observer: eventDispatcher)
             let eventsTracker = DefaultEventsTracker(storage: eventsStorage, coordinator: submissionCoordinator, observer: eventDispatcher)
             let eventsScheduler = DefaultEventsPeriodicScheduler(coordinator: submissionCoordinator, intervalSeconds: config.pushRate)
-            // onEventPush bridges validated TrackerEvents into our storage+submission pipeline.
-            // It's set here because DefaultTracker only accepts it via constructor (private let).
             let tracker = DefaultTracker(defaultTrafficType: target.trafficType, initialEventSizeInBytes: 1024, eventValidator: ThinEventValidator(), propertyValidator: ThinPropertyValidator(), logger: ThinTrackerLogger(), onEventPush: { trackerEvent in
                 guard trackerEvent.trafficType != nil && trackerEvent.trafficType != "" else {
                     Logger.e("Tracker event not tracked because trafficType is empty")
@@ -166,7 +161,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
             })
 
         // 2. Create
-        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager, authProvider: authProvider, observer: eventDispatcher, syncManager: syncManager, tracker: tracker, eventsTracker: eventsTracker, eventsScheduler: eventsScheduler, telemetryObserver: telemetryObserver, telemetrySubmitter: telemetrySubmitter, fetchCoordinator: fetchCoordinator)
+        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager, authProvider: authProvider, observer: eventDispatcher, syncManager: syncManager, tracker: tracker, eventsTracker: eventsTracker, eventsScheduler: eventsScheduler, telemetryObserver: telemetryObserver, telemetrySubmitter: telemetrySubmitter, fetchCoordinator: fetchCoordinator, evaluationRepository: evaluationRepository)
 
         // 3. Register
         clients[target.key] = client

@@ -12,12 +12,8 @@ protocol EvaluationRepository: Sendable {
     func setTarget(_ target: Target)
     @discardableResult
     func update(_ evaluations: [EvaluationResult], for target: Target) -> [String]
-    /// Applies a fetch result to the in-memory cache, honoring `shouldApplyToCache` so an
-    /// up-to-date (empty) response never wipes existing data. Returns the changed flag names.
     @discardableResult
-    func applyFetched(_ result: FetchResult, for target: Target) -> [String]
-    /// Applies persisted (warm-up) evaluations only if the network hasn't  written
-    /// this target yet.
+    func applyFetched(_ result: FetchResult, for target: Target) -> [String] // Applies a fetch result to the in-memory cache, honoring `shouldApplyToCache` so an up-to-date (empty) response never wipes existing data.
     @discardableResult
     func loadFromCache(_ evaluations: [EvaluationResult], for target: Target) -> [String]
     @discardableResult

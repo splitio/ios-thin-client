@@ -15,6 +15,8 @@ final class EvaluationFetchCoordinatorMock: EvaluationFetchCoordinator, @uncheck
     var onRefetchAllCallback: (() -> Void)?
     var onRefetchKeysCallback: (() -> Void)?
     var registeredMatchingKeys: [String] = []
+    var registerOnUpdateActionCalls: [Key] = []
+    var onUpdateActions: [Key: (FetchResult) -> Void] = [:]
 
     private let lock = NSLock()
 
@@ -35,7 +37,17 @@ final class EvaluationFetchCoordinatorMock: EvaluationFetchCoordinator, @uncheck
         onRefetchKeysCallback?()
     }
 
+    func registerOnUpdateAction(for key: Key, action: @escaping (FetchResult) -> Void) {
+        withLock(lock) {
+            registerOnUpdateActionCalls.append(key)
+            onUpdateActions[key] = action
+        }
+    }
+
     func unregister(target: Target) {
-        withLock(lock) { unregisterCalls.append(target) }
+        withLock(lock) {
+            unregisterCalls.append(target)
+            onUpdateActions.removeValue(forKey: target.key)
+        }
     }
 }
