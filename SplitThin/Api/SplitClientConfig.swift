@@ -191,7 +191,7 @@ public final class SplitConfigBuilder {
             serviceEndpoints: serviceEndpoints,
             configsEnabled: configsEnabled,
             logLevel: logLevel,
-            evaluationRefreshRate: evaluationRefreshRate,
+            pollingRate: pollingRate,
             readyTimeout: readyTimeout,
             prefix: prefix,
             pushRate: pushRate,
