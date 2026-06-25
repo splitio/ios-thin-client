@@ -28,12 +28,12 @@ public struct SplitClientConfig: Sendable {
     let fallbackTreatments: FallbackTreatmentsConfig
     let evaluationFilters: EvaluationFilters?
 
-    fileprivate init(syncMode: SyncMode, serviceEndpoints: ServiceEndpoints?, configsEnabled: Bool, logLevel: LogLevel, evaluationRefreshRate: Int, readyTimeout: Int, prefix: String?, pushRate: Int, fallbackTreatments: FallbackTreatmentsConfig, evaluationFilters: EvaluationFilters?) {
+    fileprivate init(syncMode: SyncMode, serviceEndpoints: ServiceEndpoints?, configsEnabled: Bool, logLevel: LogLevel, pollingRate: Int, readyTimeout: Int, prefix: String?, pushRate: Int, fallbackTreatments: FallbackTreatmentsConfig, evaluationFilters: EvaluationFilters?) {
         self.syncMode = syncMode
         self.serviceEndpoints = serviceEndpoints
         self.configsEnabled = configsEnabled
         self.logLevel = logLevel
-        self.pollingRate = evaluationRefreshRate
+        self.pollingRate = pollingRate
         self.readyTimeout = readyTimeout
         self.prefix = prefix
         self.pushRate = pushRate
@@ -54,7 +54,7 @@ public final class SplitConfigBuilder {
     private var serviceEndpoints: ServiceEndpoints?
     private var configsEnabled: Bool = false
     private var logLevel: LogLevel = .none
-    private var evaluationRefreshRate: Int = 3600
+    private var pollingRate: Int = 3600
     private var readyTimeout: Int = SplitClientConfig.defaultReadyTimeout
     private var prefix: String?
     private var pushRate: Int = 1800
@@ -98,13 +98,13 @@ public final class SplitConfigBuilder {
     /// Sets how often (in seconds) to poll for feature flag updates.
     /// Minimum: 60 seconds. Default: 3600 seconds (1 hour).
     @discardableResult
-    public func set(evaluationRefreshRate: Int) -> Self {
+    public func set(pollingRate: Int) -> Self {
         let minRate = minEvaluationRefreshRateOverride ?? SplitClientConfig.minEvaluationRefreshRate
-        if evaluationRefreshRate < minRate {
+        if pollingRate < minRate {
             Logger.w("evaluationRefreshRate must be at least \(minRate) seconds. Using minimum allowed value.")
-            self.evaluationRefreshRate = minRate
+            self.pollingRate = minRate
         } else {
-            self.evaluationRefreshRate = evaluationRefreshRate
+            self.pollingRate = pollingRate
         }
         return self
     }
