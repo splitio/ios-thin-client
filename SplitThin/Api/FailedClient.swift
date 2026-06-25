@@ -4,7 +4,7 @@
 import Foundation
 
 /// Returned when factory initialization fails, to avoid crashing the host app.
-final class FailedClient: SplitClient {
+final class FailedClient: SplitClient, Sendable {
 
     var target: Target {
         Target(matchingKey: "", trafficType: "")

@@ -5,7 +5,7 @@ import Foundation
 import Logging
 import Tracker
 
-public protocol SplitClient: AnyObject {
+public protocol SplitClient: AnyObject, Sendable {
     var target: Target { get }
     func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) -> EvaluationResult
     func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult]
@@ -22,9 +22,6 @@ public protocol SplitClient: AnyObject {
 final class DefaultSplitClient: SplitClient, @unchecked Sendable {
 
     private let lock = NSLock() // protects (`_target`, `clientListeners`, `isDestroyed`)
-    // setTarget transitions run here (serialized, off the caller's thread) so concurrent calls keep their
-    // ordering — last target wins, no interleaved auth/coordinator register/unregister — without blocking
-    // the caller and without holding `lock` across the synchronous Keychain I/O.
     private let setTargetQueue = DispatchQueue(label: "split-client-set-target")
     private var _target: Target
     var target: Target { withLock(lock) { _target } }
@@ -80,8 +77,6 @@ final class DefaultSplitClient: SplitClient, @unchecked Sendable {
 
     // MARK: - Target switching
 
-    // Fire-and-forget: the switch is applied asynchronously on `setTargetQueue`, so the caller never
-    // blocks. Successive setTarget calls are applied in submission order (last one wins).
     func setTarget(target: Target) {
         setTargetQueue.async { [weak self] in
             self?.applyTargetSwitch(to: target)
