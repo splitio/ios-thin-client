@@ -46,9 +46,8 @@ final class DefaultSplitClientTest: XCTestCase {
     func testSetTargetReRegistersKeyForAuth() {
         client.setTarget(target: Target(matchingKey: "user2", trafficType: "user"))
 
-        waitUntil { self.authProviderMock.lastTargetRegistered == "user2" }
+        waitUntil { authProviderMock.lastTargetRegistered == "user2" }
         XCTAssertEqual(authProviderMock.lastTargetUnregistered, "user1", "Previous key must be unregistered")
-        XCTAssertEqual(authProviderMock.lastTargetRegistered, "user2", "New key must be registered so its token authorizes it")
     }
 
     func testSetTargetForwardsToSyncManager() {
@@ -70,7 +69,6 @@ final class DefaultSplitClientTest: XCTestCase {
     func testSetTargetUnregistersOldTargetFromCoordinator() {
         client.setTarget(target: Target(matchingKey: "user2", trafficType: "user"))
         waitUntil { self.fetchCoordinatorMock.unregisterCalls.first?.matchingKey == "user1" }
-        XCTAssertEqual(fetchCoordinatorMock.unregisterCalls.first?.matchingKey, "user1", "Old key must be unregistered from the fetch coordinator so it stops being refetched and bitmap-checked")
     }
 
     func testSetTargetSameKeyDoesNotUnregisterFromCoordinator() {
