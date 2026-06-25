@@ -76,6 +76,9 @@ final class FetchCoordinatorE2ETest: XCTestCase {
 
         factory.client.setTarget(target: Target(matchingKey: "user-2", trafficType: "user"))
 
+        // setTarget is applied asynchronously, so wait for the switch to take effect
+        waitUntil(timeout: 3) { factory.client.getTreatment("flag_a").treatment != "on" }
+
         // Check that the evaluation is CONTROL, until the new target's fetch lands. 
         let deadline = Date().addingTimeInterval(3)
         var treatment = factory.client.getTreatment("flag_a").treatment

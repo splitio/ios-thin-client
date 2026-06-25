@@ -4,17 +4,6 @@
 import Foundation
 import Logging
 
-/// Sanitizes a target's attributes one key at a time.
-///
-/// The thin client forwards attributes to the server as JSON, so a "valid" attribute is simply one
-/// whose value is JSON-serializable: `String`, `Number`, `Bool`, `NSNull`, or arrays/maps of those
-/// (this is intentionally more permissive than the full SDK, which only allows `[String]` lists).
-///
-/// The raw `JSONSerialization` gate downstream is all-or-nothing: a single non-serializable value
-/// (e.g. a `Date`, a `URL`, a custom object) makes the SDK drop the *entire* attribute map silently.
-/// This sanitizer instead discards only the offending entries — each with a warning — keeping the
-/// rest. Sanitizing once at `Target` construction guarantees what gets sent, hashed (cache
-/// fingerprint) and persisted is always the same set.
 enum AttributeSanitizer {
 
     static func sanitize(_ attributes: [String: Any]?) -> [String: Any]? {
@@ -22,9 +11,9 @@ enum AttributeSanitizer {
 
         var sanitized = [String: Any](minimumCapacity: attributes.count)
         for (name, value) in attributes {
-            guard isSerializable(value) else {
-                Logger.w("Target attributes - discarded '\(name)': value is not JSON-serializable " +
-                         "(allowed: String, Number, Boolean, or lists/maps of those)")
+            guard isSerializable(value), !containsMap(value) else {
+                Logger.w("Target attributes - discarded '\(name)': value must be a String, Number, " +
+                         "Boolean, or a list of those (nested maps and non-serializable values are not allowed)")
                 continue
             }
             sanitized[name] = value
@@ -36,5 +25,11 @@ enum AttributeSanitizer {
     // single attribute. Scalars, lists and NSNull all resolve correctly through the array form.
     private static func isSerializable(_ value: Any) -> Bool {
         JSONSerialization.isValidJSONObject([value])
+    }
+
+    private static func containsMap(_ value: Any) -> Bool {
+        if value as? [AnyHashable: Any] != nil { return true }
+        if let array = value as? [Any] { return array.contains(where: containsMap) }
+        return false
     }
 }

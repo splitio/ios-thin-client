@@ -104,7 +104,7 @@ final class DefaultSplitFactoryTest: XCTestCase {
 
     func testVersion() {
         XCTAssertFalse(factory.version.isEmpty)
-        XCTAssertTrue(factory.version.contains("ios-thin"))
+        XCTAssertTrue(factory.version.contains("iOSThin"))
     }
 
     // MARK: - Manager

@@ -64,6 +64,27 @@ final class AttributeSanitizerTests: XCTestCase {
         XCTAssertNil(result?["badList"])
     }
 
+    func testDropsNestedMap() {
+        let result = AttributeSanitizer.sanitize([
+            "ok": "value",
+            "nested": ["inner": 1],   // nested maps are rejected for parity with the classic SDK
+        ])
+
+        XCTAssertEqual(result?.count, 1, "the nested map entry must be dropped")
+        XCTAssertEqual(result?["ok"] as? String, "value")
+        XCTAssertNil(result?["nested"])
+    }
+
+    func testDropsListContainingMap() {
+        let result = AttributeSanitizer.sanitize([
+            "ok": "value",
+            "listWithMap": ["a", ["inner": 1]],
+        ])
+
+        XCTAssertEqual(result?.count, 1, "a list containing a map must be dropped")
+        XCTAssertNil(result?["listWithMap"])
+    }
+
     // MARK: - Wired into Target
 
     func testTargetSanitizesAttributesOnConstruction() {

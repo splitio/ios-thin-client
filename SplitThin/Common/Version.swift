@@ -4,8 +4,8 @@
 import Foundation
 
 enum Version {
-    private static let sdkPlatform = "ios-thin"
-    private static let version = "1.0.0-rc3"
+    private static let sdkPlatform = "iOSThin"
+    private static let version = "1.0.0-rc4"
 
     static var semantic: String {
         version

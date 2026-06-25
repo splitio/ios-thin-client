@@ -19,9 +19,16 @@ public protocol SplitClient: AnyObject {
     func flush() async
 }
 
-final class DefaultSplitClient: SplitClient {
+final class DefaultSplitClient: SplitClient, @unchecked Sendable {
 
-    private(set) var target: Target
+    private let lock = NSLock() // protects (`_target`, `clientListeners`, `isDestroyed`)
+    // setTarget transitions run here (serialized, off the caller's thread) so concurrent calls keep their
+    // ordering — last target wins, no interleaved auth/coordinator register/unregister — without blocking
+    // the caller and without holding `lock` across the synchronous Keychain I/O.
+    private let setTargetQueue = DispatchQueue(label: "split-client-set-target")
+    private var _target: Target
+    var target: Target { withLock(lock) { _target } }
+
     private let treatmentsManager: TreatmentsManager
     private let eventsManager: SplitEventsManager
     private let authProvider: AuthProvider
@@ -38,7 +45,7 @@ final class DefaultSplitClient: SplitClient {
     private var isDestroyed = false
 
     init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, authProvider: AuthProvider, observer: Observer, syncManager: SyncManager, tracker: Tracker, eventsTracker: EventsTracker, eventsScheduler: EventsPeriodicScheduler, telemetryObserver: TelemetryObserver, telemetrySubmitter: TelemetrySubmitter, fetchCoordinator: EvaluationFetchCoordinator, evaluationRepository: EvaluationRepository) {
-        self.target = target
+        self._target = target
         self.treatmentsManager = treatmentsManager
         self.eventsManager = eventsManager
         self.authProvider = authProvider
@@ -58,7 +65,8 @@ final class DefaultSplitClient: SplitClient {
     // MARK: - Evaluations
 
     func getTreatment(flag: String, evaluationOptions: EvaluationOptions? = nil) -> EvaluationResult {
-        observer.notify(event: .evaluationRequested(flagName: flag, target: target))
+        let currentTarget = withLock(lock) { _target }
+        observer.notify(event: .evaluationRequested(flagName: flag, target: currentTarget))
         return treatmentsManager.getTreatment(flag: flag, evaluationOptions: evaluationOptions)
     }
 
@@ -71,10 +79,23 @@ final class DefaultSplitClient: SplitClient {
     }
 
     // MARK: - Target switching
+
+    // Fire-and-forget: the switch is applied asynchronously on `setTargetQueue`, so the caller never
+    // blocks. Successive setTarget calls are applied in submission order (last one wins).
     func setTarget(target: Target) {
+        setTargetQueue.async { [weak self] in
+            self?.applyTargetSwitch(to: target)
+        }
+    }
+
+    private func applyTargetSwitch(to target: Target) {
         observer.notify(event: .targetSwitchStarted)
-        let previousTarget = self.target
-        self.target = target
+
+        let previousTarget = withLock(lock) { () -> Target in
+            let previous = _target
+            _target = target
+            return previous
+        }
 
         if previousTarget.matchingKey != target.matchingKey {
             // Register the new key to get a valid auth token for it.
@@ -88,6 +109,7 @@ final class DefaultSplitClient: SplitClient {
 
         syncManager.setTarget(target)
         treatmentsManager.setTarget(target)
+
         observer.notify(event: .targetSwitchCompleted)
     }
 
@@ -102,14 +124,15 @@ final class DefaultSplitClient: SplitClient {
     // MARK: - Events
 
     func addEventListener(_ listener: SplitEventListener) {
-        clientListeners.append(listener) // We are saving them here to know which ones to remove from the EventsManager when the client is
-                                         // destroyed, since EventsManager does not keep a registry of listeners by client.
+        // We are saving them here to know which ones to remove from the EventsManager when the client is
+        // destroyed, since EventsManager does not keep a registry of listeners by client.
+        withLock(lock) { clientListeners.append(listener) }
         eventsManager.addListener(listener)
     }
 
     func removeEventListener(_ listener: SplitEventListener) {
         // Comparing memory addresses to find the exact EventListener on local array (not just one that has the same content)
-        clientListeners.removeElementByMemoryAddress(listener)
+        withLock(lock) { clientListeners.removeElementByMemoryAddress(listener) }
         eventsManager.removeListener(listener)
     }
 
@@ -117,23 +140,30 @@ final class DefaultSplitClient: SplitClient {
 
     @discardableResult
     func track(eventType: String, value: Double? = nil, properties: EventProperties? = nil) -> Bool {
-        guard !isDestroyed else {
+        let (destroyed, currentTarget) = withLock(lock) { (isDestroyed, _target) }
+        guard !destroyed else {
             observer.notify(event: .trackDropped(reason: .destroyed))
             return false
         }
 
         observer.notify(event: .trackCalled)
-        return tracker.track(eventType: eventType, trafficType: target.trafficType, value: value, properties: properties, matchingKey: target.matchingKey, isSdkReady: true)
+        return tracker.track(eventType: eventType, trafficType: currentTarget.trafficType, value: value, properties: properties, matchingKey: currentTarget.matchingKey, isSdkReady: true)
     }
 
     // MARK: - Lifecycle
 
     func destroy() async {
-        guard !isDestroyed else { return }
-        observer.notify(event: .destroyStarted)
-        isDestroyed = true
+        let alreadyDestroyed = withLock(lock) { () -> Bool in
+            if isDestroyed { return true }
+            isDestroyed = true
+            return false
+        }
+        guard !alreadyDestroyed else { return }
 
-        authProvider.unregister(target: target.matchingKey)
+        observer.notify(event: .destroyStarted)
+
+        let currentTarget = withLock(lock) { _target }
+        authProvider.unregister(target: currentTarget.matchingKey)
 
         eventsScheduler.stop()
         await eventsTracker.flush()
@@ -141,10 +171,14 @@ final class DefaultSplitClient: SplitClient {
         await telemetryObserver.persistNow()
         await telemetrySubmitter.flush(count: nil)
 
-        for listener in clientListeners {
+        let listeners = withLock(lock) { () -> [SplitEventListener] in
+            let snapshot = clientListeners
+            clientListeners.removeAll()
+            return snapshot
+        }
+        for listener in listeners {
             eventsManager.removeListener(listener)
         }
-        clientListeners.removeAll()
 
         eventsManager.stop()
         await syncManager.stop()

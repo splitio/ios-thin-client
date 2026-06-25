@@ -65,12 +65,12 @@ final class TelemetryObserver: Observer, @unchecked Sendable {
     private func schedulePersist() {
         withLock(lock) {
             debounceTask?.cancel()
-            let snapshot = metrics
             let sid = sessionId
             let store = storage
             debounceTask = Task {
                 try? await Task.sleep(nanoseconds: UInt64(Self.debounceInterval * 1_000_000_000))
                 guard !Task.isCancelled else { return }
+                let snapshot = withLock(lock) { metrics }
                 await store.save(sessionId: sid, metrics: snapshot)
             }
         }
