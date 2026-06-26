@@ -290,6 +290,40 @@ final class StreamingE2ETest: XCTestCase {
         cm.stop()
     }
 
+    // CAT-3: a reconnect parked by reportError must not open a connection if the app
+    // paused (e.g. went to background) while the backoff was still waiting. With
+    // pushEnabled=true the JWT parser is the seam: extractChannels is only reached when
+    // connectSse gets past the `state == .started` gate.
+    func testParkedReconnectDoesNotConnectWhilePaused() async throws {
+        let authProviderMock = AuthProviderMock()
+        authProviderMock.credentialToReturn = JwtCredential(token: "fake.jwt.token", expiresAt: Date().addingTimeInterval(3600), pushEnabled: true)
+
+        let firstConnect = expectation("first connect")
+        let reconnectWhilePaused = expectation("reconnect while paused").inverted()
+        let parseCount = Box(0)
+        let jwtParserSpy = SseJwtParserSpy {
+            parseCount.value += 1
+            if parseCount.value == 1 { firstConnect.fulfill() } else { reconnectWhilePaused.fulfill() }
+        }
+
+        let target = Target(matchingKey: "user-123", trafficType: "user")
+        let cm = DefaultStreaming(target: target, authProvider: authProviderMock, streamingEndpoint: URL(string: "https://fake.endpoint")!, httpClient: DefaultHttpClient.shared, fetchCoordinator: EvaluationFetchCoordinatorMock(), notificationParser: DefaultThinNotificationParser(), jwtParser: jwtParserSpy, backoffCounter: DefaultBackoffCounter(backoffBase: 1))
+
+        // Initial connect reaches the JWT parser once (extractChannels returns nil → bails, no socket).
+        cm.start()
+        waitFor(firstConnect)
+
+        // Park a reconnect (wakes after ~1s), then pause before it fires.
+        cm.reportError(isRetryable: true)
+        cm.pause()
+
+        // The parked reconnect must bail at the gate before reaching the parser again.
+        waitFor(reconnectWhilePaused, timeout: 2.0)
+        XCTAssertEqual(parseCount.value, 1, "Parked reconnect must not connect while paused")
+
+        cm.stop()
+    }
+
     private class Box<T> {
         var value: T
         init(_ value: T) { self.value = value }

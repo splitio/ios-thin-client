@@ -239,16 +239,12 @@ final class DefaultStreaming: Streaming, SseHandler, @unchecked Sendable {
 
     // MARK: - Private
 
-    private var isStopped: Bool {
-        withLock(stateLock) { state == .stopped }
-    }
-
     private func connectSse() async {
         guard let authProvider, let jwtParser, let streamingEndpoint, let httpClient else { return }
 
-        // No-op if stopped or already connecting
+        // Only connect while started (not paused/stopped) and if not already connecting.
         let shouldConnect: Bool = withLock(stateLock) {
-            guard state != .stopped, !isConnecting else { return false }
+            guard state == .started, !isConnecting else { return false }
             isConnecting = true
             return true
         }
@@ -267,7 +263,8 @@ final class DefaultStreaming: Streaming, SseHandler, @unchecked Sendable {
             if let delay = credential.connDelay, delay > 0 {
                 Logger.d("StreamingConnection: delaying connection by \(delay)s")
                 try? await Task.sleep(nanoseconds: UInt64(delay) * 1_000_000_000)
-                guard !isStopped else { return }
+                // Bail if we were paused/stopped while waiting (CAT-3: don't open in background).
+                guard withLock(stateLock, { state == .started }) else { return }
             }
 
             guard let channels = jwtParser.extractChannels(from: credential.token), !channels.isEmpty else {
