@@ -27,7 +27,7 @@ final class EvaluationPeriodicSchedulerTests: XCTestCase {
 
         waitFor(polled, timeout: 3)
         scheduler.stop()
-    }2 co
+    }
 
     // Start() while already running must be a no-op
     func testStartTwiceDoesNotLeakSecondLoop() {
