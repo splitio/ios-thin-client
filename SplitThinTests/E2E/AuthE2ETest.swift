@@ -235,6 +235,32 @@ final class AuthE2ETest: XCTestCase {
         XCTAssertLessThan(elapsed, 2.0, "Destroy should not wait for pending auth request")
     }
 
+    // MARK: - Push disabled fallback
+
+    func testStreamingFallsBackToPollingWhenPushDisabled() async throws {
+        httpMock.responses = [
+            HttpResponse(code: 200, data: Self.mockAuthResponse()), // pushEnabled:false
+            HttpResponse(code: 200, data: mockEvaluationsData())    // initial fetch
+        ]
+
+        let spy = ObserverSpy()
+        let sdkReady = expectation("SDK ready")
+        let listener = TestEventListener(readyExpectation: sdkReady)
+        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .streaming, refreshRate: 1, prefix: prefix, observer: spy)
+        factory.client.addEventListener(listener)
+
+        waitFor(sdkReady)
+        XCTAssertFalse(spy.notifiedEvents.contains(where: isPeriodicFetch), "No polling should happen before the push-disabled fallback")
+
+        // After the streaming layer sees pushEnabled=false it must switch to polling.
+        waitUntil(timeout: 5) { spy.notifiedEvents.contains(where: self.isPeriodicFetch) }
+    }
+
+    private func isPeriodicFetch(_ event: ObservableEvent) -> Bool {
+        if case .evalFetchRequested(let reason) = event, case .periodic = reason { return true }
+        return false
+    }
+
     // MARK: - Helpers
 
     private func mockEvaluationsData() -> Data {

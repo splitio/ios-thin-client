@@ -9,9 +9,14 @@ final class SyncManagerMock: SyncManager, MobileSync, @unchecked Sendable {
     var resumeCallCount = 0
     var setTargetCallCount = 0
     var lastTargetSet: Target?
+    var fallbackToPollingCallCount = 0
 
     func start() {
         startCallCount += 1
+    }
+
+    func fallbackToPolling() {
+        fallbackToPollingCallCount += 1
     }
 
     func stop() async {

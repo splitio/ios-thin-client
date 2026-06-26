@@ -13,6 +13,7 @@ protocol Streaming {
     func pause()
     func resume()
     func handleNotification(_ notification: ThinNotification)
+    func setPushDisabledHandler(_ handler: @escaping () -> Void)
 }
 
 final class DefaultStreaming: Streaming, SseHandler, @unchecked Sendable {
@@ -29,7 +30,7 @@ final class DefaultStreaming: Streaming, SseHandler, @unchecked Sendable {
     private let backoffCounter: BackoffCounter?
     private let payloadDecoder: PayloadDecoder
     private let onConnect: (() -> Void)?
-    private let onPushDisabled: (() -> Void)?
+    private var onPushDisabled: (() -> Void)?
 
     private var state: State = .stopped
     private let stateLock = NSLock()
@@ -98,6 +99,15 @@ final class DefaultStreaming: Streaming, SseHandler, @unchecked Sendable {
         Task { [weak self] in await self?.connectSse() }
     }
 
+    func setPushDisabledHandler(_ handler: @escaping () -> Void) {
+        withLock(stateLock) { self.onPushDisabled = handler }
+    }
+
+    private func notifyPushDisabled() {
+        let handler = withLock(stateLock) { onPushDisabled }
+        handler?()
+    }
+
     func handleNotification(_ notification: ThinNotification) {
         switch notification.type {
             case .evaluationUpdate:
@@ -111,7 +121,7 @@ final class DefaultStreaming: Streaming, SseHandler, @unchecked Sendable {
                 handleControl(notification as? ThinControlNotification)
             case .occupancy:
                 if let occupancy = notification as? ThinOccupancyNotification, occupancy.publishers == 0 {
-                    onPushDisabled?()
+                    notifyPushDisabled()
                 }
             case .error:
                 if let error = notification as? ThinStreamingError {
@@ -230,6 +240,7 @@ final class DefaultStreaming: Streaming, SseHandler, @unchecked Sendable {
             let credential = try await authProvider.getCredential()
             guard credential.pushEnabled else {
                 Logger.d("StreamingConnection: push not enabled")
+                notifyPushDisabled()
                 return
             }
 

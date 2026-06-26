@@ -27,6 +27,32 @@ final class SyncManagerTests: XCTestCase {
         DefaultSyncManager(syncMode: mode, evaluationRepository: evaluationRepository, observer: observer, evaluationStorage: evaluationStorage, eventsManager: eventsManager, periodicScheduler: polling, streaming: streaming, target: target)
     }
 
+    // MARK: - Fallback to polling
+
+    func testFallbackToPollingStartsPollingInStreamingMode() {
+        syncManager = createSyncManager(mode: .streaming)
+
+        syncManager.fallbackToPolling()
+
+        XCTAssertEqual(polling.startCalls, 1)
+    }
+
+    func testFallbackToPollingIgnoredInPollingMode() {
+        syncManager = createSyncManager(mode: .polling)
+
+        syncManager.fallbackToPolling()
+
+        XCTAssertEqual(polling.startCalls, 0)
+    }
+
+    func testFallbackToPollingIgnoredInSingleSyncMode() {
+        syncManager = createSyncManager(mode: .singleSync)
+
+        syncManager.fallbackToPolling()
+
+        XCTAssertEqual(polling.startCalls, 0)
+    }
+
     // MARK: - Pause Tests
 
 #if !os(macOS)

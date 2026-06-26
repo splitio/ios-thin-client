@@ -86,6 +86,38 @@ final class DefaultSplitFactoryTest: XCTestCase {
         XCTAssertNotIdentical(client1, client2, "Should return different instances for different keys")
     }
 
+    // MARK: - Push disabled fallback
+
+    func testFactoryRegistersPushDisabledHandler() {
+        XCTAssertNotNil(connectionManagerMock.pushDisabledHandler, "Factory should wire the shared streaming's push-disabled fallback handler")
+    }
+
+    func testClientCreatedAfterPushDisabledPolls() async {
+        let fetchCoordinator = EvaluationFetchCoordinatorMock()
+        let streamingMock = StreamingMock()
+        let evalRepo = EvaluationRepositoryMock()
+        let coreData = CoreDataStorage(databaseName: "test_latefallback_\(UUID().uuidString.prefix(8))")
+        let config = SplitClientConfig.builder().set(syncMode: .streaming).setMinEvaluationRefreshRate(1).set(evaluationRefreshRate: 1).build()
+        let localFactory = DefaultSplitFactory(sdkKey: SdkKey("api-key"), target: Target(matchingKey: "user1", trafficType: "user"), config: config, evaluationFilters: nil, secureHttpClient: SecureHttpClientMock(), authProvider: AuthProviderMock(), evaluationRepository: evalRepo, fetchCoordinator: fetchCoordinator, streaming: streamingMock, evaluationStorage: EvaluationStorageMock(), coreDataStorage: coreData, splitManager: DefaultSplitManager(evaluationRepository: evalRepo), factoryObserver: ObserverSpy(), telemetryStorage: DefaultTelemetryStorage(storage: coreData))
+
+        // Server disables push: existing clients fall back to polling.
+        streamingMock.pushDisabledHandler?()
+
+        // A client created AFTER the toggle must also come up in polling, not streaming.
+        _ = localFactory.getClient(Target(matchingKey: "user-456", trafficType: "user"))
+
+        let polledForLateClient: () -> Bool = {
+            fetchCoordinator.fetchCalls.contains { call in
+                guard call.target.matchingKey == "user-456" else { return false }
+                if call.reason == .periodic { return true }
+                return false
+            }
+        }
+
+        waitUntil(timeout: 5) { polledForLateClient() }
+        await localFactory.destroy()
+    }
+
     // MARK: - Version
 
     func testVersion() {

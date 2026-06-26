@@ -8,6 +8,7 @@ protocol SyncManager: Sendable {
     func start()
     func stop() async
     func setTarget(_ target: Target)
+    func fallbackToPolling()
 }
 
 protocol MobileSync: Sendable {
@@ -110,6 +111,13 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
             case .polling:
                 polling.start()
         }
+    }
+
+    // Called when the server disables push. 
+    func fallbackToPolling() {
+        guard syncMode == .streaming else { return }
+        Logger.d("SyncManager: push disabled by server, falling back to polling")
+        polling.start()
     }
 }
 

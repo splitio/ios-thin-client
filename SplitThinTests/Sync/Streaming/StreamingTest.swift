@@ -1,4 +1,5 @@
 import XCTest
+import Http
 import BackoffCounter
 @testable import SplitThin
 
@@ -132,6 +133,41 @@ class DefaultStreamingTest: XCTestCase {
         let notification = ThinOccupancyNotification(channel: "[?occupancy=metrics.publishers]ch1", timestamp: 1000, publishers: 2)
         streaming.handleNotification(notification)
         XCTAssertFalse(pushDisabledCalled)
+    }
+
+    func testSetPushDisabledHandlerIsInvokedOnOccupancyZero() {
+        var called = false
+        streaming.setPushDisabledHandler { called = true }
+
+        let notification = ThinOccupancyNotification(channel: "[?occupancy=metrics.publishers]ch1", timestamp: 1000, publishers: 0)
+        streaming.handleNotification(notification)
+
+        XCTAssertTrue(called)
+    }
+
+    // MARK: - Push disabled
+
+    func testConnectSsePushDisabledCallsPushDisabledHandler() {
+        let authProviderMock = AuthProviderMock()
+        authProviderMock.credentialToReturn = JwtCredential(token: "fake.jwt.token", expiresAt: Date().addingTimeInterval(3600), pushEnabled: false)
+
+        let streamingFull = DefaultStreaming(
+            target: target,
+            authProvider: authProviderMock,
+            streamingEndpoint: URL(string: "https://fake.endpoint")!,
+            httpClient: DefaultHttpClient.shared,
+            fetchCoordinator: fetchCoordinatorMock,
+            notificationParser: DefaultThinNotificationParser(),
+            jwtParser: DefaultSseJwtParser(),
+            backoffCounter: DefaultBackoffCounter(backoffBase: 1)
+        )
+
+        let pushDisabled = expectation()
+        streamingFull.setPushDisabledHandler { pushDisabled.fulfill() }
+
+        streamingFull.start()
+
+        waitFor(pushDisabled)
     }
 
     // MARK: - Error

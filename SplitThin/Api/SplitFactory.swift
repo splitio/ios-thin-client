@@ -34,6 +34,9 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     private var syncManagers = [Key: SyncManager]()
     private var isDestroyed = false
 
+    private var pushDisabled = false
+    private let fallbackLock = NSLock()
+
     private static let initErrorMessage = "Something happened on Split init and the client couldn't be created"
 
     public var client: SplitClient {
@@ -68,6 +71,11 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         splitManager.activeTargetsProvider = { [weak self] in
             guard let self else { return [] }
             return self.clients.values.map { $0.target }
+        }
+
+        // Streaming is factory-wide; when the server disables push, every client must fall back to polling.
+        streaming.setPushDisabledHandler { [weak self] in
+            self?.fallbackAllToPolling()
         }
 
         observer.notify(event: .factoryInitStarted)
@@ -170,14 +178,30 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
 
         // 3. Register
         clients[target.key] = client
-        syncManagers[target.key] = syncManager
+        withLock(fallbackLock) { syncManagers[target.key] = syncManager }
 
         // 4. Start
         eventsManager.start()
         syncManager.start()
         eventsScheduler.start()
+
+        // If push was already disabled by the server, this client must poll instead of stream.
+        let alreadyPushDisabled = withLock(fallbackLock) { pushDisabled }
+        if alreadyPushDisabled {
+            syncManager.fallbackToPolling()
+        }
+
         observer.notify(event: .clientCreated)
 
         return client
+    }
+
+    private func fallbackAllToPolling() {
+        let managers: [SyncManager] = withLock(fallbackLock) {
+            pushDisabled = true
+            return Array(syncManagers.values)
+        }
+        Logger.d("SplitFactory: push disabled by server, falling back to polling for \(managers.count) client(s)")
+        managers.forEach { $0.fallbackToPolling() }
     }
 }
