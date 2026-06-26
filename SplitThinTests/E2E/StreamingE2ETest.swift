@@ -324,6 +324,108 @@ final class StreamingE2ETest: XCTestCase {
         cm.stop()
     }
 
+    // CAT-2: a second reportError cancels the first, so only one survivor reaches the parser.
+    func testParallelReconnectsCancelPrevious() async throws {
+        let firstConnect = expectation("first connect")
+        let survivingReconnect = expectation("surviving reconnect")
+        let extraReconnect = expectation("extra reconnect").inverted()
+        let parseCount = Box(0)
+
+        let cm = makeReconnectStreaming(parser: SseJwtParserSpy {
+            parseCount.value += 1
+            switch parseCount.value {
+                case 1: firstConnect.fulfill()
+                case 2: survivingReconnect.fulfill()
+                default: extraReconnect.fulfill()
+            }
+        })
+
+        cm.start()
+        waitFor(firstConnect)
+
+        // Both park a reconnect (backoff ~1s and ~2s); only the second should survive.
+        cm.reportError(isRetryable: true)
+        cm.reportError(isRetryable: true)
+
+        // Timeout (4s) > both backoffs, so a leaked first reconnect would still fire in-window.
+        waitFor(survivingReconnect, extraReconnect, timeout: 4.0)
+        XCTAssertEqual(parseCount.value, 2, "Only one reconnect should fire")
+        cm.stop()
+    }
+
+    // CAT-4: resume() after a parked reconnect must not double-connect
+    func testResumeDoesNotDoubleConnectWithParkedReconnect() async throws {
+        let firstConnect = expectation("first connect")
+        let resumeConnect = expectation("resume connect")
+        let extraConnect = expectation("parked reconnect").inverted()
+        let parseCount = Box(0)
+
+        let cm = makeReconnectStreaming(parser: SseJwtParserSpy {
+            parseCount.value += 1
+            switch parseCount.value {
+                case 1: firstConnect.fulfill()
+                case 2: resumeConnect.fulfill()
+                default: extraConnect.fulfill()
+            }
+        })
+
+        cm.start()
+        waitFor(firstConnect)
+
+        cm.reportError(isRetryable: true) // parks a reconnect, backoff ~1s
+        cm.pause()                        // cancels it
+        cm.resume()                       // single fresh connect (immediate)
+
+        // Timeout (2s) > backoff (~1s), so a leaked reconnect would fire in-window as a 3rd connect.
+        waitFor(resumeConnect, extraConnect, timeout: 2.0)
+        XCTAssertEqual(parseCount.value, 2, "resume() must produce exactly one connect")
+        cm.stop()
+    }
+
+    // CAT-7: STREAMING_RESET must not compete with a parked reconnect
+    func testStreamingResetCancelsParkedReconnect() async throws {
+        let firstConnect = expectation("first connect")
+        let resetConnect = expectation("reset connect")
+        let extraConnect = expectation("parked reconnect").inverted()
+        let parseCount = Box(0)
+
+        // Reconnections
+        let cm = makeReconnectStreaming(parser: SseJwtParserSpy {
+            parseCount.value += 1
+            switch parseCount.value {
+                case 1: firstConnect.fulfill()
+                case 2: resetConnect.fulfill()
+                default: extraConnect.fulfill()
+            }
+        })
+
+        cm.start()
+        waitFor(firstConnect)
+
+        cm.reportError(isRetryable: true) // parks a reconnect, backoff ~1s
+        cm.handleNotification(ThinControlNotification(channel: "ctrl", timestamp: 0, controlType: .streamingReset))
+
+        // Timeout (2s) > backoff (~1s), so a leaked reconnect would fire in-window as a 3rd connect.
+        waitFor(resetConnect, extraConnect, timeout: 2.0)
+        XCTAssertEqual(parseCount.value, 2, "STREAMING_RESET must produce exactly one connect")
+        cm.stop()
+    }
+
+    private func makeReconnectStreaming(parser: SseJwtParser) -> DefaultStreaming {
+        let authProviderMock = AuthProviderMock()
+        authProviderMock.credentialToReturn = JwtCredential(token: "fake.jwt.token", expiresAt: Date().addingTimeInterval(3600), pushEnabled: true)
+        return DefaultStreaming(
+            target: Target(matchingKey: "user-123", trafficType: "user"),
+            authProvider: authProviderMock,
+            streamingEndpoint: URL(string: "https://fake.endpoint")!,
+            httpClient: DefaultHttpClient.shared,
+            fetchCoordinator: EvaluationFetchCoordinatorMock(),
+            notificationParser: DefaultThinNotificationParser(),
+            jwtParser: parser,
+            backoffCounter: DefaultBackoffCounter(backoffBase: 1) // retries back off ~1s, ~2s, ...
+        )
+    }
+
     private class Box<T> {
         var value: T
         init(_ value: T) { self.value = value }

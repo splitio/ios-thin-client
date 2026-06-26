@@ -36,6 +36,7 @@ final class DefaultStreaming: Streaming, SseHandler, @unchecked Sendable {
     private let stateLock = NSLock()
     private var activeConnectionHandler: SseConnectionHandler?
     private var isConnecting = false // dedups concurrent connectSse attempts
+    private var reconnectTask: Task<Void, Never>? // ensures only one reconnect runs
 
     init(target: Target, authProvider: AuthProvider, streamingEndpoint: URL, httpClient: HttpClient, fetchCoordinator: EvaluationFetchCoordinator, notificationParser: ThinNotificationParser, jwtParser: SseJwtParser, backoffCounter: BackoffCounter, payloadDecoder: PayloadDecoder = DefaultPayloadDecoder(), onConnect: (() -> Void)? = nil) {
         self.target = target
@@ -81,16 +82,18 @@ final class DefaultStreaming: Streaming, SseHandler, @unchecked Sendable {
     }
 
     func stop() {
-        withLock(stateLock) {
-            state = .stopped
-            activeConnectionHandler?.disconnect()
-            activeConnectionHandler = nil
-        }
+        teardown(movingTo: .stopped)
     }
 
     func pause() {
+        teardown(movingTo: .paused)
+    }
+
+    private func teardown(movingTo newState: State) {
         withLock(stateLock) {
-            state = .paused
+            state = newState
+            reconnectTask?.cancel()
+            reconnectTask = nil
             activeConnectionHandler?.disconnect()
             activeConnectionHandler = nil
         }
@@ -156,19 +159,20 @@ final class DefaultStreaming: Streaming, SseHandler, @unchecked Sendable {
     func reportError(isRetryable: Bool) {
         Logger.w("StreamingConnection: SSE error, retryable=\(isRetryable)")
         guard isRetryable else {
-            withLock(stateLock) {
-                state = .stopped
-                activeConnectionHandler?.disconnect()
-                activeConnectionHandler = nil
-            }
+            teardown(movingTo: .stopped)
             return
         }
 
-        Task { [weak self] in
-            guard let self else { return }
-            let delay = backoffCounter?.getNextRetryTime() ?? 1
-            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            await connectSse()
+        withLock(stateLock) {
+            guard state == .started else { return }
+            reconnectTask?.cancel()
+            reconnectTask = Task { [weak self] in
+                guard let self else { return }
+                let delay = backoffCounter?.getNextRetryTime() ?? 1
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                await connectSse()
+            }
         }
     }
 
