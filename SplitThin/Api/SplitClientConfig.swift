@@ -58,7 +58,7 @@ public final class SplitConfigBuilder {
     private var configsEnabled: Bool = false
     private var logLevel: LogLevel = .none
     private var evaluationRefreshRate: Int = 3600
-    private var timeout: Int = -1
+    private var timeout: Int = 10
     private var prefix: String?
     private var pushRate: Int = 1800
     private var fallbackTreatments: FallbackTreatmentsConfig = FallbackTreatmentsConfig.builder().build()
