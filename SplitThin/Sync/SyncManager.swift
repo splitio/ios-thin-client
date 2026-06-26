@@ -29,6 +29,7 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
 
     // BG sync (just for mobile) 
     private var isPaused = false
+    private var didFallbackToPolling = false
     private let lock = NSLock()
 
     init(syncMode: SyncMode, evaluationRepository: EvaluationRepository, observer: Observer, evaluationStorage: EvaluationReadStorage, eventsManager: SplitEventsManager, periodicScheduler: EvaluationPeriodicScheduler, streaming: Streaming, target: Target, appStateManager: AppStateManager = DefaultAppStateManager.instance) {
@@ -116,6 +117,14 @@ final class DefaultSyncManager: SyncManager, @unchecked Sendable {
     // Called when the server disables push. 
     func fallbackToPolling() {
         guard syncMode == .streaming else { return }
+
+        let shouldFallback: Bool = withLock(lock) {
+            guard !didFallbackToPolling else { return false }
+            didFallbackToPolling = true
+            return true
+        }
+        guard shouldFallback else { return }
+
         Logger.d("SyncManager: push disabled by server, falling back to polling")
         polling.start()
     }

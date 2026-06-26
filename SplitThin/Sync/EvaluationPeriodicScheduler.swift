@@ -33,35 +33,38 @@ final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @un
     }
 
     func start() {
-        withLock(lock) {
-            guard !isRunning else { return }
+        let shouldStart: Bool = withLock(lock) {
+            guard !isRunning else { return false }
             isRunning = true
+            return true
         }
+        guard shouldStart else { return }
 
+
+        let interval = intervalSeconds
         task = Task { [weak self] in
-            guard let self = self else {
-                Logger.d("EvaluationPeriodicScheduler: self was deallocated, exiting")
-                return
-            }
-
             while !Task.isCancelled {
-                let shouldRun = withLock(self.lock) { self.isRunning }
-                guard shouldRun else {
-                    Logger.d("EvaluationPeriodicScheduler: isRunning=false, exiting loop")
-                    break
-                }
-
+                
+                // Sleep WITHOUT holding `self`, so ARC can reclaim the scheduler if the owner
+                // drops the client without calling stop().
                 do {
-                    Logger.d("EvaluationPeriodicScheduler: Sleeping for \(self.intervalSeconds)s")
-                    try await Task.sleep(nanoseconds: UInt64(self.intervalSeconds) * 1_000_000_000)
+                    Logger.d("EvaluationPeriodicScheduler: Sleeping for \(interval)s")
+                    try await Task.sleep(nanoseconds: UInt64(interval) * 1_000_000_000)
                 } catch {
                     Logger.d("EvaluationPeriodicScheduler: Sleep cancelled, exiting")
                     break
                 }
 
+                // Re-acquire self for the fetch; bail if it was deallocated or stopped meanwhile.
+                guard let self else { return }
+                guard withLock(self.lock, { self.isRunning }) else {
+                    Logger.d("EvaluationPeriodicScheduler: isRunning=false, exiting loop")
+                    break
+                }
+
                 // Read the current target each cycle so a setTarget mid-flight is picked up on the next poll.
                 let currentTarget = withLock(self.lock) { self.target }
-                self.observer.notify(event: .pollTriggered(rate: self.intervalSeconds))
+                self.observer.notify(event: .pollTriggered(rate: interval))
 
                 do {
                     let result = try await self.fetchCoordinator.fetchIfNeeded(target: currentTarget, filters: self.filters, reason: .periodic)
@@ -76,6 +79,11 @@ final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @un
         }
 
         Logger.d("EvaluationPeriodicScheduler: Started with interval \(intervalSeconds)s")
+    }
+
+    // Safety net: if the owner drops us without calling stop(), cancel the polling task.
+    deinit {
+        stop()
     }
 
     func stop() {

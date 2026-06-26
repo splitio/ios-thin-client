@@ -52,6 +52,16 @@ final class SyncManagerTests: XCTestCase {
 
         XCTAssertEqual(polling.startCalls, 0)
     }
+    
+    func testFallbackToPollingMultipleTimesStartsPollingOnce() {
+        syncManager = createSyncManager(mode: .streaming)
+
+        syncManager.fallbackToPolling()
+        syncManager.fallbackToPolling()
+        syncManager.fallbackToPolling()
+
+        XCTAssertEqual(polling.startCalls, 1)
+    }
 
     // MARK: - Pause Tests
 
