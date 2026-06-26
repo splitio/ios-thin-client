@@ -76,6 +76,9 @@ final class FetchCoordinatorE2ETest: XCTestCase {
 
         factory.client.setTarget(target: Target(matchingKey: "user-2", trafficType: "user"))
 
+        // setTarget is applied asynchronously, so wait for the switch to take effect
+        waitUntil(timeout: 3) { factory.client.getTreatment("flag_a").treatment != "on" }
+
         // Check that the evaluation is CONTROL, until the new target's fetch lands. 
         let deadline = Date().addingTimeInterval(3)
         var treatment = factory.client.getTreatment("flag_a").treatment
@@ -88,6 +91,62 @@ final class FetchCoordinatorE2ETest: XCTestCase {
         // Then it changes to OFF.
         XCTAssertEqual(treatment, "off", "getTreatment should reflect the new target after setTarget")
         XCTAssertTrue(httpMock.fetchEvaluationsCalls.contains { $0.target.matchingKey == "user-2" }, "evaluations should be fetched for the new target")
+    }
+
+    func testSetTargetFiresUpdateWhenNewData() async throws {
+        httpMock.fetchEvaluationsResultByKey["user-1"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"], treatment: "on", till: 100)))
+
+        let sdkReady = expectation("SDK ready")
+        let listener = TestEventListener(readyExpectation: sdkReady)
+        factory = try buildFactory(httpClient: httpMock, target: Target(matchingKey: "user-1", trafficType: "user"))
+        factory.client.addEventListener(listener)
+
+        waitFor(sdkReady)
+        XCTAssertEqual(listener.onUpdateCallCount, 0, "No update before any data change")
+
+        // The server now returns different data for the same key (e.g., attribute-based targeting changed).
+        httpMock.fetchEvaluationsResultByKey["user-1"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"], treatment: "off", till: 200)))
+
+        // Same matchingKey, different attributes: same cache key
+        factory.client.setTarget(target: Target(matchingKey: "user-1", attributes: ["env": "staging"], trafficType: "user"))
+        waitUntil(timeout: 3) { listener.onUpdateCallCount == 1 }
+
+        XCTAssertEqual(factory.client.getTreatment("flag_a").treatment, "off", "The new data must be served")
+
+        // No periodic sync in single-sync mode
+        sleep(seconds: 2)
+        XCTAssertEqual(listener.onUpdateCallCount, 1, "Without a setTarget, no periodic sync should fire an update")
+
+        // A second setTarget with fresh data must fire SDK_UPDATE again, confirming the update is driven by setTarget.
+        httpMock.fetchEvaluationsResultByKey["user-1"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"], treatment: "on", till: 300)))
+        factory.client.setTarget(target: Target(matchingKey: "user-1", attributes: ["env": "prod"], trafficType: "user"))
+        waitUntil(timeout: 3) { listener.onUpdateCallCount == 2 }
+        
+        XCTAssertEqual(factory.client.getTreatment("flag_a").treatment, "on", "The latest target's data must be served")
+    }
+
+    func testSetTargetToDifferentKeyFiresUpdate() async throws {
+        httpMock.fetchEvaluationsResultByKey["user-1"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"], treatment: "on", till: 100)))
+        httpMock.fetchEvaluationsResultByKey["user-2"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"], treatment: "off", till: 200)))
+        httpMock.fetchEvaluationsResultByKey["user-3"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"], treatment: "v3", till: 300)))
+
+        let sdkReady = expectation("SDK ready")
+        let listener = TestEventListener(readyExpectation: sdkReady)
+        factory = try buildFactory(httpClient: httpMock, target: Target(matchingKey: "user-1", trafficType: "user"))
+        factory.client.addEventListener(listener)
+
+        waitFor(sdkReady)
+        XCTAssertEqual(listener.onUpdateCallCount, 0, "No update before any data change")
+
+        factory.client.setTarget(target: Target(matchingKey: "user-2", trafficType: "user"))
+        waitUntil(timeout: 3) { listener.onUpdateCallCount == 1 }
+
+        XCTAssertEqual(factory.client.getTreatment("flag_a").treatment, "off", "The new key's data must be served")
+
+        factory.client.setTarget(target: Target(matchingKey: "user-3", trafficType: "user"))
+        waitUntil(timeout: 3) { listener.onUpdateCallCount == 2 }
+
+        XCTAssertEqual(factory.client.getTreatment("flag_a").treatment, "v3", "The latest key's data must be served")
     }
 
     func testSetTargetTriggersNewFetchForSameTarget() async throws {

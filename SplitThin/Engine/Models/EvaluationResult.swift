@@ -6,12 +6,14 @@ import Foundation
 public struct EvaluationResult: Sendable, DynamicDecodable {
     public let flag: String
     public let treatment: String
+    public let changeNumber: Int64?
     public let flagSets: [String]
     public let config: String?
 
     public init(flag: String, treatment: String, changeNumber: Int64? = nil, flagSets: [String], config: String? = nil) {
         self.flag = flag
         self.treatment = treatment
+        self.changeNumber = changeNumber
         self.flagSets = flagSets
         self.config = config
     }
@@ -25,6 +27,7 @@ public struct EvaluationResult: Sendable, DynamicDecodable {
         }
         self.flag = flag
         self.treatment = treatment
+        changeNumber = dict["changeNumber"] as? Int64
         flagSets = dict["sets"] as? [String] ?? []
         config = dict["config"] as? String
     }

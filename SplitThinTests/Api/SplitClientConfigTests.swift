@@ -8,12 +8,11 @@ final class SplitClientConfigTest: XCTestCase {
     func testDefaultValues() {
         let config = SplitClientConfig.builder().build()
 
-        XCTAssertEqual(config.evaluationsRefreshRate, 3600)
+        XCTAssertEqual(config.pollingRate, 3600)
         XCTAssertEqual(config.logLevel, .none)
-        XCTAssertEqual(config.timeout, -1)
+        XCTAssertEqual(config.readyTimeout, 10)
         XCTAssertEqual(config.syncMode, .streaming)
         XCTAssertNil(config.serviceEndpoints)
-        XCTAssertEqual(config.impressionsMode, .default)
         XCTAssertFalse(config.configsEnabled)
         XCTAssertNil(config.prefix)
         XCTAssertEqual(config.pushRate, 1800)
@@ -23,60 +22,65 @@ final class SplitClientConfigTest: XCTestCase {
 
     func testEvaluationRefreshRateClampedToMin() {
         let config = SplitClientConfig.builder()
-                                      .set(evaluationRefreshRate: 10)
+                                      .set(pollingRate: 10)
                                       .build()
 
-        XCTAssertEqual(config.evaluationsRefreshRate, 60)
+        XCTAssertEqual(config.pollingRate, 60)
     }
 
     func testEvaluationRefreshRateAcceptsValidValue() {
         let config = SplitClientConfig.builder()
-                                      .set(evaluationRefreshRate: 120)
+                                      .set(pollingRate: 120)
                                       .build()
 
-        XCTAssertEqual(config.evaluationsRefreshRate, 120)
+        XCTAssertEqual(config.pollingRate, 120)
     }
 
     func testEvaluationRefreshRateAcceptsMinBoundary() {
         let config = SplitClientConfig.builder()
-                                      .set(evaluationRefreshRate: 60)
+                                      .set(pollingRate: 60)
                                       .build()
 
-        XCTAssertEqual(config.evaluationsRefreshRate, 60)
+        XCTAssertEqual(config.pollingRate, 60)
     }
 
-    // MARK: - timeout
+    // MARK: - readyTimeout
 
-    func testTimeoutClampedToMin() {
-        let config = SplitClientConfig.builder()
-                                      .set(timeout: -5)
-                                      .build()
-
-        XCTAssertEqual(config.timeout, -1)
+    func testReadyTimeoutDefaultIs10() {
+        let config = SplitClientConfig.builder().build()
+        XCTAssertEqual(config.readyTimeout, 10)
     }
 
-    func testTimeoutAcceptsMinusOne() {
+    func testReadyTimeoutZeroResetsToDefault() {
         let config = SplitClientConfig.builder()
-                                      .set(timeout: -1)
+                                      .set(readyTimeout: 0)
                                       .build()
 
-        XCTAssertEqual(config.timeout, -1)
+        XCTAssertEqual(config.readyTimeout, 10)
     }
 
-    func testTimeoutAcceptsZero() {
+    func testReadyTimeoutNegativeResetsToDefault() {
         let config = SplitClientConfig.builder()
-                                      .set(timeout: 0)
+                                      .set(readyTimeout: -5)
                                       .build()
 
-        XCTAssertEqual(config.timeout, 0)
+        XCTAssertEqual(config.readyTimeout, 10)
     }
 
-    func testTimeoutAcceptsPositiveValue() {
+    func testReadyTimeoutMinusOneIsAccepted() {
         let config = SplitClientConfig.builder()
-                                      .set(timeout: 30)
+                                      .set(readyTimeout: -1)
                                       .build()
 
-        XCTAssertEqual(config.timeout, 30)
+        XCTAssertEqual(config.readyTimeout, -1)
+    }
+
+    func testReadyTimeoutPositiveIsAccepted() {
+        let config = SplitClientConfig.builder()
+                                      .set(readyTimeout: 30)
+                                      .build()
+
+        XCTAssertEqual(config.readyTimeout, 30)
     }
 
     // MARK: - prefix
@@ -168,14 +172,6 @@ final class SplitClientConfigTest: XCTestCase {
         XCTAssertEqual(streaming.syncMode, .streaming)
     }
 
-    func testImpressionsModeValues() {
-        let none = SplitClientConfig.builder().set(impressionsMode: .none).build()
-        XCTAssertEqual(none.impressionsMode, .none)
-
-        let defaultMode = SplitClientConfig.builder().set(impressionsMode: .default).build()
-        XCTAssertEqual(defaultMode.impressionsMode, .default)
-    }
-
     func testLogLevelValues() {
         for level in [LogLevel.none, .error, .warning, .info, .debug, .verbose] {
             let config = SplitClientConfig.builder().set(logLevel: level).build()
@@ -230,16 +226,16 @@ final class SplitClientConfigTest: XCTestCase {
     func testBuilderChaining() {
         let config = SplitClientConfig.builder()
                                       .set(syncMode: .polling)
-                                      .set(evaluationRefreshRate: 120)
-                                      .set(timeout: 30)
+                                      .set(pollingRate: 120)
+                                      .set(readyTimeout: 30)
                                       .set(pushRate: 60)
                                       .set(logLevel: .debug)
                                       .set(configsEnabled: true)
                                       .build()
 
         XCTAssertEqual(config.syncMode, .polling)
-        XCTAssertEqual(config.evaluationsRefreshRate, 120)
-        XCTAssertEqual(config.timeout, 30)
+        XCTAssertEqual(config.pollingRate, 120)
+        XCTAssertEqual(config.readyTimeout, 30)
         XCTAssertEqual(config.pushRate, 60)
         XCTAssertEqual(config.logLevel, .debug)
         XCTAssertTrue(config.configsEnabled)

@@ -44,7 +44,7 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
     func testBuildSuccessWithAllParams() {
         let filters = EvaluationFilters(flagNames: ["flag_a"], flagSets: ["set_1"])
         let config = SplitClientConfig.builder()
-                                      .set(evaluationRefreshRate: 120)
+                                      .set(pollingRate: 120)
                                       .set(syncMode: .polling)
                                       .set(evaluationFilters: filters)
                                       .build()

@@ -91,4 +91,6 @@ final class DefaultEvaluationPeriodicScheduler: EvaluationPeriodicScheduler, @un
     func setTarget(_ target: Target) {
         withLock(lock) { self.target = target }
     }
+
+    // TODO: cancel task on deInit()
 }

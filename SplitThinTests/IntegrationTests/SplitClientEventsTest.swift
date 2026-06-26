@@ -27,7 +27,8 @@ final class SplitClientEventsTest: XCTestCase {
     func testSetTargetEmitsTargetSwitchEvents() {
         client.setTarget(target: Target(matchingKey: "user2", trafficType: "user"))
 
-        XCTAssertEqual(observerSpy.eventNames, ["targetSwitchStarted", "targetSwitchCompleted"])
+        // setTarget is applied asynchronously on a serial queue, so the events arrive shortly after.
+        waitUntil { self.observerSpy.eventNames == ["targetSwitchStarted", "targetSwitchCompleted"] }
     }
 
     func testDestroyEmitsDestroyEvents() async {

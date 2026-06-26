@@ -96,7 +96,7 @@ final class CoreDataStorage: @unchecked Sendable {
 
     // MARK: - Evaluation Operations
 
-    func upsertEvaluations(matchingKey: String, bucketingKey: String?, evaluations: [(flagName: String, treatment: String, config: String?, sets: [String]?)]) async throws {
+    func upsertEvaluations(matchingKey: String, bucketingKey: String?, evaluations: [(flagName: String, treatment: String, config: String?, sets: [String]?, changeNumber: Int64?)]) async throws {
         try await withContext { context in
             let deleteRequest = NSFetchRequest<NSManagedObject>(entityName: Self.evaluationEntity)
             deleteRequest.predicate = self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey)
@@ -115,13 +115,14 @@ final class CoreDataStorage: @unchecked Sendable {
                 evaluation.setValue(eval.treatment, forKey: "treatment")
                 evaluation.setValue(eval.config, forKey: "config")
                 evaluation.setValue(self.encodeSets(eval.sets), forKey: "sets")
+                evaluation.setValue(eval.changeNumber, forKey: "changeNumber")
             }
 
             try context.save()
         }
     }
 
-    func getEvaluation(matchingKey: String, bucketingKey: String?, flagName: String) async -> (treatment: String, config: String?, sets: [String]?)? {
+    func getEvaluation(matchingKey: String, bucketingKey: String?, flagName: String) async -> (treatment: String, config: String?, sets: [String]?, changeNumber: Int64?)? {
         try? await withContext { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.evaluationEntity)
             request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
@@ -138,12 +139,13 @@ final class CoreDataStorage: @unchecked Sendable {
             let config = result.value(forKey: "config") as? String
             let setsJson = result.value(forKey: "sets") as? String
             let sets = self.decodeSets(setsJson)
+            let changeNumber = result.value(forKey: "changeNumber") as? Int64
 
-            return (treatment, config, sets)
+            return (treatment, config, sets, changeNumber)
         }
     }
 
-    func getEvaluations(matchingKey: String, bucketingKey: String?, flagNames: [String]) async -> [(flagName: String, treatment: String, config: String?, sets: [String]?)] {
+    func getEvaluations(matchingKey: String, bucketingKey: String?, flagNames: [String]) async -> [(flagName: String, treatment: String, config: String?, sets: [String]?, changeNumber: Int64?)] {
         guard !flagNames.isEmpty else { return [] }
 
         return (try? await withContext { context in
@@ -159,12 +161,13 @@ final class CoreDataStorage: @unchecked Sendable {
                 let config = result.value(forKey: "config") as? String
                 let setsJson = result.value(forKey: "sets") as? String
                 let sets = self.decodeSets(setsJson)
-                return (flagName, treatment, config, sets)
+                let changeNumber = result.value(forKey: "changeNumber") as? Int64
+                return (flagName, treatment, config, sets, changeNumber)
             }
         }) ?? []
     }
 
-    func getAllEvaluations(matchingKey: String, bucketingKey: String?) async -> [(flagName: String, treatment: String, config: String?, sets: [String]?)] {
+    func getAllEvaluations(matchingKey: String, bucketingKey: String?) async -> [(flagName: String, treatment: String, config: String?, sets: [String]?, changeNumber: Int64?)] {
         (try? await withContext { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.evaluationEntity)
             request.predicate = self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey)
@@ -175,7 +178,8 @@ final class CoreDataStorage: @unchecked Sendable {
                 let config = result.value(forKey: "config") as? String
                 let setsJson = result.value(forKey: "sets") as? String
                 let sets = self.decodeSets(setsJson)
-                return (flagName, treatment, config, sets)
+                let changeNumber = result.value(forKey: "changeNumber") as? Int64
+                return (flagName, treatment, config, sets, changeNumber)
             }
         }) ?? []
     }
@@ -472,12 +476,17 @@ final class CoreDataStorage: @unchecked Sendable {
         setsAttr.attributeType = .stringAttributeType
         setsAttr.isOptional = true
 
+        let evalChangeNumberAttr = NSAttributeDescription()
+        evalChangeNumberAttr.name = "changeNumber"
+        evalChangeNumberAttr.attributeType = .integer64AttributeType
+        evalChangeNumberAttr.isOptional = true
+
         let evalBucketingKeyAttr = NSAttributeDescription()
         evalBucketingKeyAttr.name = "bucketingKey"
         evalBucketingKeyAttr.attributeType = .stringAttributeType
         evalBucketingKeyAttr.isOptional = true
 
-        evaluationEntity.properties = [evalMatchingKeyAttr, flagNameAttr, treatmentAttr, configAttr, setsAttr, evalBucketingKeyAttr]
+        evaluationEntity.properties = [evalMatchingKeyAttr, flagNameAttr, treatmentAttr, configAttr, setsAttr, evalChangeNumberAttr, evalBucketingKeyAttr]
 
         // Compound index for efficient queries
         let compoundIndex = NSFetchIndexDescription(name: "byMatchingKeyAndFlagName", elements: [

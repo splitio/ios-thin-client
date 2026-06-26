@@ -15,11 +15,13 @@ final class TestEventListener: SplitEventListener, @unchecked Sendable {
     private let readyExpectation: XCTestExpectation?
     private let timeoutExpectation: XCTestExpectation?
     private let updateExpectation: XCTestExpectation?
+    private let cacheExpectation: XCTestExpectation?
 
-    init(readyExpectation: XCTestExpectation? = nil, timeoutExpectation: XCTestExpectation? = nil, updateExpectation: XCTestExpectation? = nil) {
+    init(readyExpectation: XCTestExpectation? = nil, timeoutExpectation: XCTestExpectation? = nil, updateExpectation: XCTestExpectation? = nil, cacheExpectation: XCTestExpectation? = nil) {
         self.readyExpectation = readyExpectation
         self.timeoutExpectation = timeoutExpectation
         self.updateExpectation = updateExpectation
+        self.cacheExpectation = cacheExpectation
     }
 
     func onReady(_ metadata: SdkReadyMetadata) {
@@ -31,6 +33,7 @@ final class TestEventListener: SplitEventListener, @unchecked Sendable {
     func onReadyFromCache(_ metadata: SdkReadyFromCacheMetadata) {
         onReadyFromCacheCallCount += 1
         lastReadyFromCacheMetadata = metadata
+        cacheExpectation?.fulfill()
     }
 
     func onReadyTimedOut() {

@@ -18,6 +18,14 @@ final class TargetTest: XCTestCase {
         XCTAssertEqual(t1, t2)
     }
 
+    func testAttributeOrderDoesNotAffectEquality() {
+        let t1 = Target(matchingKey: "key1", attributes: ["env": "prod", "age": 30, "premium": true], trafficType: "user")
+        let t2 = Target(matchingKey: "key1", attributes: ["premium": true, "env": "prod", "age": 30], trafficType: "user")
+
+        XCTAssertEqual(t1, t2, "Attribute declaration order must not affect Target equality")
+        XCTAssertEqual(t1.hashValue, t2.hashValue)
+    }
+
     func testDifferentMatchingKeyNotEqual() {
         XCTAssertNotEqual(Target(matchingKey: "key1", trafficType: "user"), Target(matchingKey: "key2", trafficType: "user"))
     }

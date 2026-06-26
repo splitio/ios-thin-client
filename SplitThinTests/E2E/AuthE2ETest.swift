@@ -54,7 +54,7 @@ final class AuthE2ETest: XCTestCase {
 
         let sdkTimedOut = expectation("SDK timed out")
         let listener = TestEventListener(timeoutExpectation: sdkTimedOut)
-        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .singleSync, timeout: 1, prefix: prefix)
+        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .singleSync, readyTimeout: 1, prefix: prefix)
         factory.client.addEventListener(listener)
 
         waitFor(sdkTimedOut)
@@ -72,7 +72,7 @@ final class AuthE2ETest: XCTestCase {
 
         let sdkTimedOut = expectation("SDK timed out")
         let listener = TestEventListener(timeoutExpectation: sdkTimedOut)
-        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .polling, refreshRate: 1, timeout: 1, prefix: prefix)
+        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .polling, refreshRate: 1, readyTimeout: 1, prefix: prefix)
         factory.client.addEventListener(listener)
 
         waitFor(sdkTimedOut)
@@ -93,7 +93,7 @@ final class AuthE2ETest: XCTestCase {
 
         let sdkTimedOut = expectation("SDK timed out")
         let listener = TestEventListener(timeoutExpectation: sdkTimedOut)
-        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .singleSync, timeout: 1, prefix: prefix)
+        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .singleSync, readyTimeout: 1, prefix: prefix)
         factory.client.addEventListener(listener)
 
         waitFor(sdkTimedOut)
@@ -114,7 +114,7 @@ final class AuthE2ETest: XCTestCase {
 
         let sdkTimedOut = expectation("SDK timed out")
         let listener = TestEventListener(timeoutExpectation: sdkTimedOut)
-        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .singleSync, timeout: 1, prefix: prefix)
+        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .singleSync, readyTimeout: 1, prefix: prefix)
         factory.client.addEventListener(listener)
 
         waitFor(sdkTimedOut)
@@ -130,7 +130,7 @@ final class AuthE2ETest: XCTestCase {
 
         let sdkTimedOut = expectation("SDK timed out")
         let listener = TestEventListener(timeoutExpectation: sdkTimedOut)
-        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .singleSync, timeout: 1, prefix: prefix)
+        factory = try buildFactory(retryableHttpClient: httpMock, syncMode: .singleSync, readyTimeout: 1, prefix: prefix)
         factory.client.addEventListener(listener)
 
         waitFor(sdkTimedOut)

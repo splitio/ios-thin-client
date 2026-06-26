@@ -8,7 +8,7 @@ import Logging
 public struct SplitClientConfig: Sendable {
 
     static let minEvaluationRefreshRate = 60
-    fileprivate static let minTimeout = 10
+    fileprivate static let defaultReadyTimeout = 10
     fileprivate static let minPushRate = 30
     fileprivate static let prefixPattern = "^[a-zA-Z0-9_]{1,80}$"
 
@@ -19,24 +19,22 @@ public struct SplitClientConfig: Sendable {
 
     let syncMode: SyncMode
     let serviceEndpoints: ServiceEndpoints?
-    let impressionsMode: ImpressionsMode
     let configsEnabled: Bool
     let logLevel: LogLevel
-    let evaluationsRefreshRate: Int
-    let timeout: Int
+    let pollingRate: Int
+    let readyTimeout: Int
     let prefix: String?
     let pushRate: Int
     let fallbackTreatments: FallbackTreatmentsConfig
     let evaluationFilters: EvaluationFilters?
 
-    fileprivate init(syncMode: SyncMode, serviceEndpoints: ServiceEndpoints?, impressionsMode: ImpressionsMode, configsEnabled: Bool, logLevel: LogLevel, evaluationRefreshRate: Int, timeout: Int, prefix: String?, pushRate: Int, fallbackTreatments: FallbackTreatmentsConfig, evaluationFilters: EvaluationFilters?) {
+    fileprivate init(syncMode: SyncMode, serviceEndpoints: ServiceEndpoints?, configsEnabled: Bool, logLevel: LogLevel, pollingRate: Int, readyTimeout: Int, prefix: String?, pushRate: Int, fallbackTreatments: FallbackTreatmentsConfig, evaluationFilters: EvaluationFilters?) {
         self.syncMode = syncMode
         self.serviceEndpoints = serviceEndpoints
-        self.impressionsMode = impressionsMode
         self.configsEnabled = configsEnabled
         self.logLevel = logLevel
-        self.evaluationsRefreshRate = evaluationRefreshRate
-        self.timeout = timeout
+        self.pollingRate = pollingRate
+        self.readyTimeout = readyTimeout
         self.prefix = prefix
         self.pushRate = pushRate
         self.fallbackTreatments = fallbackTreatments
@@ -54,11 +52,10 @@ public final class SplitConfigBuilder {
 
     private var syncMode: SyncMode = .streaming
     private var serviceEndpoints: ServiceEndpoints?
-    private var impressionsMode: ImpressionsMode = .default
     private var configsEnabled: Bool = false
     private var logLevel: LogLevel = .none
-    private var evaluationRefreshRate: Int = 3600
-    private var timeout: Int = 10
+    private var pollingRate: Int = 3600
+    private var readyTimeout: Int = SplitClientConfig.defaultReadyTimeout
     private var prefix: String?
     private var pushRate: Int = 1800
     private var fallbackTreatments: FallbackTreatmentsConfig = FallbackTreatmentsConfig.builder().build()
@@ -84,15 +81,6 @@ public final class SplitConfigBuilder {
         return self
     }
 
-    /// Sets how impressions (evaluation events) are recorded and sent.
-    /// - `.default`: Standard impression tracking
-    /// - `.none`: Disable impression tracking
-    @discardableResult
-    public func set(impressionsMode: ImpressionsMode) -> Self {
-        self.impressionsMode = impressionsMode
-        return self
-    }
-
     /// Enables or disables dynamic configuration updates from the server.
     @discardableResult
     public func set(configsEnabled: Bool) -> Self {
@@ -110,26 +98,26 @@ public final class SplitConfigBuilder {
     /// Sets how often (in seconds) to poll for feature flag updates.
     /// Minimum: 60 seconds. Default: 3600 seconds (1 hour).
     @discardableResult
-    public func set(evaluationRefreshRate: Int) -> Self {
+    public func set(pollingRate: Int) -> Self {
         let minRate = minEvaluationRefreshRateOverride ?? SplitClientConfig.minEvaluationRefreshRate
-        if evaluationRefreshRate < minRate {
+        if pollingRate < minRate {
             Logger.w("evaluationRefreshRate must be at least \(minRate) seconds. Using minimum allowed value.")
-            self.evaluationRefreshRate = minRate
+            self.pollingRate = minRate
         } else {
-            self.evaluationRefreshRate = evaluationRefreshRate
+            self.pollingRate = pollingRate
         }
         return self
     }
 
     /// Sets the maximum time (in seconds) to wait for the SDK to be ready on startup.
-    /// Use `-1` for no timeout (wait indefinitely). Default: -1.
+    /// Use `-1` for no timeout (wait indefinitely). Default: 10.
     @discardableResult
-    public func set(timeout: Int) -> Self {
-        if timeout < SplitClientConfig.minTimeout {
-            Logger.w("timeout must be at least \(SplitClientConfig.minTimeout). Using minimum allowed value.")
-            self.timeout = SplitClientConfig.minTimeout
+    public func set(readyTimeout: Int) -> Self {
+        if readyTimeout != -1 && readyTimeout < 1 {
+            Logger.w("readyTimeout must be -1 (disabled) or >= 1. Using default value.")
+            self.readyTimeout = SplitClientConfig.defaultReadyTimeout
         } else {
-            self.timeout = timeout
+            self.readyTimeout = readyTimeout
         }
         return self
     }
@@ -201,11 +189,10 @@ public final class SplitConfigBuilder {
         SplitClientConfig(
             syncMode: syncMode,
             serviceEndpoints: serviceEndpoints,
-            impressionsMode: impressionsMode,
             configsEnabled: configsEnabled,
             logLevel: logLevel,
-            evaluationRefreshRate: evaluationRefreshRate,
-            timeout: timeout,
+            pollingRate: pollingRate,
+            readyTimeout: readyTimeout,
             prefix: prefix,
             pushRate: pushRate,
             fallbackTreatments: fallbackTreatments,
