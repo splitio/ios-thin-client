@@ -8,7 +8,7 @@ import Logging
 public struct SplitClientConfig: Sendable {
 
     static let minEvaluationRefreshRate = 60
-    fileprivate static let minTimeout = -1
+    fileprivate static let minTimeout = 10
     fileprivate static let minPushRate = 30
     fileprivate static let prefixPattern = "^[a-zA-Z0-9_]{1,80}$"
 
