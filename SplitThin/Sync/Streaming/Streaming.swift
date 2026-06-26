@@ -35,6 +35,7 @@ final class DefaultStreaming: Streaming, SseHandler, @unchecked Sendable {
     private var state: State = .stopped
     private let stateLock = NSLock()
     private var activeConnectionHandler: SseConnectionHandler?
+    private var isConnecting = false // dedups concurrent connectSse attempts
 
     init(target: Target, authProvider: AuthProvider, streamingEndpoint: URL, httpClient: HttpClient, fetchCoordinator: EvaluationFetchCoordinator, notificationParser: ThinNotificationParser, jwtParser: SseJwtParser, backoffCounter: BackoffCounter, payloadDecoder: PayloadDecoder = DefaultPayloadDecoder(), onConnect: (() -> Void)? = nil) {
         self.target = target
@@ -80,13 +81,19 @@ final class DefaultStreaming: Streaming, SseHandler, @unchecked Sendable {
     }
 
     func stop() {
-        withLock(stateLock) { state = .stopped }
-        activeConnectionHandler?.disconnect()
+        withLock(stateLock) {
+            state = .stopped
+            activeConnectionHandler?.disconnect()
+            activeConnectionHandler = nil
+        }
     }
 
     func pause() {
-        withLock(stateLock) { state = .paused }
-        activeConnectionHandler?.disconnect()
+        withLock(stateLock) {
+            state = .paused
+            activeConnectionHandler?.disconnect()
+            activeConnectionHandler = nil
+        }
     }
 
     func resume() {
@@ -149,7 +156,11 @@ final class DefaultStreaming: Streaming, SseHandler, @unchecked Sendable {
     func reportError(isRetryable: Bool) {
         Logger.w("StreamingConnection: SSE error, retryable=\(isRetryable)")
         guard isRetryable else {
-            withLock(stateLock) { state = .stopped }
+            withLock(stateLock) {
+                state = .stopped
+                activeConnectionHandler?.disconnect()
+                activeConnectionHandler = nil
+            }
             return
         }
 
@@ -234,8 +245,17 @@ final class DefaultStreaming: Streaming, SseHandler, @unchecked Sendable {
 
     private func connectSse() async {
         guard let authProvider, let jwtParser, let streamingEndpoint, let httpClient else { return }
-        guard !isStopped else { return }
 
+        // No-op if stopped or already connecting
+        let shouldConnect: Bool = withLock(stateLock) {
+            guard state != .stopped, !isConnecting else { return false }
+            isConnecting = true
+            return true
+        }
+        guard shouldConnect else { return }
+        defer { withLock(stateLock) { isConnecting = false } }
+
+        // Connect
         do {
             let credential = try await authProvider.getCredential()
             guard credential.pushEnabled else {
