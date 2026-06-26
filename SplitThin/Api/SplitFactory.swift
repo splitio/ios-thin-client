@@ -151,7 +151,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
             let eventsTracker = DefaultEventsTracker(storage: eventsStorage, coordinator: submissionCoordinator, observer: eventDispatcher)
             let eventsScheduler = DefaultEventsPeriodicScheduler(coordinator: submissionCoordinator, intervalSeconds: config.pushRate)
             let tracker = DefaultTracker(defaultTrafficType: target.trafficType, initialEventSizeInBytes: 1024, eventValidator: ThinEventValidator(), propertyValidator: ThinPropertyValidator(), logger: ThinTrackerLogger(), onEventPush: { trackerEvent in
-                guard trackerEvent.trafficType != nil && trackerEvent.trafficType != "" else {
+                guard !trackerEvent.trafficType.isEmpty else {
                     Logger.e("Tracker event not tracked because trafficType is empty")
                     return
                 }

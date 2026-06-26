@@ -8,7 +8,7 @@ func buildFactory(httpClient: SecureHttpClient? = nil, retryableHttpClient: Retr
     var configBuilder = SplitClientConfig.builder()
                                          .setMinEvaluationRefreshRate(1)
                                          .set(syncMode: syncMode)
-                                         .set(evaluationRefreshRate: refreshRate)
+                                         .set(pollingRate: refreshRate)
                                          .set(readyTimeout: readyTimeout)
                                          .set(configsEnabled: configsEnabled)
                                          .set(prefix: prefix)

@@ -22,7 +22,7 @@ final class SplitClientConfigTest: XCTestCase {
 
     func testEvaluationRefreshRateClampedToMin() {
         let config = SplitClientConfig.builder()
-                                      .set(evaluationRefreshRate: 10)
+                                      .set(pollingRate: 10)
                                       .build()
 
         XCTAssertEqual(config.pollingRate, 60)
@@ -30,7 +30,7 @@ final class SplitClientConfigTest: XCTestCase {
 
     func testEvaluationRefreshRateAcceptsValidValue() {
         let config = SplitClientConfig.builder()
-                                      .set(evaluationRefreshRate: 120)
+                                      .set(pollingRate: 120)
                                       .build()
 
         XCTAssertEqual(config.pollingRate, 120)
@@ -38,7 +38,7 @@ final class SplitClientConfigTest: XCTestCase {
 
     func testEvaluationRefreshRateAcceptsMinBoundary() {
         let config = SplitClientConfig.builder()
-                                      .set(evaluationRefreshRate: 60)
+                                      .set(pollingRate: 60)
                                       .build()
 
         XCTAssertEqual(config.pollingRate, 60)
@@ -226,7 +226,7 @@ final class SplitClientConfigTest: XCTestCase {
     func testBuilderChaining() {
         let config = SplitClientConfig.builder()
                                       .set(syncMode: .polling)
-                                      .set(evaluationRefreshRate: 120)
+                                      .set(pollingRate: 120)
                                       .set(readyTimeout: 30)
                                       .set(pushRate: 60)
                                       .set(logLevel: .debug)
