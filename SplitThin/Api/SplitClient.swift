@@ -7,9 +7,9 @@ import Tracker
 
 public protocol SplitClient: AnyObject, Sendable {
     var target: Target { get }
-    func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) -> EvaluationResult
-    func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult]
-    func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult]
+    func getTreatment(flag: String) -> EvaluationResult
+    func getTreatments(flags: [String]) -> [EvaluationResult]
+    func getTreatmentsByFlagSets(flagSets: [String]) -> [EvaluationResult]
     func setTarget(target: Target)
     func addEventListener(_ listener: SplitEventListener)
     func removeEventListener(_ listener: SplitEventListener)
@@ -61,18 +61,18 @@ final class DefaultSplitClient: SplitClient, @unchecked Sendable {
 
     // MARK: - Evaluations
 
-    func getTreatment(flag: String, evaluationOptions: EvaluationOptions? = nil) -> EvaluationResult {
+    func getTreatment(flag: String) -> EvaluationResult {
         let currentTarget = withLock(lock) { _target }
         observer.notify(event: .evaluationRequested(flagName: flag, target: currentTarget))
-        return treatmentsManager.getTreatment(flag: flag, evaluationOptions: evaluationOptions)
+        return treatmentsManager.getTreatment(flag: flag)
     }
 
-    func getTreatments(flags: [String], evaluationOptions: EvaluationOptions? = nil) -> [EvaluationResult] {
-        treatmentsManager.getTreatments(flags: flags, evaluationOptions: evaluationOptions)
+    func getTreatments(flags: [String]) -> [EvaluationResult] {
+        treatmentsManager.getTreatments(flags: flags)
     }
 
-    func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions? = nil) -> [EvaluationResult] {
-        treatmentsManager.getTreatmentsByFlagSets(flagSets: flagSets, evaluationOptions: evaluationOptions)
+    func getTreatmentsByFlagSets(flagSets: [String]) -> [EvaluationResult] {
+        treatmentsManager.getTreatmentsByFlagSets(flagSets: flagSets)
     }
 
     // MARK: - Target switching
@@ -188,20 +188,5 @@ final class DefaultSplitClient: SplitClient, @unchecked Sendable {
         observer.notify(event: .flushStarted(.telemetry))
         await telemetrySubmitter.flush(count: nil)
         observer.notify(event: .flushCompleted(.telemetry))
-    }
-}
-
-// MARK: - API variations
-public extension SplitClient {
-    func getTreatment(flag: String) -> EvaluationResult {
-        getTreatment(flag: flag, evaluationOptions: nil)
-    }
-
-    func getTreatments(flags: [String]) -> [EvaluationResult] {
-        getTreatments(flags: flags, evaluationOptions: nil)
-    }
-
-    func getTreatmentsByFlagSets(flagSets: [String]) -> [EvaluationResult] {
-        getTreatmentsByFlagSets(flagSets: flagSets, evaluationOptions: nil)
     }
 }

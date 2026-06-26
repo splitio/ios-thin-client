@@ -10,15 +10,15 @@ final class FailedClient: SplitClient, Sendable {
         Target(matchingKey: "", trafficType: "")
     }
 
-    func getTreatment(flag: String, evaluationOptions: EvaluationOptions?) -> EvaluationResult {
+    func getTreatment(flag: String) -> EvaluationResult {
         EvaluationResult(flag: flag, treatment: "control", flagSets: [])
     }
 
-    func getTreatments(flags: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult] {
+    func getTreatments(flags: [String]) -> [EvaluationResult] {
         flags.map { EvaluationResult(flag: $0, treatment: "control", flagSets: []) }
     }
 
-    func getTreatmentsByFlagSets(flagSets: [String], evaluationOptions: EvaluationOptions?) -> [EvaluationResult] {
+    func getTreatmentsByFlagSets(flagSets: [String]) -> [EvaluationResult] {
         []
     }
 
