@@ -264,14 +264,12 @@ final class StreamingE2ETest: XCTestCase {
         httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"]))
 
         let delaySeconds = 4
-        let authProviderMock = AuthProviderMock()
-        authProviderMock.credentialToReturn = JwtCredential(token: "fake.jwt.token", expiresAt: Date().addingTimeInterval(3600), pushEnabled: true, connDelay: delaySeconds)
-
         let parseCalledAt = Box<Date?>(nil)
-        let jwtParserSpy = SseJwtParserSpy { parseCalledAt.value = Date() }
 
-        let target = Target(matchingKey: "user-123", trafficType: "user")
-        let cm = DefaultStreaming(target: target, authProvider: authProviderMock, streamingEndpoint: URL(string: "https://fake.endpoint")!, httpClient: DefaultHttpClient.shared, fetchCoordinator: EvaluationFetchCoordinatorMock(), notificationParser: DefaultThinNotificationParser(), jwtParser: jwtParserSpy, backoffCounter: DefaultBackoffCounter(backoffBase: 1))
+        let cm = DefaultStreaming.makeForTest(
+            authProvider: AuthProviderMock.pushEnabled(connDelay: delaySeconds),
+            jwtParser: SseJwtParserSpy { parseCalledAt.value = Date() }
+        )
 
         let startTime = Date()
         cm.start()
@@ -295,15 +293,6 @@ final class StreamingE2ETest: XCTestCase {
         init(_ value: T) { self.value = value }
     }
 
-    private class SseJwtParserSpy: SseJwtParser {
-        let onParse: () -> Void
-        init(onParse: @escaping () -> Void) { self.onParse = onParse }
-        func extractChannels(from jwt: String) -> [String]? {
-            onParse()
-            return nil
-        }
-    }
-
     private func computeExpectedDelay(key: String, updateIntervalMs: Int64, algorithmSeed: Int) -> TimeInterval {
         RefetchDelay(intervalMs: updateIntervalMs, seed: algorithmSeed).delay(forKey: key)
     }
@@ -316,5 +305,44 @@ final class StreamingE2ETest: XCTestCase {
         for suffix in ["", "-shm", "-wal"] {
             try? fileManager.removeItem(at: dir.appendingPathComponent("\(dbName).sqlite\(suffix)"))
         }
+    }
+}
+
+final class SseJwtParserSpy: SseJwtParser {
+    let channels: [String]?
+    let onParse: () -> Void
+
+    init(channels: [String]? = ["channel-1"], onParse: @escaping () -> Void = {}) {
+        self.channels = channels
+        self.onParse = onParse
+    }
+
+    func extractChannels(from jwt: String) -> [String]? {
+        onParse()
+        return channels
+    }
+}
+
+extension DefaultStreaming {
+    static func makeForTest(
+        target: Target = Target(matchingKey: "user-123", trafficType: "user"),
+        authProvider: AuthProvider = AuthProviderMock.pushEnabled(), // enabled 
+        streamingEndpoint: URL = URL(string: "https://fake.endpoint")!,
+        httpClient: HttpClient = StreamingHttpClientStub(),
+        fetchCoordinator: EvaluationFetchCoordinator = EvaluationFetchCoordinatorMock(),
+        notificationParser: ThinNotificationParser = DefaultThinNotificationParser(),
+        jwtParser: SseJwtParser = SseJwtParserSpy(), // channel = channel-1
+        backoffCounter: BackoffCounter = DefaultBackoffCounter(backoffBase: 1)
+    ) -> DefaultStreaming {
+        DefaultStreaming(
+            target: target,
+            authProvider: authProvider,
+            streamingEndpoint: streamingEndpoint,
+            httpClient: httpClient,
+            fetchCoordinator: fetchCoordinator,
+            notificationParser: notificationParser,
+            jwtParser: jwtParser,
+            backoffCounter: backoffCounter
+        )
     }
 }

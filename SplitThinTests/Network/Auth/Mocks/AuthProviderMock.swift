@@ -3,6 +3,16 @@ import Foundation
 
 final class AuthProviderMock: AuthProvider, @unchecked Sendable {
 
+    /// An auth provider returning a push-enabled credential (optionally with a connection delay).
+    static func pushEnabled(connDelay: Int? = nil) -> AuthProviderMock {
+        let mock = AuthProviderMock()
+        mock.credentialToReturn = JwtCredential(token: "fake.jwt.token",
+                                                expiresAt: Date().addingTimeInterval(3600),
+                                                pushEnabled: true,
+                                                connDelay: connDelay)
+        return mock
+    }
+
     var credentialToReturn: JwtCredential?
     var errorToThrow: Error?
     var getCredentialCallCount = 0
