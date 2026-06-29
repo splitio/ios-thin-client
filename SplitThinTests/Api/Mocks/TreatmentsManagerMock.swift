@@ -1,0 +1,35 @@
+import Foundation
+@testable import SplitThin
+
+final class TreatmentsManagerMock: TreatmentsManager, @unchecked Sendable {
+
+    var getTreatmentResult: EvaluationResult?
+    var getTreatmentsResult: [EvaluationResult] = []
+    var getTreatmentsByFlagSetsResult: [EvaluationResult] = []
+
+    var getTreatmentCallCount = 0
+    var getTreatmentsCallCount = 0
+    var getTreatmentsByFlagSetsCallCount = 0
+    var setTargetCalls = [Target]()
+
+    func getTreatment(flag: String) -> EvaluationResult {
+        getTreatmentCallCount += 1
+        return getTreatmentResult ?? EvaluationResult(flag: flag, treatment: "control", flagSets: [])
+    }
+
+    func getTreatments(flags: [String]) -> [EvaluationResult] {
+        getTreatmentsCallCount += 1
+        return getTreatmentsResult.isEmpty
+            ? flags.map { EvaluationResult(flag: $0, treatment: "control", flagSets: []) }
+            : getTreatmentsResult
+    }
+
+    func getTreatmentsByFlagSets(flagSets: [String]) -> [EvaluationResult] {
+        getTreatmentsByFlagSetsCallCount += 1
+        return getTreatmentsByFlagSetsResult
+    }
+
+    func setTarget(_ target: Target) {
+        setTargetCalls.append(target)
+    }
+}

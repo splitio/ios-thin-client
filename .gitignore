@@ -1,0 +1,31 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Xcode
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xccheckout
+
+# SwiftPM / Xcode generated
+Package.resolved
+
+# Cursor
+.cursor/
+
+# VS Code / Cursor workspace settings
+.vscode/
+
+# macOS
+.DS_Store
+
+# CI/test generated artifacts
+.reports/
+.ci-home/
+
+# Local sandbox HOME used by tools/tests (do not commit)
+.home/
+
+# Git worktrees
+worktrees/

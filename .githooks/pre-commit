@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+THRESHOLD="${COVERAGE_THRESHOLD:-80}"
+ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -z "${ROOT_DIR}" ]]; then
+  # Allow running the hook manually before git is initialized.
+  ROOT_DIR="$(pwd)"
+fi
+cd "$ROOT_DIR"
+
+echo "Running unit-test coverage gate (line coverage >= ${THRESHOLD}%)..."
+swift test --enable-code-coverage >/dev/null
+
+PROFDATA="$(find .build -type f -name default.profdata | head -n 1 || true)"
+if [[ -z "${PROFDATA}" || ! -f "${PROFDATA}" ]]; then
+  echo "ERROR: Coverage profile not found (default.profdata)."
+  exit 1
+fi
+
+TEST_BINS=()
+while IFS= read -r test_bin; do
+  [[ -n "$test_bin" ]] && TEST_BINS+=("$test_bin")
+done < <(find .build -type f -name '*PackageTests' -perm -111 2>/dev/null || true)
+if [[ "${#TEST_BINS[@]}" -eq 0 ]]; then
+  echo "ERROR: Package test binary not found under .build."
+  exit 1
+fi
+
+python3 - "$THRESHOLD" "$ROOT_DIR" "$PROFDATA" "${TEST_BINS[@]}" <<'PY'
+import json
+import os
+import subprocess
+import sys
+
+
+def run(cmd, cwd=None):
+    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
+
+
+threshold = float(sys.argv[1])
+root_dir = os.path.abspath(sys.argv[2])
+profdata = sys.argv[3]
+test_bins = sys.argv[4:]
+
+export = run(
+    ["xcrun", "llvm-cov", "export", "-summary-only", *test_bins, "-instr-profile", profdata],
+    cwd=root_dir,
+)
+if export.returncode != 0 or not export.stdout.strip():
+    print("ERROR: Unable to generate llvm-cov export.")
+    if export.stderr.strip():
+        print(export.stderr.strip())
+    sys.exit(1)
+
+try:
+    export_json = json.loads(export.stdout)
+except json.JSONDecodeError:
+    print("ERROR: Could not parse llvm-cov export JSON.")
+    sys.exit(1)
+
+staged_files_res = run(
+    ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],
+    cwd=root_dir,
+)
+staged_files = set()
+if staged_files_res.returncode == 0:
+    for line in staged_files_res.stdout.splitlines():
+        p = line.strip()
+        if p.endswith(".swift"):
+            staged_files.add(p)
+
+submodule_paths = set()
+gitmodules_path = os.path.join(root_dir, ".gitmodules")
+if os.path.isfile(gitmodules_path):
+    submods = run(
+        ["git", "config", "--file", ".gitmodules", "--get-regexp", r"^submodule\..*\.path$"],
+        cwd=root_dir,
+    )
+    if submods.returncode == 0:
+        for line in submods.stdout.splitlines():
+            parts = line.strip().split(maxsplit=1)
+            if len(parts) == 2:
+                submodule_paths.add(parts[1].rstrip("/"))
+
+# Always exclude this directory from coverage math and messaging (even if it's not registered as a submodule yet).
+submodule_paths.add("ios-client")
+
+def in_submodule(path):
+    normalized = path.strip("/").replace("\\", "/")
+    for sm in submodule_paths:
+        sm_norm = sm.strip("/").replace("\\", "/")
+        if normalized == sm_norm or normalized.startswith(sm_norm + "/"):
+            return True
+    return False
+
+def is_test_file(path):
+    normalized = path.replace("\\", "/")
+    parts = normalized.split("/")
+    filename = parts[-1]
+    if filename == "Package.swift":
+        return True
+    # Any directory segment containing "Tests" (e.g. "SplitThinTests", "Sources/Api/Tests")
+    if any("Tests" in seg for seg in parts):
+        return True
+    if filename.endswith("Tests.swift") or filename.endswith("Test.swift"):
+        return True
+    return False
+
+file_summaries = {}
+covered_files = set()
+for data_entry in export_json.get("data", []):
+    for file_entry in data_entry.get("files", []):
+        filename = file_entry.get("filename")
+        if not filename:
+            continue
+        abs_name = os.path.abspath(filename)
+        if abs_name.startswith(root_dir + os.sep):
+            rel = os.path.relpath(abs_name, root_dir)
+            covered_files.add(rel)
+            if "summary" in file_entry:
+                file_summaries[rel] = file_entry["summary"]
+
+def summarize_line_coverage(summary: dict):
+    """
+    Returns (total_lines, covered_lines, missed_lines, percent) or None if unavailable.
+    """
+    lines = (summary or {}).get("lines") or {}
+    try:
+        total = int(lines.get("count", 0))
+        covered = int(lines.get("covered", 0))
+    except (TypeError, ValueError):
+        return None
+    if total <= 0:
+        return None
+    missed = max(0, total - covered)
+    pct = (covered / total) * 100.0
+    return total, covered, missed, pct
+
+# Compute overall line coverage for first-party non-test Swift files, excluding submodules (notably ios-client/).
+included_files = []
+total_lines_all = 0
+covered_lines_all = 0
+
+for relpath, summary in file_summaries.items():
+    if not relpath.endswith(".swift"):
+        continue
+    if in_submodule(relpath):
+        continue
+    if is_test_file(relpath):
+        continue
+    cov = summarize_line_coverage(summary)
+    if cov is None:
+        continue
+    total, covered, missed, pct = cov
+    included_files.append((relpath, total, covered, missed, pct))
+    total_lines_all += total
+    covered_lines_all += covered
+
+overall_pct = 100.0 if total_lines_all == 0 else (covered_lines_all / total_lines_all) * 100.0
+print(f"Line coverage (excluding submodules + tests): {overall_pct:.2f}% (threshold: {threshold:.2f}%)")
+
+if overall_pct < threshold:
+    print("Coverage gate failed. Under-covered files (excluding submodules + tests):")
+    offenders = sorted(
+        (t for t in included_files if t[3] > 0),
+        key=lambda t: (t[4], -t[3], t[0]),
+    )
+    if not offenders:
+        print(" - (No per-file offenders found, but aggregate coverage is below threshold; check tooling output.)")
+    else:
+        for relpath, total, covered, missed, pct in offenders[:25]:
+            print(f" - {relpath}: {pct:.2f}% ({missed}/{total} lines missed)")
+        if len(offenders) > 25:
+            print(f" - ... and {len(offenders) - 25} more")
+    print("Commit blocked.")
+    sys.exit(1)
+
+expected_files = {path for path in staged_files if not in_submodule(path) and not is_test_file(path)}
+if not expected_files:
+    print("No staged non-test Swift files detected; skipping per-file coverage presence gate.")
+else:
+    missing = sorted(path for path in expected_files if path not in covered_files)
+    if missing:
+        print("Coverage gate failed. The following staged non-test Swift files are missing from coverage (excluding git submodules):")
+        for path in missing:
+            print(f" - {path}")
+        sys.exit(1)
+    print("Coverage gate passed for staged non-test project files (excluding git submodules).")
+PY
