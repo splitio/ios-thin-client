@@ -27,6 +27,7 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
     private let readStorage: EvaluationReadStorage?
 
     private var cache = [Key: [String: StoredEvaluation]]()
+    private var lastTarget: Target?
     private let lock = NSLock()
 
     init(fetchCoordinator: EvaluationFetchCoordinator, evaluationFilters: EvaluationFilters?, readStorage: EvaluationReadStorage? = nil) {
@@ -60,6 +61,16 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
     }
 
     func setTarget(_ target: Target) {
+        let previousTarget = withLock(lock) { () -> Target? in
+            let previous = lastTarget
+            lastTarget = target
+            return previous
+        }
+
+        if let previousTarget, !target.requiresRefetch(comparedTo: previousTarget) {
+            return
+        }
+
         Task { [weak self] in
             guard let self else { return }
 
@@ -100,6 +111,7 @@ final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendab
 
     @discardableResult
     func initialize(target: Target) async throws -> FetchResult {
+        withLock(lock) { lastTarget = target }
         let result = try await fetchCoordinator.fetchIfNeeded(target: target, filters: evaluationFilters, reason: .initialization)
         applyFetched(result, for: target)
         return result

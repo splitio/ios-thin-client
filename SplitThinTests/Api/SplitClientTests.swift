@@ -77,6 +77,29 @@ final class DefaultSplitClientTest: XCTestCase {
         XCTAssertTrue(fetchCoordinatorMock.unregisterCalls.isEmpty, "Re-targeting the same key must not unregister it from the coordinator")
     }
 
+    func testSameKeyDiffBucketingUnregistersOldFromCoordinator() {
+        client.setTarget(target: Target(matchingKey: "user1", bucketingKey: "bucket-2", trafficType: "user"))
+
+        waitUntil {
+            self.fetchCoordinatorMock.unregisterCalls.contains { $0.matchingKey == "user1" && $0.bucketingKey == nil }
+        }
+    }
+
+    func testSameKeyDiffBucketingReRegistersUpdateAction() {
+        client.setTarget(target: Target(matchingKey: "user1", bucketingKey: "bucket-2", trafficType: "user"))
+
+        waitUntil {
+            self.fetchCoordinatorMock.registerOnUpdateActionCalls.contains { $0.matchingKey == "user1" && $0.bucketingKey == "bucket-2" }
+        }
+    }
+
+    func testTrafficTypeOnlyDoesNotUnregisterFromCoordinator() {
+        // Only trafficType changes: no refetch, no coordinator churn.
+        client.setTarget(target: Target(matchingKey: "user1", trafficType: "account"))
+
+        waitUntil { self.syncManagerMock.setTargetCallCount == 1 }
+    }
+
     func testGetTreatmentReturnsControl() {
         let result = client.getTreatment("flag_a")
 

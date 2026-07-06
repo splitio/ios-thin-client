@@ -121,6 +121,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         syncManagers.removeAll()
 
         splitManager = nil
+        (evaluationRepository as? DefaultEvaluationRepository)?.clear() // clear in-memory flags
         observer.notify(event: .destroyCompleted)
     }
 

@@ -174,4 +174,31 @@ final class EvaluationRepositoryTests: XCTestCase {
         XCTAssertEqual(readStorage.getAllCallCount, 1, "setTarget must hydrate the new target from persisted storage")
         XCTAssertEqual(repo.getEvaluation(flag: "persisted", target: target)?.evaluationResult.treatment, "v1", "Persisted cache for the new target must be available after setTarget")
     }
+
+    // MARK: - setTarget refetch decision
+
+    func testTrafficTypeDoesNotRefetch() {
+        let coordinator = EvaluationFetchCoordinatorMock()
+        let repo = DefaultEvaluationRepository(fetchCoordinator: coordinator, evaluationFilters: nil)
+
+        repo.setTarget(Target(matchingKey: "user1", trafficType: "user"))
+        waitUntil(timeout: 2) { coordinator.fetchCalls.count == 1 }
+
+        // Only the trafficType changes 
+        repo.setTarget(Target(matchingKey: "user1", trafficType: "account"))
+        Thread.sleep(forTimeInterval: 0.3)
+        XCTAssertEqual(coordinator.fetchCalls.count, 1, "A trafficType-only change must not trigger a refetch")
+    }
+
+    func testBucketingChangeRefetches() {
+        let coordinator = EvaluationFetchCoordinatorMock()
+        let repo = DefaultEvaluationRepository(fetchCoordinator: coordinator, evaluationFilters: nil)
+
+        repo.setTarget(Target(matchingKey: "user1", trafficType: "user"))
+        waitUntil(timeout: 2) { coordinator.fetchCalls.count == 1 }
+
+        // The bucketingKey changes → refetch.
+        repo.setTarget(Target(matchingKey: "user1", bucketingKey: "bucket-2", trafficType: "user"))
+        waitUntil(timeout: 2) { coordinator.fetchCalls.count == 2 }
+    }
 }
