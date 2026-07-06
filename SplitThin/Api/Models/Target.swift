@@ -32,6 +32,11 @@ public struct Target: Hashable, @unchecked Sendable {
         }
     }
 
+    // Omits refetch for trafficType changes
+    func requiresRefetch(comparedTo other: Target) -> Bool {
+        key != other.key || !Target.attributesEqual(attributes, other.attributes)
+    }
+
     // MARK: - Equatable
 
     public static func == (lhs: Target, rhs: Target) -> Bool {
@@ -40,7 +45,7 @@ public struct Target: Hashable, @unchecked Sendable {
             && lhs.trafficType == rhs.trafficType
     }
 
-    private static func attributesEqual(_ lhs: [String: Any]?, _ rhs: [String: Any]?) -> Bool {
+    static func attributesEqual(_ lhs: [String: Any]?, _ rhs: [String: Any]?) -> Bool {
         switch (lhs, rhs) {
             case (nil, nil):
                 true

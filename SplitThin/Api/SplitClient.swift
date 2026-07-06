@@ -93,12 +93,18 @@ final class DefaultSplitClient: SplitClient, @unchecked Sendable {
         }
 
         if previousTarget.matchingKey != target.matchingKey {
-            // Register the new key to get a valid auth token for it.
             authProvider.unregister(target: previousTarget.matchingKey)
             authProvider.register(target: target.matchingKey)
+        }
 
-            // Stop refetching/bitmap-checking the old key on the factory-wide coordinator.
+        // Stop refetching the abandoned target 
+        if target.requiresRefetch(comparedTo: previousTarget) {
             fetchCoordinator.unregister(target: previousTarget)
+        }
+
+        // The update action is keyed by Key. Move it onto the new Key only when the Key changed.
+        if previousTarget.key != target.key {
+            fetchCoordinator.unregisterOnUpdateAction(for: previousTarget.key)
             registerUpdateAction(for: target)
         }
 

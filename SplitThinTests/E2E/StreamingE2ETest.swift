@@ -55,6 +55,42 @@ final class StreamingE2ETest: XCTestCase {
         XCTAssertEqual(factory.client.getTreatment("flag_a").treatment, "off", "Treatment should update to 'off' after streaming push")
     }
 
+    // A setTarget that keeps the matchingKey but changes the bucketingKey must move the
+    // registered target over: a later streaming push must refetch ONLY the new bucketing,
+    // never the abandoned one.
+    func testSetTargetSameKeyDiffBucketingDoesNotRefetchOldBucketing() async throws {
+        let target = Target(matchingKey: "user-123", trafficType: "user")
+        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"]))
+
+        let sdkReady = expectation(description: "SDK ready")
+        let listener = TestEventListener(readyExpectation: sdkReady)
+
+        var connectionManagerRef: DefaultStreaming?
+        factory = try buildStreamingFactory(target: target) { fetchCoordinator in
+            let cm = DefaultStreaming(target: target, fetchCoordinator: fetchCoordinator, notificationParser: DefaultThinNotificationParser())
+            connectionManagerRef = cm
+            return cm
+        }
+        factory.client.addEventListener(listener)
+        waitFor(sdkReady)
+
+        // Switch to the same matchingKey but a different bucketingKey.
+        factory.client.setTarget(target: Target(matchingKey: "user-123", bucketingKey: "bucket-2", trafficType: "user"))
+        waitUntil(timeout: 3) { self.httpMock.fetchEvaluationsCalls.contains { $0.target.bucketingKey == "bucket-2" } }
+
+        let baseline = httpMock.fetchEvaluationsCalls.count
+
+        // A streaming push refetches every registered target.
+        connectionManagerRef!.handleNotification(EvaluationUpdateNotification(channel: nil, timestamp: 0, changeNumber: 2))
+        try await Task.sleep(nanoseconds: 500_000_000)
+
+        let postSwitchCalls = Array(httpMock.fetchEvaluationsCalls[baseline...])
+        XCTAssertFalse(postSwitchCalls.contains { $0.target.bucketingKey == nil },
+                       "After switching bucketing, the abandoned target must not be refetched on push")
+        XCTAssertTrue(postSwitchCalls.contains { $0.target.bucketingKey == "bucket-2" },
+                      "The current target must still be refetched on push")
+    }
+
     // Mirrors Android Test 10: SDK delays fetch based on hashing params in the notification
     func testStreamingPushAppliesStaggeredDelayBeforeFetch() async throws {
         let targetKey = "user-123"

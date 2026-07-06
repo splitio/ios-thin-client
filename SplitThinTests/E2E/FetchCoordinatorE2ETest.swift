@@ -149,7 +149,7 @@ final class FetchCoordinatorE2ETest: XCTestCase {
         XCTAssertEqual(factory.client.getTreatment("flag_a").treatment, "v3", "The latest key's data must be served")
     }
 
-    func testSetTargetTriggersNewFetchForSameTarget() async throws {
+    func testSetTargetDoesNotRefetchForIdenticalTarget() async throws {
         httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["my-flag"]))
         httpMock.fetchDelay = 10_000_000 // 10ms
 
@@ -162,12 +162,13 @@ final class FetchCoordinatorE2ETest: XCTestCase {
 
         factory.client.setTarget(target: Target(matchingKey: "user-A", trafficType: "user"))
         sleep(seconds: 0.03) // Give time for setTarget fetch
+        // Re-applying the exact same Target (same Key + attributes) must not refetch: neither
+        // Key nor attributes changed, so the previous evaluations are still valid.
         factory.client.setTarget(target: Target(matchingKey: "user-A", trafficType: "user"))
-        sleep(seconds: 0.03) // Give time for second setTarget fetch
+        sleep(seconds: 0.03) // Give a redundant fetch a chance to (wrongly) happen
 
         let fetchesForUserA = httpMock.fetchEvaluationsCalls.filter { $0.target.matchingKey == "user-A" }.count
-        XCTAssertEqual(fetchesForUserA, 2, "Sequential setTarget calls should each trigger a fetch")
-
+        XCTAssertEqual(fetchesForUserA, 1, "Re-applying an identical Target must not trigger a second fetch")
     }
 
     // MARK: - Initial fetch Tests

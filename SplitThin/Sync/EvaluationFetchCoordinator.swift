@@ -43,6 +43,7 @@ protocol EvaluationFetchCoordinator: Sendable {
 
     // Bridge with clients
     func registerOnUpdateAction(for key: Key, action: @escaping (FetchResult) -> Void)
+    func unregisterOnUpdateAction(for key: Key)
     func unregister(target: Target)
 
     /// The matching keys that have been registered via fetchIfNeeded (and not unregistered).
@@ -82,7 +83,6 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
     func unregister(target: Target) {
         withLock(lock) {
             fetchedKeys = fetchedKeys.filter { $0.target != target }
-            onUpdateActions.removeValue(forKey: target.key)
         }
     }
 
