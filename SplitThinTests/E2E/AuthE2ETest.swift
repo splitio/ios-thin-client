@@ -42,9 +42,11 @@ final class AuthE2ETest: XCTestCase {
         let treatment = client.getTreatment("my_feature").treatment
 
         XCTAssertEqual(treatment, "on")
-        XCTAssertEqual(httpMock.executeCalls.count, 2)
-        XCTAssertEqual(httpMock.executeCalls[0].category, .auth)
-        XCTAssertEqual(httpMock.executeCalls[1].category, .evaluations)
+        // Auth goes through the URLRequest path (percent-encoded query); evaluations through the Endpoint path.
+        XCTAssertEqual(httpMock.requestCalls.count, 1)
+        XCTAssertEqual(httpMock.requestCalls[0].category, .auth)
+        XCTAssertEqual(httpMock.executeCalls.count, 1)
+        XCTAssertEqual(httpMock.executeCalls[0].category, .evaluations)
     }
 
     func testAuthFailureReturnsControlTreatment() async throws {
@@ -77,11 +79,11 @@ final class AuthE2ETest: XCTestCase {
 
         waitFor(sdkTimedOut)
 
-        let callCountAfterTimeout = httpMock.executeCalls.count
+        let callCountAfterTimeout = httpMock.requestCalls.count + httpMock.executeCalls.count
 
         sleep(seconds: 1.5)
 
-        let callCountLater = httpMock.executeCalls.count
+        let callCountLater = httpMock.requestCalls.count + httpMock.executeCalls.count
         XCTAssertEqual(callCountAfterTimeout, callCountLater, "No polling should occur after auth 401")
     }
 
@@ -156,7 +158,7 @@ final class AuthE2ETest: XCTestCase {
 
         waitFor(sdkReady)
 
-        let authCalls = httpMock.executeCalls.filter { $0.category == .auth }
+        let authCalls = httpMock.requestCalls.filter { $0.category == .auth }
         XCTAssertEqual(authCalls.count, 1, "Should reuse cached credential, not re-auth")
     }
 
@@ -176,7 +178,7 @@ final class AuthE2ETest: XCTestCase {
 
         waitFor(sdkReady)
 
-        let authCalls = httpMock.executeCalls.filter { $0.category == .auth }
+        let authCalls = httpMock.requestCalls.filter { $0.category == .auth }
         XCTAssertEqual(authCalls.count, 2, "Should re-auth after 401 on evaluations")
     }
 
@@ -194,12 +196,12 @@ final class AuthE2ETest: XCTestCase {
         factory.client.addEventListener(listener)
 
         waitFor(sdkReady)
-        XCTAssertEqual(httpMock.executeCalls.filter { $0.category == .auth }.count, 1, "exactly one auth at init")
+        XCTAssertEqual(httpMock.requestCalls.filter { $0.category == .auth }.count, 1, "exactly one auth at init")
 
         factory.client.setTarget(target: Target(matchingKey: "user-2", trafficType: "user"))
 
-        waitUntil(timeout: 3) { self.httpMock.executeCalls.filter { $0.category == .auth }.count == 2 }
-        XCTAssertEqual(httpMock.executeCalls.filter { $0.category == .auth }.count, 2, "setTarget with a new matchingKey must trigger a fresh auth for it")
+        waitUntil(timeout: 3) { self.httpMock.requestCalls.filter { $0.category == .auth }.count == 2 }
+        XCTAssertEqual(httpMock.requestCalls.filter { $0.category == .auth }.count, 2, "setTarget with a new matchingKey must trigger a fresh auth for it")
     }
 
     func testSlowAuthDoesNotBlockSDKInitialization() async throws {

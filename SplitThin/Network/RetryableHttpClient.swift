@@ -7,6 +7,11 @@ import BackoffCounter
 
 protocol RetryableHttpClient: Sendable {
     func execute(_ endpoint: Endpoint, category: RequestCategory, body: Data?) async throws -> HttpResponse
+
+    // Sends a pre-built URLRequest through the same retry policy. Used for requests whose URL
+    // must be fully controlled (e.g. auth, where query keys need percent-encoding that the
+    // shared Endpoint/HttpClient stack does not apply).
+    func execute(request: URLRequest, category: RequestCategory) async throws -> HttpResponse
 }
 
 extension RetryableHttpClient {
@@ -23,20 +28,39 @@ enum RetryableHttpError: Error {
 
 final class DefaultRetryableHttpClient: RetryableHttpClient, @unchecked Sendable {
 
+    // Sends a raw URLRequest and maps the result to an HttpResponse. Injectable so tests can
+    // drive the URLRequest path without hitting the network.
+    typealias UrlRequestSender = @Sendable (URLRequest) async throws -> HttpResponse
+
     private let httpClient: HttpClient
     private let observer: Observer // For logging & telemetry
     private let policies: RetryPoliciesByCategory
     private let backoffCounterFactory: (Int) -> BackoffCounter
+    private let urlRequestSender: UrlRequestSender
 
-    init(httpClient: HttpClient, observer: Observer, policies: RetryPoliciesByCategory? = nil, backoffCounterFactory: @escaping (Int) -> BackoffCounter = { DefaultBackoffCounter(backoffBase: $0) }) {
+    init(httpClient: HttpClient, observer: Observer, policies: RetryPoliciesByCategory? = nil, backoffCounterFactory: @escaping (Int) -> BackoffCounter = { DefaultBackoffCounter(backoffBase: $0) }, urlRequestSender: UrlRequestSender? = nil) {
         self.httpClient = httpClient
         self.observer = observer
         self.policies = policies ?? Self.defaultPolicies()
         self.backoffCounterFactory = backoffCounterFactory
+        self.urlRequestSender = urlRequestSender ?? Self.defaultUrlRequestSender
     }
 
     func execute(_ endpoint: Endpoint, category: RequestCategory, body: Data?) async throws -> HttpResponse {
-        observer.notify(event: .httpRequestStarted(category: category.toHttpCategory, method: endpoint.method == .post ? .post : .get))
+        try await executeWithRetry(category: category, method: endpoint.method) {
+            try await self.performRequest(endpoint: endpoint, body: body)
+        }
+    }
+
+    func execute(request: URLRequest, category: RequestCategory) async throws -> HttpResponse {
+        let method: HttpMethod = (request.httpMethod?.uppercased() == "POST") ? .post : .get
+        return try await executeWithRetry(category: category, method: method) {
+            try await self.urlRequestSender(request)
+        }
+    }
+
+    private func executeWithRetry(category: RequestCategory, method: HttpMethod, perform: () async throws -> HttpResponse) async throws -> HttpResponse {
+        observer.notify(event: .httpRequestStarted(category: category.toHttpCategory, method: method == .post ? .post : .get))
 
         let categoryPolicies = policies[category] ?? CategoryRetryPolicies()
         let backoffCounter = backoffCounterFactory(Int(categoryPolicies.fallback?.backoffBaseSeconds ?? 1))
@@ -47,7 +71,7 @@ final class DefaultRetryableHttpClient: RetryableHttpClient, @unchecked Sendable
         while true {
             try Task.checkCancellation()
 
-            let response = try await performRequest(endpoint: endpoint, body: body)
+            let response = try await perform()
 
             if response.isSuccess {
                 observer.notify(event: .httpRequestSucceeded(category: category.toHttpCategory, statusCode: response.code))
@@ -85,6 +109,20 @@ final class DefaultRetryableHttpClient: RetryableHttpClient, @unchecked Sendable
             } catch {
                 continuation.resume(throwing: RetryableHttpError.networkError(error))
             }
+        }
+    }
+
+    private static let defaultUrlRequestSender: UrlRequestSender = { request in
+        try await withCheckedThrowingContinuation { continuation in
+            let task = URLSession.shared.dataTask(with: request) { data, response, error in
+                if let error = error {
+                    continuation.resume(throwing: RetryableHttpError.networkError(error))
+                    return
+                }
+                let code = (response as? HTTPURLResponse)?.statusCode ?? HttpCode.internalServerError
+                continuation.resume(returning: HttpResponse(code: code, data: data))
+            }
+            task.resume()
         }
     }
 

@@ -72,8 +72,8 @@ final class DefaultAuthProvider: AuthProvider, @unchecked Sendable {
             }
 
             // .. or start the Task and return it.
+            let users = registeredTargets.sorted()
             let newTask = Task { [credentialFetcher] () throws -> JwtCredential in
-                let users = key.split(separator: ",").map(String.init)
                 return try await credentialFetcher.fetchCredential(for: users)
             }
 

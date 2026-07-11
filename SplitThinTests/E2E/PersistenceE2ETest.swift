@@ -298,4 +298,13 @@ private final class SinceAwareHttpClientMock: RetryableHttpClient, @unchecked Se
                 return HttpResponse(code: 200, data: nil)
         }
     }
+
+    func execute(request: URLRequest, category: RequestCategory) async throws -> HttpResponse {
+        switch category {
+            case .auth:
+                return HttpResponse(code: 200, data: authData)
+            default:
+                return HttpResponse(code: 200, data: nil)
+        }
+    }
 }

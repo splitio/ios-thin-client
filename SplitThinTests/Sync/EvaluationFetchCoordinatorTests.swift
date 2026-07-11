@@ -250,4 +250,16 @@ final class DefaultEvaluationFetchCoordinatorTest: XCTestCase {
         // Only the initial fetch, no refetch after unregister
         XCTAssertEqual(provider.fetchCalls.count, 1)
     }
+
+    func testPushForUnregisteredTargetDoesNotReRegisterIt() async throws {
+        provider.resultToReturn = EvaluationsResult(evaluations: [], till: 1)
+
+        _ = try await coordinator.fetchIfNeeded(target: target, filters: filters, reason: .initialization)
+        coordinator.unregister(target: target)
+
+        _ = try? await coordinator.fetchIfNeeded(target: target, filters: filters, reason: .push)
+
+        XCTAssertFalse(coordinator.registeredMatchingKeys.contains(target.matchingKey),
+                       "A .push refresh must not re-register a target that was unregistered")
+    }
 }
