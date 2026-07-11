@@ -40,13 +40,13 @@ final class DefaultCredentialFetcherTest: XCTestCase {
 
         try await fetcher.fetchCredential(for: "user1")
 
-        XCTAssertEqual(httpClientMock.executeCalls.count, 1)
+        XCTAssertEqual(httpClientMock.requestCalls.count, 1)
 
-        let call = httpClientMock.executeCalls[0]
+        let call = httpClientMock.requestCalls[0]
         XCTAssertEqual(call.category, .auth)
-        XCTAssertTrue(call.endpoint.url.absoluteString.contains("/auth"))
-        XCTAssertTrue(call.endpoint.url.absoluteString.contains("key=user1"))
-        XCTAssertEqual(call.endpoint.headers["Authorization"], "Bearer \(sdkKey)")
+        XCTAssertTrue(call.request.url!.absoluteString.contains("/auth"))
+        XCTAssertTrue(call.request.url!.absoluteString.contains("key=user1"))
+        XCTAssertEqual(call.request.value(forHTTPHeaderField: "Authorization"), "Bearer \(sdkKey)")
     }
 
     func testFetchCredentialWithMultipleUsers() async throws {
@@ -59,7 +59,7 @@ final class DefaultCredentialFetcherTest: XCTestCase {
 
         _ = try await fetcher.fetchCredential(for: ["user1", "user2"])
 
-        let url = httpClientMock.executeCalls[0].endpoint.url.absoluteString
+        let url = httpClientMock.requestCalls[0].request.url!.absoluteString
         XCTAssertTrue(url.contains("key=user1&key=user2"), "URL should contain a key param per user: \(url)")
     }
 
@@ -142,7 +142,7 @@ final class DefaultCredentialFetcherTest: XCTestCase {
 
         try await configsFetcher.fetchCredential(for: "user1")
 
-        let url = httpClientMock.executeCalls[0].endpoint.url.absoluteString
+        let url = httpClientMock.requestCalls[0].request.url!.absoluteString
         XCTAssertTrue(url.contains("capabilities=evaluatorWithConfigs"), "URL should contain capabilities=evaluatorWithConfigs: \(url)")
     }
 
@@ -153,7 +153,7 @@ final class DefaultCredentialFetcherTest: XCTestCase {
 
         try await fetcher.fetchCredential(for: "user1")
 
-        let url = httpClientMock.executeCalls[0].endpoint.url.absoluteString
+        let url = httpClientMock.requestCalls[0].request.url!.absoluteString
         XCTAssertTrue(url.contains("capabilities=evaluator"), "URL should contain capabilities=evaluator: \(url)")
         XCTAssertFalse(url.contains("capabilities=evaluatorWithConfigs"), "URL should not contain capabilities=evaluatorWithConfigs: \(url)")
     }
@@ -170,7 +170,7 @@ final class DefaultCredentialFetcherTest: XCTestCase {
 
         try await filteredFetcher.fetchCredential(for: "user1")
 
-        let url = httpClientMock.executeCalls[0].endpoint.url.absoluteString
+        let url = httpClientMock.requestCalls[0].request.url!.absoluteString
         XCTAssertTrue(url.contains("sets=set_a,set_z"), "URL should contain alphabetically-sorted sets param: \(url)")
         XCTAssertFalse(url.contains("names="), "URL should not contain names param when flagNames is nil: \(url)")
     }
@@ -182,7 +182,7 @@ final class DefaultCredentialFetcherTest: XCTestCase {
 
         try await fetcher.fetchCredential(for: "user1")
 
-        let url = httpClientMock.executeCalls[0].endpoint.url.absoluteString
+        let url = httpClientMock.requestCalls[0].request.url!.absoluteString
         XCTAssertFalse(url.contains("names="), "URL should not contain names param: \(url)")
         XCTAssertFalse(url.contains("sets="), "URL should not contain sets param: \(url)")
     }
@@ -197,9 +197,38 @@ final class DefaultCredentialFetcherTest: XCTestCase {
 
         try await filteredFetcher.fetchCredential(for: "user1")
 
-        let url = httpClientMock.executeCalls[0].endpoint.url.absoluteString
+        let url = httpClientMock.requestCalls[0].request.url!.absoluteString
         XCTAssertFalse(url.contains("names="), "URL should not contain names param when flagNames is empty: \(url)")
         XCTAssertFalse(url.contains("sets="), "URL should not contain sets param when flagSets is empty: \(url)")
+    }
+
+    // MARK: - Key encoding in auth URL
+
+    // A matchingKey containing a comma must travel percent-encoded (%2C). The auth server
+    // treats a raw comma inside the `key` query value as a separator, so an unencoded comma
+    // would split one key into several and break authentication.
+    func testEncodesCommaInKeyForAuthUrl() async throws {
+        let jwt = makeJwt(exp: Date().addingTimeInterval(3600).timeIntervalSince1970)
+        let authResponse = "{\"token\":\"\(jwt)\",\"pushEnabled\":true}".data(using: .utf8)!
+        httpClientMock.responses = [HttpResponse(code: 200, data: authResponse)]
+
+        _ = try await fetcher.fetchCredential(for: ["CABM, CCIB Ma"])
+
+        let url = httpClientMock.requestCalls[0].request.url!.absoluteString
+        XCTAssertTrue(url.contains("key=CABM%2C%20CCIB%20Ma"), "Comma/space in key must be percent-encoded (%2C, %20): \(url)")
+        XCTAssertFalse(url.contains("key=CABM,"), "Raw comma must not reach the auth URL: \(url)")
+    }
+
+    // Reserved query characters must not leak through and corrupt the query structure.
+    func testEncodesReservedCharactersInKeyForAuthUrl() async throws {
+        let jwt = makeJwt(exp: Date().addingTimeInterval(3600).timeIntervalSince1970)
+        let authResponse = "{\"token\":\"\(jwt)\",\"pushEnabled\":true}".data(using: .utf8)!
+        httpClientMock.responses = [HttpResponse(code: 200, data: authResponse)]
+
+        _ = try await fetcher.fetchCredential(for: ["a+b&c#d"])
+
+        let url = httpClientMock.requestCalls[0].request.url!.absoluteString
+        XCTAssertTrue(url.contains("key=a%2Bb%26c%23d"), "+, & and # must be percent-encoded: \(url)")
     }
 
     // MARK: - Helpers

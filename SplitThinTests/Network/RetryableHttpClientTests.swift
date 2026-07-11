@@ -160,14 +160,46 @@ final class DefaultRetryableHttpClientTest: XCTestCase {
         XCTAssertEqual(httpClientMock.lastBody, bodyData)
     }
 
+    // MARK: - URLRequest path
+
+    func testExecuteRequestReturnsResponseFromSender() async throws {
+        let sentRequests = SentRequestsBox()
+        let client = createClient(urlRequestSender: { request in
+            sentRequests.append(request)
+            return HttpResponse(code: 200, data: Data("ok".utf8))
+        })
+
+        let request = URLRequest(url: URL(string: "https://auth.example.com/api/v3/auth?key=a%2Cb")!)
+        let response = try await client.execute(request: request, category: .auth)
+
+        XCTAssertEqual(response.code, 200)
+        XCTAssertEqual(sentRequests.all.count, 1)
+        XCTAssertEqual(sentRequests.all[0].url?.absoluteString, "https://auth.example.com/api/v3/auth?key=a%2Cb")
+    }
+
+    func testExecuteRequestRetriesOnRetryableStatus() async throws {
+        let responses = ResponseQueueBox([
+            HttpResponse(code: 500, data: nil),
+            HttpResponse(code: 200, data: Data())
+        ])
+        let client = createClient(urlRequestSender: { _ in responses.next() })
+
+        let request = URLRequest(url: URL(string: "https://auth.example.com/api/v3/auth")!)
+        let response = try await client.execute(request: request, category: .auth)
+
+        XCTAssertEqual(response.code, 200)
+        XCTAssertEqual(responses.consumed, 2)
+    }
+
     // MARK: - Helpers
 
-    private func createClient(policies: RetryPoliciesByCategory? = nil) -> DefaultRetryableHttpClient {
+    private func createClient(policies: RetryPoliciesByCategory? = nil, urlRequestSender: DefaultRetryableHttpClient.UrlRequestSender? = nil) -> DefaultRetryableHttpClient {
         DefaultRetryableHttpClient(
             httpClient: httpClientMock,
             observer: ObserverSpy(),
             policies: policies,
-            backoffCounterFactory: { [backoffCounterMock] _ in backoffCounterMock! }
+            backoffCounterFactory: { [backoffCounterMock] _ in backoffCounterMock! },
+            urlRequestSender: urlRequestSender
         )
     }
 
@@ -175,5 +207,39 @@ final class DefaultRetryableHttpClientTest: XCTestCase {
         Endpoint.builder(baseUrl: URL(string: "https://api.example.com")!, path: "test")
             .set(method: .get)
             .build()
+    }
+}
+
+// Thread-safe helpers so the @Sendable urlRequestSender closure can record/return values.
+private final class SentRequestsBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var requests: [URLRequest] = []
+
+    func append(_ request: URLRequest) {
+        lock.lock(); defer { lock.unlock() }
+        requests.append(request)
+    }
+
+    var all: [URLRequest] {
+        lock.lock(); defer { lock.unlock() }
+        return requests
+    }
+}
+
+private final class ResponseQueueBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var responses: [HttpResponse]
+    private(set) var consumed = 0
+
+    init(_ responses: [HttpResponse]) {
+        self.responses = responses
+    }
+
+    func next() -> HttpResponse {
+        lock.lock(); defer { lock.unlock() }
+        guard consumed < responses.count else { return HttpResponse(code: 200, data: nil) }
+        let response = responses[consumed]
+        consumed += 1
+        return response
     }
 }

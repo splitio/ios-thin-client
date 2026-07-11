@@ -36,25 +36,17 @@ final class DefaultCredentialFetcher: CredentialFetcher, @unchecked Sendable {
     func fetchCredential(for users: [String]) async throws -> JwtCredential {
         observer.notify(event: .jwtFetchStarted)
 
-        var queryString = ""
-        if configsEnabled {
-            queryString += "&capabilities=evaluatorWithConfigs"
-        } else {
-            queryString += "&capabilities=evaluator"
-        }
-        queryString += users.map { "&key=\($0)" }.joined()
-        if let flagSets = evaluationFilters?.flagSets, !flagSets.isEmpty {
-            queryString += "&sets=\(flagSets.sorted().joined(separator: ","))"
+        guard let url = buildAuthUrl(for: users) else {
+            throw CredentialFetcherError.invalidAuthResponse
         }
 
-        let endpoint = Endpoint.builder(baseUrl: authEndpoint, path: "api/v3/auth", defaultQueryString: queryString)
-                               .set(method: .get)
-                               .add(header: "Authorization", withValue: "Bearer \(sdkKey)")
-                               .add(header: "Content-Type", withValue: "application/json")
-                               .add(header: "X-Harness-FME-SDK-Version", withValue: "ios-\(Version.semantic)")
-                               .build()
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(sdkKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("ios-\(Version.semantic)", forHTTPHeaderField: "X-Harness-FME-SDK-Version")
 
-        let response = try await retryableHttpClient.execute(endpoint, category: .auth)
+        let response = try await retryableHttpClient.execute(request: request, category: .auth)
 
         if response.code == 401 {
             throw CredentialFetcherError.unauthorized
@@ -66,9 +58,35 @@ final class DefaultCredentialFetcher: CredentialFetcher, @unchecked Sendable {
 
         let authResponse = try Json.decode(from: data, to: AuthResponse.self)
         let expiresAt = try extractExpiration(from: authResponse.token)
-
+ 
         observer.notify(event: .jwtFetchSucceeded(expiresAt: Int64(expiresAt.timeIntervalSince1970), pushEnabled: authResponse.pushEnabled))
         return JwtCredential(token: authResponse.token, expiresAt: expiresAt, pushEnabled: authResponse.pushEnabled, connDelay: authResponse.connDelay)
+    }
+
+    // Builds the auth URL with a manually percent-encoded query.
+    // The key values must be percent-encoded so query sub-delimiters that are part of the key
+    // (comma, &, +, #, space, =, ...) don't corrupt the query structure or get split server-side
+    private func buildAuthUrl(for users: [String]) -> URL? {
+        var components = URLComponents(url: authEndpoint, resolvingAgainstBaseURL: false)
+        let basePath = components?.path ?? ""
+        components?.path = basePath.hasSuffix("/") ? "\(basePath)api/v3/auth" : "\(basePath)/api/v3/auth"
+
+        var parts: [String] = [configsEnabled ? "capabilities=evaluatorWithConfigs" : "capabilities=evaluator"]
+        parts += users.map { "key=\(Self.percentEncodedKey($0))" }
+        if let flagSets = evaluationFilters?.flagSets, !flagSets.isEmpty {
+            parts.append("sets=\(flagSets.sorted().joined(separator: ","))")
+        }
+        components?.percentEncodedQuery = parts.joined(separator: "&")
+
+        return components?.url
+    }
+
+    private static let unreservedKeyCharacters = CharacterSet(
+        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+    )
+
+    private static func percentEncodedKey(_ key: String) -> String {
+        key.addingPercentEncoding(withAllowedCharacters: unreservedKeyCharacters) ?? key
     }
 
     private func extractExpiration(from jwt: String) throws -> Date {

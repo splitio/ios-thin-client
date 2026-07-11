@@ -97,7 +97,9 @@ final class DefaultEvaluationFetchCoordinator: EvaluationFetchCoordinator, @unch
         let key = FetchKey(target: target, filters: filters)
 
         let task: Task<FetchResult, Error> = withLock(lock) {
-            fetchedKeys.insert(key)
+            if reason == .initialization || reason == .targetSwitch {
+                fetchedKeys.insert(key)
+            }
 
             // 1. Check for deduplications
             if let existing = inFlightTasks[key] {

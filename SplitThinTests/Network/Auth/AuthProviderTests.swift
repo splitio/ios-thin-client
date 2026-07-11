@@ -103,6 +103,15 @@ final class DefaultAuthProviderTest: XCTestCase {
         XCTAssertNotNil(storageMock.credentials["alpha,bravo,charlie"])
     }
 
+    func testKeyContainingCommaIsNotSplitIntoMultipleUsers() async throws {
+        provider.register(target: "CABM, CCIB Ma")
+        fetcherMock.credentialToReturn = makeCredential(token: "token")
+
+        try await provider.getCredential()
+
+        XCTAssertEqual(fetcherMock.lastUsersRequested, ["CABM, CCIB Ma"])
+    }
+
     func testRegisterNewTargetInvalidatesOldCompositeKey() async throws {
         provider.register(target: "user1")
         let cred = makeCredential(token: "token")
