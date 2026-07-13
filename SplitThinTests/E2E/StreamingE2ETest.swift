@@ -256,6 +256,48 @@ final class StreamingE2ETest: XCTestCase {
         XCTAssertFalse(namesB.contains("feature_x"))
     }
 
+    // A client destroyed via client.destroy() must fully unregister from the coordinator
+    func testDestroyedClientStopsReceivingPushUpdates() async throws {
+
+        // Create two clients
+        httpMock.fetchEvaluationsResultByKey["user-A"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"])))
+        httpMock.fetchEvaluationsResultByKey["user-B"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_b"])))
+        let readyA = expectation("Client A ready")
+        let readyB = expectation("Client B ready")
+        let updateA = expectation("Client A update")
+        let notUpdateB = expectation("Client B must not update after destroy").inverted()
+        let listenerA = TestEventListener(readyExpectation: readyA, updateExpectation: updateA)
+        let listenerB = TestEventListener(readyExpectation: readyB, updateExpectation: notUpdateB)
+        let (built, connectionManager) = try buildStreamingFactory(target: "user-A")
+        factory = built
+        factory.client.addEventListener(listenerA)
+        let clientB = factory.getClient("user-B")
+        clientB.addEventListener(listenerB)
+
+        waitFor(readyA, readyB)
+        XCTAssertEqual(clientB.getTreatment("flag_b").treatment, "on", "Client B's initial treatment should be 'on'")
+
+        await clientB.destroy()
+
+        let baseline = httpMock.fetchEvaluationsCalls.count
+
+        // A streaming push refetches every *registered* target: B is gone, A is not.
+        httpMock.fetchEvaluationsResultByKey["user-A"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_a"], treatment: "off", till: 12346)))
+        httpMock.fetchEvaluationsResultByKey["user-B"] = .success(HttpResponse(code: 200, data: mockEvaluationsData(flags: ["flag_b"], treatment: "off", till: 12346)))
+        connectionManager.handleNotification(EvaluationUpdateNotification(channel: nil, timestamp: 0, changeNumber: 2))
+
+        waitFor(updateA, notUpdateB, timeout: 2.0)
+
+        let postDestroyCalls = Array(httpMock.fetchEvaluationsCalls[baseline...])
+        XCTAssertFalse(postDestroyCalls.contains { $0.target.matchingKey == "user-B" },
+                       "A destroyed client's target must not be refetched on push")
+        XCTAssertTrue(postDestroyCalls.contains { $0.target.matchingKey == "user-A" },
+                      "The surviving client must still be refetched on push")
+
+        XCTAssertEqual(factory.client.getTreatment("flag_a").treatment, "off", "Surviving client must apply the push update")
+        XCTAssertEqual(clientB.getTreatment("flag_b").treatment, "on", "Destroyed client's cached evaluation must not change after push")
+    }
+
     // MARK: - Helpers
 
     /// Builds a streaming factory with a real `DefaultStreaming`.

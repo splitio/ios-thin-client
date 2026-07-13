@@ -165,6 +165,8 @@ final class DefaultSplitClient: SplitClient, @unchecked Sendable {
 
         let currentTarget = withLock(lock) { _target }
         authProvider.unregister(target: currentTarget.matchingKey)
+        fetchCoordinator.unregister(target: currentTarget)
+        fetchCoordinator.unregisterOnUpdateAction(for: currentTarget.key)
 
         eventsScheduler.stop()
         await eventsTracker.flush()
