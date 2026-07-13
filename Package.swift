@@ -10,7 +10,7 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/splitio/ios-client.git",
-            revision: "4c6b1034f7044a3bf272fea4f607a6f51182d1b8"
+            revision: "e256f22a7c98af2643ffd03cc60a2b24cf90524f"
         )
     ],
     targets: [
