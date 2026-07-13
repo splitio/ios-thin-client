@@ -155,6 +155,20 @@ final class DefaultSplitClientTest: XCTestCase {
         XCTAssertEqual(authProviderMock.lastTargetUnregistered, "user1")
     }
 
+    func testDestroyUnregistersTargetFromCoordinator() async {
+        await client.destroy()
+
+        XCTAssertTrue(fetchCoordinatorMock.unregisterCalls.contains { $0.matchingKey == "user1" },
+                      "destroy() must unregister the target from the shared coordinator so streaming/polling stops refetching it")
+    }
+
+    func testDestroyUnregistersUpdateActionFromCoordinator() async {
+        await client.destroy()
+
+        XCTAssertTrue(fetchCoordinatorMock.unregisterOnUpdateActionCalls.contains { $0.matchingKey == "user1" },
+                      "destroy() must remove the update action so shared refreshes stop notifying a dead client")
+    }
+
     func testDestroyStopsEventsManager() async {
         await client.destroy()
 
