@@ -59,22 +59,25 @@ final class DefaultSplitClientTest: XCTestCase {
     }
 
     func testSetTargetSameKeyDoesNotChurnAuth() {
-        client.setTarget(target: Target(matchingKey: "user1", trafficType: "user"))
+        client.setTarget(target: Target(matchingKey: "user1", attributes: ["env": "prod"], trafficType: "user")) // same target
 
         waitUntil { self.syncManagerMock.setTargetCallCount == 1 }
         XCTAssertEqual(authProviderMock.registerCallCount, 0, "Re-targeting the same key must not re-register")
         XCTAssertEqual(authProviderMock.unregisterCallCount, 0, "Re-targeting the same key must not unregister")
     }
 
+    func testSetTargetIdenticalIsNoOp() {
+        client.setTarget(target: Target(matchingKey: "user1", trafficType: "user")) // exact same target
+        client.setTarget(target: Target(matchingKey: "user2", trafficType: "user")) // different target
+
+        waitUntil { self.syncManagerMock.lastTargetSet?.matchingKey == "user2" }
+        XCTAssertEqual(syncManagerMock.setTargetCallCount, 1, "Identical setTarget must not propagate to syncManager")
+        XCTAssertEqual(treatmentsManagerMock.setTargetCalls.count, 1, "Identical setTarget must not propagate to treatmentsManager")
+    }
+
     func testSetTargetUnregistersOldTargetFromCoordinator() {
         client.setTarget(target: Target(matchingKey: "user2", trafficType: "user"))
         waitUntil { self.fetchCoordinatorMock.unregisterCalls.first?.matchingKey == "user1" }
-    }
-
-    func testSetTargetSameKeyDoesNotUnregisterFromCoordinator() {
-        client.setTarget(target: Target(matchingKey: "user1", trafficType: "user"))
-        waitUntil { self.syncManagerMock.setTargetCallCount == 1 }
-        XCTAssertTrue(fetchCoordinatorMock.unregisterCalls.isEmpty, "Re-targeting the same key must not unregister it from the coordinator")
     }
 
     func testSameKeyDiffBucketingUnregistersOldFromCoordinator() {

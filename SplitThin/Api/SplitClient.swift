@@ -84,13 +84,13 @@ final class DefaultSplitClient: SplitClient, @unchecked Sendable {
     }
 
     private func applyTargetSwitch(to target: Target) {
-        observer.notify(event: .targetSwitchStarted)
+        let previousTarget = withLock(lock) { _target }
 
-        let previousTarget = withLock(lock) { () -> Target in
-            let previous = _target
-            _target = target
-            return previous
-        }
+        guard target != previousTarget else { return }
+
+        withLock(lock) { _target = target }
+
+        observer.notify(event: .targetSwitchStarted)
 
         if previousTarget.matchingKey != target.matchingKey {
             authProvider.unregister(target: previousTarget.matchingKey)
@@ -110,6 +110,7 @@ final class DefaultSplitClient: SplitClient, @unchecked Sendable {
 
         syncManager.setTarget(target)
         treatmentsManager.setTarget(target)
+
 
         observer.notify(event: .targetSwitchCompleted)
     }
