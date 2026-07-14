@@ -171,6 +171,26 @@ final class FetchCoordinatorE2ETest: XCTestCase {
         XCTAssertEqual(fetchesForUserA, 1, "Re-applying an identical Target must not trigger a second fetch")
     }
 
+    func testSetTargetIdenticalTargetIsFullNoOp() async throws {
+        httpMock.fetchEvaluationsResult = HttpResponse(code: 200, data: mockEvaluationsData(flags: ["my-flag"]))
+
+        let sdkReady = expectation("SDK ready")
+        let listener = TestEventListener(readyExpectation: sdkReady)
+        factory = try buildFactory(httpClient: httpMock, target: Target(matchingKey: "user-A", trafficType: "user"))
+        factory.client.addEventListener(listener)
+
+        waitFor(sdkReady)
+        let fetchesAfterReady = httpMock.fetchEvaluationsCalls.count
+        XCTAssertEqual(listener.onUpdateCallCount, 0, "No update before any change")
+
+        // Re-applying the exact same Target must be a full no-op: no fetch and no SDK_UPDATE.
+        factory.client.setTarget(target: Target(matchingKey: "user-A", trafficType: "user"))
+        sleep(seconds: 0.2)
+
+        XCTAssertEqual(httpMock.fetchEvaluationsCalls.count, fetchesAfterReady, "Identical setTarget must not trigger any fetch")
+        XCTAssertEqual(listener.onUpdateCallCount, 0, "Identical setTarget must not fire SDK_UPDATE")
+    }
+
     // MARK: - Initial fetch Tests
 
     func testGetTreatmentAfterInitialFetch() async throws {
