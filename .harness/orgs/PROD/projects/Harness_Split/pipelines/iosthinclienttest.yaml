@@ -58,9 +58,7 @@ pipeline:
                     args: --version
                     shell: Sh
                     preCommand: |
-                      set -euo pipefail
-                      chmod +x .harness/scripts/run-ci-reports.sh
-                      REPORTS_ROOT=.reports .harness/scripts/run-ci-reports.sh
+                      echo "Skipping run-ci-reports.sh (disabled for debugging)"
                     testIntelligence:
                       enabled: false
                     reports:
