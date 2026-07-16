@@ -1,2 +1,5 @@
+1.0.0 (Jul 16, 2026)
+- Initial stable release.
+
 1.0.0-beta1 (Jun 29, 2026)
 - Initial release.
