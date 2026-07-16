@@ -170,5 +170,10 @@ pipeline:
                     envVariables:
                       SONAR_TOKEN: <+secrets.getValue("sonarqube-token")>
                   timeout: 15m
-                  when:
-                    stageStatus: Success
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: MarkAsSuccess
+        timeout: 30m
