@@ -9,6 +9,9 @@
 MASTER_BRANCH="main"
 DEVELOPMENT_BRANCH="development"
 
+# Public GitHub repo (canonical for this public SDK; PRs/tags live here).
+GITHUB_REPO="splitio/ios-thin-client"
+
 set -e
 
 # Check if version parameter is provided
@@ -25,6 +28,23 @@ RELEASE_BRANCH="release/$VERSION"
 # Ensure we're in the repo root directory
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
+
+# Releases must originate on the public GitHub repo (canonical). Harness Code is a
+# downstream mirror, so pushing there would never reach GitHub / trigger the tag
+# workflow. Refuse to run unless 'origin' points at the GitHub repo.
+ORIGIN_URL="$(git config --get remote.origin.url || true)"
+case "$ORIGIN_URL" in
+  *github.com[:/]"$GITHUB_REPO"* )
+    : ;;  # ok, origin is the GitHub repo
+  * )
+    echo "❌ Error: 'origin' is not the GitHub repo ($GITHUB_REPO)."
+    echo "   Current origin: ${ORIGIN_URL:-<none>}"
+    echo "   Releases must be run from the GitHub clone (the public repo is canonical;"
+    echo "   Harness Code only mirrors from it). Clone and release from there:"
+    echo "     git clone https://github.com/$GITHUB_REPO.git"
+    exit 1
+    ;;
+esac
 
 # Check if working directory is clean
 if [ -n "$(git status --porcelain)" ]; then
@@ -124,11 +144,16 @@ else
   echo "📊 Regular version detected, PR will target the $MASTER_BRANCH branch"
 fi
 
+# Create PR URL on the public GitHub repo (canonical; Harness Code mirrors from it)
+PR_URL="https://github.com/$GITHUB_REPO/compare/$TARGET_BRANCH...$RELEASE_BRANCH?expand=1"
+
 echo ""
 echo "🎉 Release preparation completed successfully!"
 echo ""
+echo "Opening browser to create pull request..."
+open "$PR_URL" 2>/dev/null || echo "Open this URL to create the PR: $PR_URL"
+echo ""
 echo "Next steps:"
-echo "1. Open Harness Code (repo ios-thin-client, org PROD, project Harness_Split)"
-echo "   and create a PR from '$RELEASE_BRANCH' into '$TARGET_BRANCH'."
-echo "2. After merging, the tag '$VERSION' is created and mirrored to GitHub."
+echo "1. Complete the pull request to merge $RELEASE_BRANCH into $TARGET_BRANCH on GitHub."
+echo "2. After merging, the release-tag workflow creates and pushes the tag '$VERSION'."
 echo ""
