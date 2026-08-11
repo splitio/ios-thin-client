@@ -18,7 +18,9 @@ enum ControlType: String, Decodable {
     case unknown
 }
 
-class ThinNotification {
+// All stored properties across this hierarchy are immutable and Sendable; the compiler
+// can't verify that automatically for a non-final class, so it's marked unchecked.
+class ThinNotification: @unchecked Sendable {
     let type: ThinNotificationType
     let channel: String?
     let timestamp: Int64

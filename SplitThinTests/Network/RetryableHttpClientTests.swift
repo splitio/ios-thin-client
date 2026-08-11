@@ -133,15 +133,17 @@ final class DefaultRetryableHttpClientTest: XCTestCase {
         let client = createClient(policies: policies)
         let endpoint = createEndpoint()
 
+        // HttpResponse (from ios-client) isn't Sendable yet, so Task<HttpResponse, Error> can't
+        // be formed directly; box the result the same way DefaultRetryableHttpClient does.
         let task = Task {
-            try await client.execute(endpoint, category: .evaluations)
+            UncheckedSendableBox(value: try await client.execute(endpoint, category: .evaluations))
         }
 
         try await Task.sleep(nanoseconds: 50_000_000)
         task.cancel()
 
         do {
-            _ = try await task.value
+            _ = try await task.value.value
             XCTFail("Expected cancellation error")
         } catch is CancellationError {
             XCTAssertLessThan(httpClientMock.requestCount, 100)

@@ -2,6 +2,10 @@ import Foundation
 import XCTest
 @testable import SplitThin
 
+// XCTest runs one test method at a time, so treating test cases as Sendable is safe and
+// avoids having to annotate every test class that captures `self` in a Task/async let.
+extension XCTestCase: @retroactive @unchecked Sendable {}
+
 func withLock<T>(_ lock: NSLock, _ block: () -> T) -> T {
     lock.lock()
     defer { lock.unlock() }

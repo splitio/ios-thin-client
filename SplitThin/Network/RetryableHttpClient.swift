@@ -98,11 +98,11 @@ final class DefaultRetryableHttpClient: RetryableHttpClient, @unchecked Sendable
     }
 
     private func performRequest(endpoint: Endpoint, body: Data?) async throws -> HttpResponse {
-        try await withCheckedThrowingContinuation { continuation in
+        let box: UncheckedSendableBox<HttpResponse> = try await withCheckedThrowingContinuation { continuation in
             do {
                 _ = try httpClient.sendRequest(endpoint: endpoint, parameters: nil, headers: endpoint.headers, body: body)
                     .getResponse { response in
-                        continuation.resume(returning: response)
+                        continuation.resume(returning: UncheckedSendableBox(value: response))
                     } errorHandler: { error in
                         continuation.resume(throwing: RetryableHttpError.networkError(error))
                     }
@@ -110,6 +110,7 @@ final class DefaultRetryableHttpClient: RetryableHttpClient, @unchecked Sendable
                 continuation.resume(throwing: RetryableHttpError.networkError(error))
             }
         }
+        return box.value
     }
 
     private static let defaultUrlRequestSender: UrlRequestSender = { request in
