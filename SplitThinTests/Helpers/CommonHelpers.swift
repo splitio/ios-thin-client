@@ -2,10 +2,6 @@ import Foundation
 import XCTest
 @testable import SplitThin
 
-// XCTest runs one test method at a time, so treating test cases as Sendable is safe and
-// avoids having to annotate every test class that captures `self` in a Task/async let.
-extension XCTestCase: @retroactive @unchecked Sendable {}
-
 func withLock<T>(_ lock: NSLock, _ block: () -> T) -> T {
     lock.lock()
     defer { lock.unlock() }
@@ -22,12 +18,13 @@ extension XCTestCase {
         expectation(description: description)
     }
 
-    // Utility to improve testing legibility. 
-    // If the expectation doesn't fulfill in 3 seconds, THE TEST FAILS.
+    // Utility to improve testing legibility.
     func waitFor(_ expectations: XCTestExpectation..., timeout: Double = 3) {
+        let testCase = UncheckedSendableBox(value: self)
+        let expectations = UncheckedSendableBox(value: expectations)
         let semaphore = DispatchSemaphore(value: 0)
         Task {
-            await fulfillment(of: expectations, timeout: timeout)
+            await testCase.value.fulfillment(of: expectations.value, timeout: timeout)
             semaphore.signal()
         }
         semaphore.wait()

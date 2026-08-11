@@ -1,7 +1,7 @@
 import XCTest
 @testable import SplitThin
 
-final class DefaultEvaluationFetchCoordinatorTest: XCTestCase {
+final class DefaultEvaluationFetchCoordinatorTest: XCTestCase, @unchecked Sendable {
 
     private var provider: EvaluationProviderMock!
     private var coordinator: DefaultEvaluationFetchCoordinator!

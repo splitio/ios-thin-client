@@ -60,21 +60,23 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
 
     // MARK: - Register/remove listener
     func addListener(_ listener: SplitEventListener) {
+        let listener = UncheckedSendableBox(value: listener)
         processQueue.async { [weak self] in
             guard let self else { return }
             self.appendListener(listener)
 
             // Sticky events: replay already-fired state to late subscribers
             if let metadata = self.getReadyMetadata() {
-                DispatchQueue.main.async { listener.onReady(metadata) }
+                self.notifyOnMain(listener.value) { $0.onReady(metadata) }
             }
             if let metadata = self.getCacheMetadata() {
-                DispatchQueue.main.async { listener.onReadyFromCache(metadata) }
+                self.notifyOnMain(listener.value) { $0.onReadyFromCache(metadata) }
             }
         }
     }
 
     func removeListener(_ listener: SplitEventListener) {
+        let listener = UncheckedSendableBox(value: listener)
         processQueue.async { [weak self] in
             guard let self else { return }
             self.deleteListener(listener)
@@ -135,35 +137,27 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
         guard !isSdkReadyFired() else { return }
         setReadyMetadata(metadata)
 
-        getListeners().forEach { listener in 
-            DispatchQueue.main.async {  listener.onReady(metadata) } 
-        }
+        getListeners().forEach { notifyOnMain($0) { $0.onReady(metadata) } }
     }
 
     private func triggerReadyFromCache(_ metadata: SdkReadyFromCacheMetadata) {
         guard !isSdkReadyFromCacheFired() else { return }
         setCacheMetadata(metadata)
 
-        getListeners().forEach { listener in 
-            DispatchQueue.main.async {  listener.onReadyFromCache(metadata) } 
-        }
+        getListeners().forEach { notifyOnMain($0) { $0.onReadyFromCache(metadata) } }
     }
 
     private func triggerReadyTimedOut() {
         guard !isSdkReadyTimedOutFired() else { return }
         setSdkReadyTimedOutFired()
 
-        getListeners().forEach { listener in 
-            DispatchQueue.main.async {  listener.onReadyTimedOut() } 
-        }
+        getListeners().forEach { notifyOnMain($0) { $0.onReadyTimedOut() } }
     }
 
     private func triggerUpdate(_ metadata: SdkUpdateMetadata) {
         Logger.d("Triggering SDK event SDK_UPDATE")
 
-        getListeners().forEach { listener in 
-            DispatchQueue.main.async {  listener.onUpdate(metadata) } 
-        }
+        getListeners().forEach { notifyOnMain($0) { $0.onUpdate(metadata) } }
     }
 
     // MARK: - Thread-safe accessors
@@ -214,19 +208,24 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
         dataAccessQueue.sync { evaluationsUpdateReceived = true }
     }
 
-    private func appendListener(_ listener: SplitEventListener) {
-        dataAccessQueue.async { [weak self] in self?.listeners.append(listener) }
+    private func appendListener(_ listener: UncheckedSendableBox<SplitEventListener>) {
+        dataAccessQueue.async { [weak self] in self?.listeners.append(listener.value) }
     }
 
-    private func deleteListener(_ listener: SplitEventListener) {
+    private func deleteListener(_ listener: UncheckedSendableBox<SplitEventListener>) {
         dataAccessQueue.async { [weak self] in
             // Comparing memory addresses to find the exact EventListener (not just one that has the same content)
-            self?.listeners.removeElementByMemoryAddress(listener)
+            self?.listeners.removeElementByMemoryAddress(listener.value)
         }
     }
 
     private func getListeners() -> [SplitEventListener] {
         dataAccessQueue.sync { listeners }
+    }
+
+    private func notifyOnMain(_ listener: SplitEventListener, _ callback: @escaping @Sendable (SplitEventListener) -> Void) {
+        let listener = UncheckedSendableBox(value: listener)
+        DispatchQueue.main.async { callback(listener.value) }
     }
 }
 

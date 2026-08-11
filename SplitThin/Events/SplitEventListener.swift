@@ -3,7 +3,7 @@
 
 import Foundation
 
-public protocol SplitEventListener: Sendable {
+public protocol SplitEventListener {
     func onReady(_ metadata: SdkReadyMetadata)
     func onReadyFromCache(_ metadata: SdkReadyFromCacheMetadata)
     func onReadyTimedOut()

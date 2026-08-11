@@ -1,7 +1,8 @@
 import XCTest
 @testable import SplitThin
 
-final class EvaluationFetchCoordinatorEventsTest: XCTestCase {
+// XCTest runs test methods serially, so sending `self` into the concurrent fetches below is safe.
+final class EvaluationFetchCoordinatorEventsTest: XCTestCase, @unchecked Sendable {
 
     private var provider: EvaluationProviderMock!
     private var coordinator: DefaultEvaluationFetchCoordinator!

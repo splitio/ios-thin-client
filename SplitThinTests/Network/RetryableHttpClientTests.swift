@@ -3,7 +3,8 @@ import Http
 import BackoffCounter
 @testable import SplitThin
 
-final class DefaultRetryableHttpClientTest: XCTestCase {
+// XCTest runs test methods serially, so sending `self` into the concurrent requests below is safe.
+final class DefaultRetryableHttpClientTest: XCTestCase, @unchecked Sendable {
 
     private var httpClientMock: HttpClientStub!
     private var backoffCounterMock: BackoffCounterStub!
