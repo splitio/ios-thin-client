@@ -22,3 +22,7 @@ extension Array {
         }
     }
 }
+
+struct UncheckedSendableBox<Value>: @unchecked Sendable {
+    let value: Value
+}

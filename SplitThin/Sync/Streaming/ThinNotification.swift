@@ -18,7 +18,7 @@ enum ControlType: String, Decodable {
     case unknown
 }
 
-class ThinNotification {
+class ThinNotification: @unchecked Sendable {
     let type: ThinNotificationType
     let channel: String?
     let timestamp: Int64
@@ -52,7 +52,7 @@ enum UpdateStrategy: Int {
     case keyList = 2
 }
 
-class EvaluationUpdateNotification: ThinNotification {
+class EvaluationUpdateNotification: ThinNotification, @unchecked Sendable {
     let changeNumber: Int64
     let dataType: NotificationDataType?
     let updateStrategy: UpdateStrategy?
@@ -75,7 +75,7 @@ class EvaluationUpdateNotification: ThinNotification {
     }
 }
 
-class ThinControlNotification: ThinNotification {
+class ThinControlNotification: ThinNotification, @unchecked Sendable {
     let controlType: ControlType
 
     init(channel: String?, timestamp: Int64, controlType: ControlType) {
@@ -84,7 +84,7 @@ class ThinControlNotification: ThinNotification {
     }
 }
 
-class ThinOccupancyNotification: ThinNotification {
+class ThinOccupancyNotification: ThinNotification, @unchecked Sendable {
     let publishers: Int
 
     init(channel: String?, timestamp: Int64, publishers: Int) {
@@ -93,7 +93,7 @@ class ThinOccupancyNotification: ThinNotification {
     }
 }
 
-class ThinStreamingError: ThinNotification {
+class ThinStreamingError: ThinNotification, @unchecked Sendable {
     let message: String
     let code: Int
     let statusCode: Int?
