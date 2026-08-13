@@ -64,12 +64,14 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
             guard let self else { return }
             self.appendListener(listener)
 
+            let boxedListener = UncheckedSendableBox(value: listener)
+
             // Sticky events: replay already-fired state to late subscribers
             if let metadata = self.getReadyMetadata() {
-                DispatchQueue.main.async { listener.onReady(metadata) }
+                DispatchQueue.main.async { boxedListener.value.onReady(metadata) }
             }
             if let metadata = self.getCacheMetadata() {
-                DispatchQueue.main.async { listener.onReadyFromCache(metadata) }
+                DispatchQueue.main.async { boxedListener.value.onReadyFromCache(metadata) }
             }
         }
     }
@@ -135,8 +137,9 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
         guard !isSdkReadyFired() else { return }
         setReadyMetadata(metadata)
 
-        getListeners().forEach { listener in 
-            DispatchQueue.main.async {  listener.onReady(metadata) } 
+        getListeners().forEach { listener in
+            let boxedListener = UncheckedSendableBox(value: listener)
+            DispatchQueue.main.async { boxedListener.value.onReady(metadata) }
         }
     }
 
@@ -144,8 +147,9 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
         guard !isSdkReadyFromCacheFired() else { return }
         setCacheMetadata(metadata)
 
-        getListeners().forEach { listener in 
-            DispatchQueue.main.async {  listener.onReadyFromCache(metadata) } 
+        getListeners().forEach { listener in
+            let boxedListener = UncheckedSendableBox(value: listener)
+            DispatchQueue.main.async { boxedListener.value.onReadyFromCache(metadata) }
         }
     }
 
@@ -153,16 +157,18 @@ final class DefaultSplitEventsManager: SplitEventsManager, @unchecked Sendable {
         guard !isSdkReadyTimedOutFired() else { return }
         setSdkReadyTimedOutFired()
 
-        getListeners().forEach { listener in 
-            DispatchQueue.main.async {  listener.onReadyTimedOut() } 
+        getListeners().forEach { listener in
+            let boxedListener = UncheckedSendableBox(value: listener)
+            DispatchQueue.main.async { boxedListener.value.onReadyTimedOut() }
         }
     }
 
     private func triggerUpdate(_ metadata: SdkUpdateMetadata) {
         Logger.d("Triggering SDK event SDK_UPDATE")
 
-        getListeners().forEach { listener in 
-            DispatchQueue.main.async {  listener.onUpdate(metadata) } 
+        getListeners().forEach { listener in
+            let boxedListener = UncheckedSendableBox(value: listener)
+            DispatchQueue.main.async { boxedListener.value.onUpdate(metadata) }
         }
     }
 
