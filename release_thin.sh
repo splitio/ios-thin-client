@@ -72,7 +72,12 @@ fi
 
 # Update Version.swift
 echo "📝 Updating Version.swift to $VERSION..."
-sed -i '' "s/private static let version = \".*\"/private static let version = \"$VERSION\"/" SplitThin/Common/Version.swift
+VERSION_FILE="SplitThin/Common/Version.swift"
+if ! grep -q 'private static let version = "[^"]*"' "$VERSION_FILE"; then
+  echo "❌ Error: could not find version line in $VERSION_FILE"
+  exit 1
+fi
+sed -i '' "s/private static let version = \".*\"/private static let version = \"$VERSION\"/" "$VERSION_FILE"
 
 # Update CHANGES.txt if not a pre-release version
 if [ "$IS_PRERELEASE" = false ]; then
