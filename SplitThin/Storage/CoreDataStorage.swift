@@ -403,9 +403,7 @@ final class CoreDataStorage: @unchecked Sendable {
 
     private func withContext<T>(_ block: @escaping (NSManagedObjectContext) throws -> T) async throws -> T {
         let context = container.newBackgroundContext()
-        // `T` is not Sendable, so box it before crossing the continuation boundary. Newer Swift
-        // toolchains accept the bare crossing via region-based isolation, but older ones (e.g. the CI
-        // runner) reject it as a hard error; the box keeps this portable across toolchains.
+
         let boxed: UncheckedSendableBox<T> = try await withCheckedThrowingContinuation { continuation in
             context.perform {
                 do {

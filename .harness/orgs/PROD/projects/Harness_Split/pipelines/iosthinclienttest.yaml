@@ -50,7 +50,7 @@ pipeline:
                       .harness/scripts/install-deps.sh
               - step:
                   type: Run
-                  name: Swift 6 strict concurrency check
+                  name: Build and Test (Swift 6 strict concurrency)
                   identifier: swift6_strict_concurrency_check
                   spec:
                     shell: Sh
@@ -71,6 +71,19 @@ pipeline:
                       security list-keychains -d user -s "$KEYCHAIN_PATH"
 
                       swift test -Xswiftc -swift-version -Xswiftc 6
+
+              - step:
+                  type: Run
+                  name: Build and Test (Swift 5)
+                  identifier: swift5
+                  spec:
+                    shell: Sh
+                    command: |
+                      set -euo pipefail
+                      # Swift 5 is the mode we actually ship (Package.swift is swift-tools-version 5.5),
+                      # so validate the shipped semantics first, then re-run under Swift 6 strict for
+                      # forward-compat.
+                      swift test
               - step:
                   type: RunTests
                   name: Run unit tests
