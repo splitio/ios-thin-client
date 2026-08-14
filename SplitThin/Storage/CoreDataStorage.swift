@@ -403,15 +403,17 @@ final class CoreDataStorage: @unchecked Sendable {
 
     private func withContext<T>(_ block: @escaping (NSManagedObjectContext) throws -> T) async throws -> T {
         let context = container.newBackgroundContext()
-        return try await withCheckedThrowingContinuation { continuation in
+
+        let boxed: UncheckedSendableBox<T> = try await withCheckedThrowingContinuation { continuation in
             context.perform {
                 do {
-                    continuation.resume(returning: try block(context))
+                    continuation.resume(returning: UncheckedSendableBox(value: try block(context)))
                 } catch {
                     continuation.resume(throwing: error)
                 }
             }
         }
+        return boxed.value
     }
 
     // MARK: - Model Definition
