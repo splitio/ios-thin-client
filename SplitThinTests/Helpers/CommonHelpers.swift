@@ -19,11 +19,14 @@ extension XCTestCase {
     }
 
     // Utility to improve testing legibility. 
-    // If the expectation doesn't fulfill in 3 seconds, THE TEST FAILS.
+    // self and expectations are boxed because XCTestCase/XCTestExpectation aren't Sendable, but
+    // XCTest runs test methods serially, so sending them into this Task is safe.
     func waitFor(_ expectations: XCTestExpectation..., timeout: Double = 3) {
+        let testCase = UncheckedSendableBox(value: self)
+        let expectations = UncheckedSendableBox(value: expectations)
         let semaphore = DispatchSemaphore(value: 0)
         Task {
-            await fulfillment(of: expectations, timeout: timeout)
+            await testCase.value.fulfillment(of: expectations.value, timeout: timeout)
             semaphore.signal()
         }
         semaphore.wait()

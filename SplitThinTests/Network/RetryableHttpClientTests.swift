@@ -131,17 +131,17 @@ final class DefaultRetryableHttpClientTest: XCTestCase {
         ]
 
         let client = createClient(policies: policies)
-        let endpoint = createEndpoint()
+        let endpoint = UncheckedSendableBox(value: createEndpoint())
 
         let task = Task {
-            try await client.execute(endpoint, category: .evaluations)
+            UncheckedSendableBox(value: try await client.execute(endpoint.value, category: .evaluations))
         }
 
         try await Task.sleep(nanoseconds: 50_000_000)
         task.cancel()
 
         do {
-            _ = try await task.value
+            _ = try await task.value.value
             XCTFail("Expected cancellation error")
         } catch is CancellationError {
             XCTAssertLessThan(httpClientMock.requestCount, 100)

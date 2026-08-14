@@ -1,7 +1,7 @@
 import XCTest
 @testable import SplitThin
 
-final class DefaultAuthProviderTest: XCTestCase {
+final class DefaultAuthProviderTest: XCTestCase, @unchecked Sendable {
 
     private var storageMock: CredentialStorageMock!
     private var fetcherMock: CredentialFetcherMock!
