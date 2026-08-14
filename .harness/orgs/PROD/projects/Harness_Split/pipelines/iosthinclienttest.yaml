@@ -59,6 +59,17 @@ pipeline:
                       # Package.swift stays on swift-tools-version 5.5 (toolchain compat), so this
                       # is the only place that actually validates the SDK against Swift 6 strict mode.
                       swift build -Xswiftc -swift-version -Xswiftc 6
+
+                      # Headless macOS runners have no unlocked login keychain, so generic-password
+                      # items never round-trip and KeychainCredentialStorage persistence tests fail.
+                      # Create and unlock a temporary default keychain for this session.
+                      KEYCHAIN_PATH="$(pwd)/ci.keychain-db"
+                      security create-keychain -p "" "$KEYCHAIN_PATH"
+                      security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+                      security unlock-keychain -p "" "$KEYCHAIN_PATH"
+                      security default-keychain -s "$KEYCHAIN_PATH"
+                      security list-keychains -d user -s "$KEYCHAIN_PATH"
+
                       swift test -Xswiftc -swift-version -Xswiftc 6
               - step:
                   type: RunTests
