@@ -44,10 +44,16 @@ jobs:
           echo "✅ Version.swift contains correct version: $VERSION_IN_FILE"
 
       - name: Create tag
+        env:
+          VERSION: ${{ steps.extract-version.outputs.version }}
         run: |
-          echo "🏷️ Creating tag ${{ steps.extract-version.outputs.version }}..."
-          git tag -a "${{ steps.extract-version.outputs.version }}" -m "Release ${{ steps.extract-version.outputs.version }}"
-          git push origin "${{ steps.extract-version.outputs.version }}"
+          if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+            echo "ℹ️ Tag $VERSION already exists locally — skipping create."
+          else
+            echo "🏷️ Creating tag $VERSION..."
+            git tag -a "$VERSION" -m "Release $VERSION"
+          fi
+          git push origin "$VERSION"
 
       - name: Verify tag in remote
         run: |
