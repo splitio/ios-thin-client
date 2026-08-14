@@ -62,7 +62,7 @@ echo "📑 Current branch: $CURRENT_BRANCH"
 
 # Create release branch from current branch
 echo "🌿 Creating branch $RELEASE_BRANCH from $CURRENT_BRANCH..."
-git checkout -b "$RELEASE_BRANCH"
+git checkout -B "$RELEASE_BRANCH"
 
 # Any version with a "-" suffix (rc, beta, alpha...) is a pre-release
 IS_PRERELEASE=false
