@@ -9,6 +9,12 @@ public protocol SplitFactory {
     var client: SplitClient { get }
     func getClient(_ target: Target?) -> SplitClient
     func manager() -> SplitManager
+    /// Sets factory-wide user consent. `true` grants (events are persisted and submitted),
+    /// `false` declines (events are not tracked). `UNKNOWN` is only available as the initial
+    /// value via `SplitClientConfig`.
+    func setUserConsent(enabled: Bool)
+    /// Current factory-wide user consent status.
+    var userConsent: UserConsent { get }
     func destroy() async
 }
 
@@ -36,6 +42,10 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
 
     private var pushDisabled = false
     private let fallbackLock = NSLock()
+
+    private let consentManager: UserConsentManager
+    private let consentLock = NSLock()
+    private var currentConsent: UserConsent
 
     private static let initErrorMessage = "Something happened on Split init and the client couldn't be created"
 
@@ -67,6 +77,8 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         self.splitManager = splitManager
         self.observer = factoryObserver
         self.telemetryStorage = telemetryStorage
+        self.currentConsent = config.userConsent
+        self.consentManager = DefaultUserConsentManager(initialStatus: config.userConsent)
 
         splitManager.activeTargetsProvider = { [weak self] in
             guard let self else { return [] }
@@ -109,6 +121,16 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         return FailedManager()
     }
 
+    public var userConsent: UserConsent {
+        withLock(consentLock) { currentConsent }
+    }
+
+    public func setUserConsent(enabled: Bool) {
+        let status: UserConsent = enabled ? .granted : .declined
+        withLock(consentLock) { currentConsent = status }
+        Task { [consentManager] in await consentManager.set(status) }
+    }
+
     public func destroy() async {
         guard !isDestroyed else { return }
         observer.notify(event: .destroyStarted)
@@ -117,6 +139,8 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         for client in clients.values {
             await client.destroy()
         }
+        // Discard any events buffered in memory while consent was unknown.
+        await consentManager.clearPending()
         clients.removeAll()
         syncManagers.removeAll()
 
@@ -152,7 +176,10 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
             let treatmentsManager = DefaultTreatmentsManager(target: target, evaluationRepository: evaluationRepository, fallbackCalculator: fallbackCalculator)
             
             // Tracking
-            let eventsStorage = DefaultEventsStorage(storage: coreDataStorage)
+            // The temporary storage buffers events in memory while consent is not granted,
+            // and flushes them to the persistent store on grant.
+            let persistentEventsStorage = DefaultEventsStorage(storage: coreDataStorage)
+            let eventsStorage = UserConsentTemporaryStorage(persistentStorage: persistentEventsStorage, persistenceEnabled: config.userConsent == .granted)
             let eventSerializer = DefaultEventSerializer()
             let eventsSubmitter = DefaultHttpEventsSubmitter(secureHttpClient: secureHttpClient)
             let eventTask = DefaultEventTask(storage: eventsStorage, serializer: eventSerializer, submitter: eventsSubmitter, observer: eventDispatcher, target: target)
@@ -176,10 +203,15 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         clients[target.key] = client
         withLock(fallbackLock) { syncManagers[target.key] = syncManager }
 
+        // Consent governs the events components: registering applies the current status,
+        // which starts the submission scheduler only when consent is granted.
+        Task { [consentManager] in
+            await consentManager.register(ConsentControllableBundle(storage: eventsStorage, tracker: eventsTracker, scheduler: eventsScheduler, coordinator: submissionCoordinator))
+        }
+
         // 4. Start
         eventsManager.start()
         syncManager.start()
-        eventsScheduler.start()
 
         // If push was already disabled by the server, this client must poll instead of stream.
         let alreadyPushDisabled = withLock(fallbackLock) { pushDisabled }

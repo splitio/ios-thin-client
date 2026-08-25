@@ -195,6 +195,41 @@ final class SessionMetricsDTOTest: XCTestCase {
         XCTAssertEqual(runtimeDict["lastEvaluationsSync"] as? Int64, 12345)
     }
 
+    // MARK: - User consent
+
+    func testUserConsentDefaultsToGrantedWhenOmitted() {
+        let config = SessionMetricsDTO.ConfigMetrics(syncMode: "streaming", pushRate: 60, evaluationRefreshRate: 300)
+
+        XCTAssertEqual(config.userConsent, UserConsent.granted.rawValue)
+    }
+
+    func testUserConsentRoundTrips() throws {
+        let metrics = SessionMetricsDTO(sessionId: "sess-1",
+                                        config: .init(syncMode: "streaming", pushRate: 60, evaluationRefreshRate: 300, userConsent: UserConsent.unknown.rawValue),
+                                        runtime: .init(),
+                                        platform: .init())
+
+        let data = try Json.encode(metrics)
+        let decoded = try Json.decode(from: data, to: SessionMetricsDTO.self)
+
+        XCTAssertEqual(decoded.config.userConsent, UserConsent.unknown.rawValue)
+    }
+
+    func testDecodesUserConsentFromRawJson() throws {
+        let json = """
+        {
+            "sessionId": "sess-1",
+            "config": {"syncMode": "streaming", "pushRate": 60, "evaluationRefreshRate": 300, "userConsent": 3},
+            "runtime": {"successfulJwtFetches": 0, "evaluationCount": 0},
+            "platform": {"name": "ios-thin", "version": "0.1.0"}
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try Json.decode(from: json, to: SessionMetricsDTO.self)
+
+        XCTAssertEqual(decoded.config.userConsent, UserConsent.declined.rawValue)
+    }
+
     // MARK: - PlatformMetrics defaults
 
     func testPlatformMetricsDefaultValues() {

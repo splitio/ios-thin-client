@@ -27,8 +27,9 @@ public struct SplitClientConfig: Sendable {
     let pushRate: Int
     let fallbackTreatments: FallbackTreatmentsConfig
     let evaluationFilters: EvaluationFilters?
+    let userConsent: UserConsent
 
-    fileprivate init(syncMode: SyncMode, serviceEndpoints: ServiceEndpoints?, configsEnabled: Bool, logLevel: LogLevel, pollingRate: Int, readyTimeout: Int, prefix: String?, pushRate: Int, fallbackTreatments: FallbackTreatmentsConfig, evaluationFilters: EvaluationFilters?) {
+    fileprivate init(syncMode: SyncMode, serviceEndpoints: ServiceEndpoints?, configsEnabled: Bool, logLevel: LogLevel, pollingRate: Int, readyTimeout: Int, prefix: String?, pushRate: Int, fallbackTreatments: FallbackTreatmentsConfig, evaluationFilters: EvaluationFilters?, userConsent: UserConsent) {
         self.syncMode = syncMode
         self.serviceEndpoints = serviceEndpoints
         self.configsEnabled = configsEnabled
@@ -39,6 +40,7 @@ public struct SplitClientConfig: Sendable {
         self.pushRate = pushRate
         self.fallbackTreatments = fallbackTreatments
         self.evaluationFilters = evaluationFilters
+        self.userConsent = userConsent
     }
 
     /// Creates a new builder for `SplitClientConfig`.
@@ -60,6 +62,7 @@ public final class SplitConfigBuilder {
     private var pushRate: Int = 1800
     private var fallbackTreatments: FallbackTreatmentsConfig = FallbackTreatmentsConfig.builder().build()
     private var evaluationFilters: EvaluationFilters?
+    private var userConsent: UserConsent = .granted
 
     // Internal for testing
     var minEvaluationRefreshRateOverride: Int?
@@ -184,6 +187,16 @@ public final class SplitConfigBuilder {
         return self
     }
 
+    /// Sets the initial user consent status. Default: `.granted`.
+    ///
+    /// Use `.unknown` to track events in memory (without persisting or submitting them)
+    /// until consent is resolved at runtime via `SplitFactory.setUserConsent(enabled:)`.
+    @discardableResult
+    public func set(userConsent: UserConsent) -> Self {
+        self.userConsent = userConsent
+        return self
+    }
+
     /// Builds the `SplitClientConfig` with the configured values.
     public func build() -> SplitClientConfig {
         SplitClientConfig(
@@ -196,7 +209,8 @@ public final class SplitConfigBuilder {
             prefix: prefix,
             pushRate: pushRate,
             fallbackTreatments: fallbackTreatments,
-            evaluationFilters: evaluationFilters
+            evaluationFilters: evaluationFilters,
+            userConsent: userConsent
         )
     }
 }

@@ -47,11 +47,15 @@ extension SessionMetricsDTO {
         let syncMode: String
         let pushRate: Int
         let evaluationRefreshRate: Int
+        // Initial user consent status (raw value). Records the value at init time,
+        // not runtime transitions.
+        let userConsent: Int
 
-        init(syncMode: String, pushRate: Int, evaluationRefreshRate: Int) {
+        init(syncMode: String, pushRate: Int, evaluationRefreshRate: Int, userConsent: Int = UserConsent.granted.rawValue) {
             self.syncMode = syncMode
             self.pushRate = pushRate
             self.evaluationRefreshRate = evaluationRefreshRate
+            self.userConsent = userConsent
         }
 
         init(jsonObject: Any) throws {
@@ -66,6 +70,7 @@ extension SessionMetricsDTO {
             self.syncMode = syncMode
             self.pushRate = pushRate
             self.evaluationRefreshRate = evaluationRefreshRate
+            self.userConsent = dict["userConsent"] as? Int ?? UserConsent.granted.rawValue
         }
 
         func toJsonObject() -> Any {
@@ -73,6 +78,7 @@ extension SessionMetricsDTO {
             dict["syncMode"] = syncMode
             dict["pushRate"] = pushRate
             dict["evaluationRefreshRate"] = evaluationRefreshRate
+            dict["userConsent"] = userConsent
             return dict
         }
     }

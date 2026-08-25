@@ -8,6 +8,7 @@ final class EventsTrackerMock: EventsTracker, @unchecked Sendable {
 
     var trackedEvents = [EventEntity]()
     var flushCallCount = 0
+    var trackingEnabled = true
 
     func track(_ event: EventEntity) async {
         trackedEvents.append(event)
@@ -15,5 +16,9 @@ final class EventsTrackerMock: EventsTracker, @unchecked Sendable {
 
     func flush() async {
         flushCallCount += 1
+    }
+
+    func setTrackingEnabled(_ enabled: Bool) {
+        trackingEnabled = enabled
     }
 }

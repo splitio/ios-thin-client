@@ -7,6 +7,7 @@ import Logging
 protocol EventsTracker: Sendable {
     func track(_ event: EventEntity) async
     func flush() async
+    func setTrackingEnabled(_ enabled: Bool)
 }
 
 final class DefaultEventsTracker: EventsTracker, @unchecked Sendable {
@@ -27,6 +28,7 @@ final class DefaultEventsTracker: EventsTracker, @unchecked Sendable {
     private var buffer = [EventEntity]()
     private let bufferLock = NSLock()
     private var windowTask: Task<Void, Never>?
+    private var trackingEnabled = true
 
     init(storage: EventsWriteStorage & EventsReadStorage, coordinator: EventSubmissionCoordinator, observer: Observer) {
         self.storage = storage
@@ -36,15 +38,21 @@ final class DefaultEventsTracker: EventsTracker, @unchecked Sendable {
 
     // Validation happens upstream in DefaultTracker (Tracker module) before events reach this point.
     // Events are buffered and written in batches; the periodic submission is handled by the worker.
+    func setTrackingEnabled(_ enabled: Bool) {
+        withLock(bufferLock) { trackingEnabled = enabled }
+    }
+
     func track(_ event: EventEntity) async {
         let shouldFlushNow = withLock(bufferLock) {
+            guard trackingEnabled else { return false }
+
             buffer.append(event)
-            // The buffer is full: drain it immediately rather than waiting for the window.
+
             if buffer.count >= Self.maxBufferSize {
                 return true
             }
-            // Open a write window on the first event. While it's open, every event
-            // that arrives is captured into the same buffer and written together.
+
+            // Open a write time window on the first event
             if windowTask == nil {
                 windowTask = Task { [weak self] in
                     try? await Task.sleep(nanoseconds: Self.accumulationWindowNanos)

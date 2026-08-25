@@ -7,6 +7,8 @@ import Logging
 protocol EventSubmissionCoordinator: Sendable {
     /// If a submission is already running, new triggers should be dropped.
     func triggerSubmission(reason: EventsFlushReason) async
+    /// When disabled (consent not granted), submissions are suppressed even if triggered.
+    func setSubmissionEnabled(_ enabled: Bool)
 }
 
 final class DefaultEventSubmissionCoordinator: EventSubmissionCoordinator, @unchecked Sendable {
@@ -15,6 +17,7 @@ final class DefaultEventSubmissionCoordinator: EventSubmissionCoordinator, @unch
     private let observer: Observer
 
     private var isSubmitting = false
+    private var submissionEnabled = true
     private let lock = NSLock()
 
     init(eventTask: EventTask, observer: Observer) {
@@ -22,8 +25,13 @@ final class DefaultEventSubmissionCoordinator: EventSubmissionCoordinator, @unch
         self.observer = observer
     }
 
+    func setSubmissionEnabled(_ enabled: Bool) {
+        withLock(lock) { submissionEnabled = enabled }
+    }
+
     func triggerSubmission(reason: EventsFlushReason) async {
         let shouldRun = withLock(lock) {
+            guard submissionEnabled else { return false }
             guard !isSubmitting else { return false }
             isSubmitting = true
             return true

@@ -3,7 +3,7 @@ import Http
 import Tracker
 @testable import SplitThin
 
-func buildFactory(httpClient: SecureHttpClient? = nil, retryableHttpClient: RetryableHttpClient? = nil, syncMode: SyncMode = .singleSync, refreshRate: Int = 1, readyTimeout: Int = -1, target: Target = Target(matchingKey: "user-123", trafficType: "user"), configsEnabled: Bool = false, prefix: String? = nil, fallbackTreatments: FallbackTreatmentsConfig? = nil, observer: Observer? = nil) throws -> SplitFactory {
+func buildFactory(httpClient: SecureHttpClient? = nil, retryableHttpClient: RetryableHttpClient? = nil, syncMode: SyncMode = .singleSync, refreshRate: Int = 1, readyTimeout: Int = -1, target: Target = Target(matchingKey: "user-123", trafficType: "user"), configsEnabled: Bool = false, prefix: String? = nil, fallbackTreatments: FallbackTreatmentsConfig? = nil, userConsent: UserConsent = .granted, observer: Observer? = nil) throws -> SplitFactory {
 
     var configBuilder = SplitClientConfig.builder()
                                          .setMinEvaluationRefreshRate(1)
@@ -12,6 +12,7 @@ func buildFactory(httpClient: SecureHttpClient? = nil, retryableHttpClient: Retr
                                          .set(readyTimeout: readyTimeout)
                                          .set(configsEnabled: configsEnabled)
                                          .set(prefix: prefix)
+                                         .set(userConsent: userConsent)
 
     if let fallbacks = fallbackTreatments {
         configBuilder = configBuilder.set(fallbackTreatments: fallbacks)
