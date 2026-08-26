@@ -1,4 +1,4 @@
-// swift-tools-version: 5.6
+// swift-tools-version: 5.5
 import PackageDescription
 
 let package = Package(
@@ -8,10 +8,7 @@ let package = Package(
         .library(name: "SplitThin", targets: ["SplitThin"]),
     ],
     dependencies: [
-        .package(
-            url: "https://github.com/splitio/ios-client.git",
-            exact: "3.7.2-rc1"
-        )
+        .package(url: "https://github.com/splitio/ios-client.git", "3.7.2-rc1" ... "3.7.2-rc1")
     ],
     targets: [
         .target(
