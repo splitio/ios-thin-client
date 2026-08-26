@@ -1,4 +1,4 @@
-// swift-tools-version: 5.5
+// swift-tools-version: 5.6
 import PackageDescription
 
 let package = Package(
@@ -10,7 +10,7 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/splitio/ios-client.git",
-            revision: "e256f22a7c98af2643ffd03cc60a2b24cf90524f"
+            exact: "3.7.2-rc1"
         )
     ],
     targets: [
