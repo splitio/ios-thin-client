@@ -298,10 +298,10 @@ final class CoreDataStorage: @unchecked Sendable {
         }
     }
 
-    func getTelemetrySessions(excluding sessionId: String) async -> [(sessionId: String, metricsJson: String, lastUpdateTimestamp: Double)] {
+    func getTelemetrySessions(excluding sessionIds: Set<String>) async -> [(sessionId: String, metricsJson: String, lastUpdateTimestamp: Double)] {
         (try? await withContext { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.telemetrySessionEntity)
-            request.predicate = NSPredicate(format: "sessionId != %@", sessionId)
+            request.predicate = NSPredicate(format: "NOT (sessionId IN %@)", Array(sessionIds))
             request.sortDescriptors = [NSSortDescriptor(key: "lastUpdateTimestamp", ascending: true)]
 
             return try context.fetch(request).compactMap { result -> (String, String, Double)? in

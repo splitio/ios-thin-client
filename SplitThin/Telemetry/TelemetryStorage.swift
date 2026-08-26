@@ -12,7 +12,7 @@ struct TelemetrySessionRecord: Sendable {
 
 protocol TelemetryReadStorage: Sendable {
     func getAll() async -> [TelemetrySessionRecord]
-    func getNonActive(activeSessionId: String) async -> [TelemetrySessionRecord]
+    func getNonActive(activeSessionIds: Set<String>) async -> [TelemetrySessionRecord]
 }
 
 protocol TelemetryWriteStorage: Sendable {
@@ -57,8 +57,8 @@ final class DefaultTelemetryStorage: TelemetryReadStorage, TelemetryWriteStorage
         }
     }
 
-    func getNonActive(activeSessionId: String) async -> [TelemetrySessionRecord] {
-        let rows = await storage.getTelemetrySessions(excluding: activeSessionId)
+    func getNonActive(activeSessionIds: Set<String>) async -> [TelemetrySessionRecord] {
+        let rows = await storage.getTelemetrySessions(excluding: activeSessionIds)
         return rows.compactMap { row in
             deserialize(sessionId: row.sessionId, json: row.metricsJson, timestamp: row.lastUpdateTimestamp)
         }

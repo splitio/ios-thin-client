@@ -12,6 +12,17 @@ public protocol SplitFactory {
     func destroy() async
 }
 
+// Tracks the telemetry sessions currently owned by live clients. The factory-wide
+// telemetry submitter consults this to avoid sending a session that's still being updated.
+private final class ActiveSessionRegistry: @unchecked Sendable {
+    private var ids = Set<String>()
+    private let lock = NSLock()
+
+    func add(_ id: String) { withLock(lock) { _ = ids.insert(id) } }
+    func remove(_ id: String) { withLock(lock) { ids.remove(id) } }
+    var snapshot: Set<String> { withLock(lock) { ids } }
+}
+
 public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
 
     private let sdkKey: SdkKey
@@ -28,6 +39,13 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     private let evaluationStorage: EvaluationReadStorage
     private let coreDataStorage: CoreDataStorage
     private let telemetryStorage: TelemetryReadStorage & TelemetryWriteStorage
+
+    // Factory-wide submission pipeline. Single owners of the shared event queue and
+    // telemetry store, so read → POST → delete is serialized and never duplicated.
+    private let eventsTracker: EventsTracker
+    private let eventsScheduler: EventsPeriodicScheduler
+    private let telemetrySubmitter: TelemetrySubmitter
+    private let sessionRegistry = ActiveSessionRegistry()
 
     private var splitManager: DefaultSplitManager?
     private var clients = [Key: SplitClient]()
@@ -68,6 +86,18 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         self.observer = factoryObserver
         self.telemetryStorage = telemetryStorage
 
+        // Shared events submission pipeline: one instance drains the global event queue.
+        let eventsStorage = DefaultEventsStorage(storage: coreDataStorage)
+        let eventsSubmitter = DefaultHttpEventsSubmitter(secureHttpClient: secureHttpClient)
+        let eventTask = DefaultEventTask(storage: eventsStorage, serializer: DefaultEventSerializer(), submitter: eventsSubmitter, observer: factoryObserver)
+        let submissionCoordinator = DefaultEventSubmissionCoordinator(eventTask: eventTask, observer: factoryObserver)
+        self.eventsTracker = DefaultEventsTracker(storage: eventsStorage, coordinator: submissionCoordinator, observer: factoryObserver)
+        self.eventsScheduler = DefaultEventsPeriodicScheduler(coordinator: submissionCoordinator, intervalSeconds: config.pushRate)
+
+        // Shared telemetry submitter: excludes sessions owned by live clients per flush.
+        let registry = sessionRegistry
+        self.telemetrySubmitter = DefaultTelemetrySubmitter(storage: telemetryStorage, secureHttpClient: secureHttpClient, activeSessionIdsProvider: { registry.snapshot })
+
         splitManager.activeTargetsProvider = { [weak self] in
             guard let self else { return [] }
             return self.clients.values.map { $0.target }
@@ -80,6 +110,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
 
         observer.notify(event: .factoryInitStarted)
         createClient(target: target)
+        eventsScheduler.start()
         observer.notify(event: .factoryInitCompleted)
     }
 
@@ -114,11 +145,19 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         observer.notify(event: .destroyStarted)
         isDestroyed = true
 
+        // Stop the shared periodic flusher before tearing clients down so no new
+        // submission is triggered mid-destroy.
+        eventsScheduler.stop()
+
         for client in clients.values {
             await client.destroy()
         }
         clients.removeAll()
         syncManagers.removeAll()
+
+        // Final drain: any events still buffered and any telemetry sessions now orphaned.
+        await eventsTracker.flush()
+        await telemetrySubmitter.flush(count: nil)
 
         splitManager = nil
         (evaluationRepository as? DefaultEvaluationRepository)?.clear() // clear in-memory flags
@@ -140,10 +179,10 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
             eventDispatcher.register(eventsManager)
             eventDispatcher.register(LoggingObserver())
 
-            // Telemetry
+            // Telemetry (session is genuinely per-client; submission is shared)
             let telemetryObserver = TelemetryObserver(storage: telemetryStorage, sessionId: UUID().uuidString, config: config)
             eventDispatcher.register(telemetryObserver)
-            let telemetrySubmitter = DefaultTelemetrySubmitter(storage: telemetryStorage, secureHttpClient: secureHttpClient, activeSessionId: telemetryObserver.sessionId)
+            sessionRegistry.add(telemetryObserver.sessionId)
 
             // Sync
             let periodicScheduler = DefaultEvaluationPeriodicScheduler(fetchCoordinator: fetchCoordinator, evaluationRepository: evaluationRepository, observer: eventDispatcher, target: target, filters: evaluationFilters, intervalSeconds: config.pollingRate)
@@ -151,14 +190,9 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
             let fallbackCalculator = DefaultFallbackTreatmentsCalculator(fallbacksConfig: config.fallbackTreatments)
             let treatmentsManager = DefaultTreatmentsManager(target: target, evaluationRepository: evaluationRepository, fallbackCalculator: fallbackCalculator)
             
-            // Tracking
-            let eventsStorage = DefaultEventsStorage(storage: coreDataStorage)
-            let eventSerializer = DefaultEventSerializer()
-            let eventsSubmitter = DefaultHttpEventsSubmitter(secureHttpClient: secureHttpClient)
-            let eventTask = DefaultEventTask(storage: eventsStorage, serializer: eventSerializer, submitter: eventsSubmitter, observer: eventDispatcher, target: target)
-            let submissionCoordinator = DefaultEventSubmissionCoordinator(eventTask: eventTask, observer: eventDispatcher)
-            let eventsTracker = DefaultEventsTracker(storage: eventsStorage, coordinator: submissionCoordinator, observer: eventDispatcher)
-            let eventsScheduler = DefaultEventsPeriodicScheduler(coordinator: submissionCoordinator, intervalSeconds: config.pushRate)
+            // Tracking: validation/traffic-type are per-client; events feed the shared tracker,
+            // carrying their identity as data (EventEntity.key) rather than routing by client.
+            let sharedEventsTracker = eventsTracker
             let tracker = DefaultTracker(defaultTrafficType: target.trafficType, initialEventSizeInBytes: 1024, eventValidator: ThinEventValidator(), propertyValidator: ThinPropertyValidator(), logger: ThinTrackerLogger(), onEventPush: { trackerEvent in
                 guard !trackerEvent.trafficType.isEmpty else {
                     Logger.e("Tracker event not tracked because trafficType is empty")
@@ -166,11 +200,13 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
                 }
                 
                 let event = EventEntity(key: trackerEvent.key ?? "", trafficType: trackerEvent.trafficType, eventType: trackerEvent.eventType, value: trackerEvent.value, properties: trackerEvent.properties, timestamp: Date(timeIntervalSince1970: Double(trackerEvent.timestamp ?? 0) / 1000.0))
-                Task { await eventsTracker.track(event) }
+                Task { await sharedEventsTracker.track(event) }
             })
 
         // 2. Create
-        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager, authProvider: authProvider, observer: eventDispatcher, syncManager: syncManager, tracker: tracker, eventsTracker: eventsTracker, eventsScheduler: eventsScheduler, telemetryObserver: telemetryObserver, telemetrySubmitter: telemetrySubmitter, fetchCoordinator: fetchCoordinator, evaluationRepository: evaluationRepository)
+        let sessionId = telemetryObserver.sessionId
+        let registry = sessionRegistry
+        let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager, authProvider: authProvider, observer: eventDispatcher, syncManager: syncManager, tracker: tracker, eventsTracker: eventsTracker, telemetryObserver: telemetryObserver, telemetrySubmitter: telemetrySubmitter, fetchCoordinator: fetchCoordinator, evaluationRepository: evaluationRepository, onDestroyed: { registry.remove(sessionId) })
 
         // 3. Register
         clients[target.key] = client
@@ -179,7 +215,6 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         // 4. Start
         eventsManager.start()
         syncManager.start()
-        eventsScheduler.start()
 
         // If push was already disabled by the server, this client must poll instead of stream.
         let alreadyPushDisabled = withLock(fallbackLock) { pushDisabled }

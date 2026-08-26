@@ -4,7 +4,7 @@
 import Foundation
 
 protocol HttpEventsSubmitter: Sendable {
-    func submit(payload: Data, target: Target) async throws
+    func submit(payload: Data) async throws
 }
 
 final class DefaultHttpEventsSubmitter: HttpEventsSubmitter {
@@ -15,7 +15,7 @@ final class DefaultHttpEventsSubmitter: HttpEventsSubmitter {
         self.secureHttpClient = secureHttpClient
     }
 
-    func submit(payload: Data, target: Target) async throws {
+    func submit(payload: Data) async throws {
         let response = try await secureHttpClient.postEvents(payload: payload)
         if response.code == 401 {
             throw CredentialFetcherError.unauthorized

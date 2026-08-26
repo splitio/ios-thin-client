@@ -58,42 +58,39 @@ final class TelemetryE2ETest: XCTestCase {
         await freshFactory.destroy()
     }
 
-    func testDestroyPersistsSessionAndNextFactoryFlushesIt() async throws {
-        waitUntilReady()
+    func testDestroySubmitsCompletedSession() async throws {
+        // Isolated DB so residual sessions from other tests don't leak into the assertions.
+        let isolatedConfig = SplitClientConfig.builder()
+                                              .setMinEvaluationRefreshRate(1)
+                                              .set(prefix: "telemetry_\(UUID().uuidString.prefix(8))")
+                                              .build()
 
-        factory.client.getTreatment("flag1")
+        let builder = DefaultSplitFactoryBuilder()
+        builder.setSecureHttpClient(httpMock)
+        guard let freshFactory = builder.setSdkKey("test-sdk-key")
+                                        .setTarget("user-isolated")
+                                        .setConfig(isolatedConfig)
+                                        .build() else {
+            XCTFail("Failed to build isolated factory")
+            return
+        }
 
-        // Destroy persists session A but does NOT post it (it's still the active session).
-        await factory.destroy()
-        factory = nil
+        let sdkReady = expectation("SDK ready")
+        freshFactory.client.addEventListener(TestEventListener(readyExpectation: sdkReady))
+        waitFor(sdkReady)
+
+        freshFactory.client.getTreatment("flag1")
         httpMock.postTelemetryCalls.removeAll()
 
-        // Second factory creates session B. Session A is now non-active in CoreData.
-        let factory2 = try buildFactory(httpClient: httpMock)
-        waitUntilReady(factory2)
+        // On destroy the session is complete: it leaves the active set and is submitted
+        // by the shared submitter (no longer deferred to a later factory).
+        await freshFactory.destroy()
 
-        await factory2.client.flush()
-
-        // The flush should have posted session A (from factory1).
-        XCTAssertEqual(httpMock.postTelemetryCalls.count, 1)
-        let flushedPayload = try JSONSerialization.jsonObject(with: httpMock.postTelemetryCalls[0]) as! [[String: Any]]
-        let flushedSessionId = flushedPayload[0]["sessionId"] as? String
-        XCTAssertNotNil(flushedSessionId)
-
-        // Destroy factory2 -- persists session B, flushes non-active (nothing left since A was already sent).
-        httpMock.postTelemetryCalls.removeAll()
-        await factory2.destroy()
-
-        // factory2's destroy persisted session B but couldn't flush it (it's active).
-        // So either nothing was posted, or if there were other residual sessions they got posted.
-        // But session B should NOT appear in any post (it was active during destroy).
-        let postDestroyPayloads = httpMock.postTelemetryCalls.flatMap { data in
+        let payloads = httpMock.postTelemetryCalls.flatMap { data in
             (try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]) ?? []
         }
-        let postDestroySessionIds = postDestroyPayloads.compactMap { $0["sessionId"] as? String }
-        for id in postDestroySessionIds {
-            XCTAssertNotEqual(id, flushedSessionId, "Factory2 session should differ from factory1 session")
-        }
+        XCTAssertEqual(payloads.count, 1, "the completed session should be submitted exactly once on destroy")
+        XCTAssertNotNil(payloads.first?["sessionId"] as? String)
     }
 
     // MARK: - Helpers

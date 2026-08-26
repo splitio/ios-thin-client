@@ -62,7 +62,7 @@ final class TelemetryStorageTests: XCTestCase {
             await sut.save(sessionId: "s\(i)", metrics: makeMetrics(sessionId: "s\(i)"))
         }
 
-        let records = await sut.getNonActive(activeSessionId: "s2")
+        let records = await sut.getNonActive(activeSessionIds: ["s2"])
 
         XCTAssertEqual(records.count, 2)
         let sessionIds = records.map { $0.sessionId }
@@ -74,7 +74,7 @@ final class TelemetryStorageTests: XCTestCase {
     func testGetNonActiveReturnsEmptyWhenOnlyActiveExists() async {
         await sut.save(sessionId: "active", metrics: makeMetrics(sessionId: "active"))
 
-        let records = await sut.getNonActive(activeSessionId: "active")
+        let records = await sut.getNonActive(activeSessionIds: ["active"])
 
         XCTAssertTrue(records.isEmpty)
     }

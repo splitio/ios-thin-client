@@ -14,7 +14,7 @@ final class TelemetrySubmitterTests: XCTestCase {
         httpClient = SecureHttpClientMock()
         sut = DefaultTelemetrySubmitter(storage: storage,
                                         secureHttpClient: httpClient,
-                                        activeSessionId: "active-session")
+                                        activeSessionIdsProvider: { ["active-session"] })
     }
 
     // MARK: - Successful flush
@@ -29,7 +29,7 @@ final class TelemetrySubmitterTests: XCTestCase {
         XCTAssertEqual(httpClient.postTelemetryCalls.count, 1)
         XCTAssertEqual(storage.removedSessionIds.count, 1)
         XCTAssertEqual(storage.removedSessionIds.first, ["s1", "s2"])
-        XCTAssertEqual(storage.getNonActiveCalledWith, "active-session")
+        XCTAssertEqual(storage.getNonActiveCalledWith, ["active-session"])
     }
 
     func testFlushWithCountLimitsSessionsSent() async {
