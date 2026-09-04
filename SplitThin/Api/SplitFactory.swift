@@ -172,16 +172,17 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
             let treatmentsManager = DefaultTreatmentsManager(target: target, evaluationRepository: evaluationRepository, fallbackCalculator: fallbackCalculator)
             
             // Tracking
-            let sharedEventsTracker = eventsTracker
-            let tracker = DefaultTracker(defaultTrafficType: target.trafficType, initialEventSizeInBytes: 1024, eventValidator: ThinEventValidator(), propertyValidator: ThinPropertyValidator(), logger: ThinTrackerLogger(), onEventPush: { trackerEvent in
-                guard !trackerEvent.trafficType.isEmpty else {
-                    Logger.e("Tracker event not tracked because trafficType is empty")
-                    return
+            let tracker = DefaultTracker(defaultTrafficType: target.trafficType, initialEventSizeInBytes: 1024, eventValidator: ThinEventValidator(), propertyValidator: ThinPropertyValidator(), logger: ThinTrackerLogger(), 
+                onEventPush: { [eventsTracker] trackerEvent in
+                    guard !trackerEvent.trafficType.isEmpty else {
+                        Logger.e("Tracker event not tracked because trafficType is empty")
+                        return
+                    }
+                    
+                    let event = EventEntity(key: trackerEvent.key ?? "", trafficType: trackerEvent.trafficType, eventType: trackerEvent.eventType, value: trackerEvent.value, properties: trackerEvent.properties, timestamp: Date(timeIntervalSince1970: Double(trackerEvent.timestamp ?? 0) / 1000.0))
+                    Task { await eventsTracker.track(event) }
                 }
-                
-                let event = EventEntity(key: trackerEvent.key ?? "", trafficType: trackerEvent.trafficType, eventType: trackerEvent.eventType, value: trackerEvent.value, properties: trackerEvent.properties, timestamp: Date(timeIntervalSince1970: Double(trackerEvent.timestamp ?? 0) / 1000.0))
-                Task { await sharedEventsTracker.track(event) }
-            })
+            )
 
         // 2. Create
         let client = DefaultSplitClient(target: target, treatmentsManager: treatmentsManager, eventsManager: eventsManager, authProvider: authProvider, observer: eventDispatcher, syncManager: syncManager, tracker: tracker, eventsTracker: eventsTracker, telemetryObserver: telemetryObserver, telemetrySubmitter: telemetrySubmitter, fetchCoordinator: fetchCoordinator, evaluationRepository: evaluationRepository)
