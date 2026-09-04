@@ -55,30 +55,6 @@ final class TelemetryStorageTests: XCTestCase {
         XCTAssertTrue(sessionIds.contains("s6"))
     }
 
-    // MARK: - getNonActive
-
-    func testGetNonActiveExcludesActiveSession() async {
-        for i in 1...3 {
-            await sut.save(sessionId: "s\(i)", metrics: makeMetrics(sessionId: "s\(i)"))
-        }
-
-        let records = await sut.getNonActive(activeSessionIds: ["s2"])
-
-        XCTAssertEqual(records.count, 2)
-        let sessionIds = records.map { $0.sessionId }
-        XCTAssertFalse(sessionIds.contains("s2"))
-        XCTAssertTrue(sessionIds.contains("s1"))
-        XCTAssertTrue(sessionIds.contains("s3"))
-    }
-
-    func testGetNonActiveReturnsEmptyWhenOnlyActiveExists() async {
-        await sut.save(sessionId: "active", metrics: makeMetrics(sessionId: "active"))
-
-        let records = await sut.getNonActive(activeSessionIds: ["active"])
-
-        XCTAssertTrue(records.isEmpty)
-    }
-
     // MARK: - Remove
 
     func testRemoveDeletesSpecifiedSessions() async {

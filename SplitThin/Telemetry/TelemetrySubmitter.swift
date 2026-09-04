@@ -12,17 +12,13 @@ final class DefaultTelemetrySubmitter: TelemetrySubmitter, @unchecked Sendable {
 
     private let storage: TelemetryReadStorage & TelemetryWriteStorage
     private let secureHttpClient: SecureHttpClient
-    // Sessions still owned by live clients must not be sent while they're being updated.
-    // A single factory-wide submitter serializes flushes, so the active set is resolved per flush.
-    private let activeSessionIdsProvider: @Sendable () -> Set<String>
 
     private var isSubmitting = false
     private let lock = NSLock()
 
-    init(storage: TelemetryReadStorage & TelemetryWriteStorage, secureHttpClient: SecureHttpClient, activeSessionIdsProvider: @escaping @Sendable () -> Set<String>) {
+    init(storage: TelemetryReadStorage & TelemetryWriteStorage, secureHttpClient: SecureHttpClient) {
         self.storage = storage
         self.secureHttpClient = secureHttpClient
-        self.activeSessionIdsProvider = activeSessionIdsProvider
     }
 
     func flush(count: Int?) async {
@@ -41,7 +37,7 @@ final class DefaultTelemetrySubmitter: TelemetrySubmitter, @unchecked Sendable {
             withLock(lock) { isSubmitting = false }
         }
 
-        let records = await storage.getNonActive(activeSessionIds: activeSessionIdsProvider())
+        let records = await storage.getAll()
         guard !records.isEmpty else { return }
 
         let toSend = count.map { Array(records.prefix($0)) } ?? records

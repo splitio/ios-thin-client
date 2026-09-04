@@ -39,7 +39,10 @@ final class TelemetryObserver: Observer, @unchecked Sendable {
         let snapshot: SessionMetricsDTO = withLock(lock) {
             debounceTask?.cancel()
             debounceTask = nil
-            return metrics
+            let snapshot = metrics
+            metrics.runtime.successfulJwtFetches = 0
+            metrics.runtime.evaluationCount = 0
+            return snapshot
         }
         await storage.save(sessionId: sessionId, metrics: snapshot)
     }

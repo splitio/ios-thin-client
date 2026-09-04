@@ -12,28 +12,25 @@ final class TelemetrySubmitterTests: XCTestCase {
         super.setUp()
         storage = TelemetryStorageMock()
         httpClient = SecureHttpClientMock()
-        sut = DefaultTelemetrySubmitter(storage: storage,
-                                        secureHttpClient: httpClient,
-                                        activeSessionIdsProvider: { ["active-session"] })
+        sut = DefaultTelemetrySubmitter(storage: storage, secureHttpClient: httpClient)
     }
 
     // MARK: - Successful flush
 
-    func testFlushPostsNonActiveSessionsAndRemovesThem() async {
+    func testFlushPostsAllSessionsAndRemovesThem() async {
         let record1 = makeRecord(sessionId: "s1")
         let record2 = makeRecord(sessionId: "s2")
-        storage.nonActiveRecords = [record1, record2]
+        storage.allRecords = [record1, record2]
 
         await sut.flush(count: nil)
 
         XCTAssertEqual(httpClient.postTelemetryCalls.count, 1)
         XCTAssertEqual(storage.removedSessionIds.count, 1)
         XCTAssertEqual(storage.removedSessionIds.first, ["s1", "s2"])
-        XCTAssertEqual(storage.getNonActiveCalledWith, ["active-session"])
     }
 
     func testFlushWithCountLimitsSessionsSent() async {
-        storage.nonActiveRecords = [makeRecord(sessionId: "s1"), makeRecord(sessionId: "s2"), makeRecord(sessionId: "s3")]
+        storage.allRecords = [makeRecord(sessionId: "s1"), makeRecord(sessionId: "s2"), makeRecord(sessionId: "s3")]
 
         await sut.flush(count: 2)
 
@@ -43,7 +40,7 @@ final class TelemetrySubmitterTests: XCTestCase {
     // MARK: - Empty storage
 
     func testFlushWithEmptyStorageIsNoOp() async {
-        storage.nonActiveRecords = []
+        storage.allRecords = []
 
         await sut.flush(count: nil)
 
@@ -54,7 +51,7 @@ final class TelemetrySubmitterTests: XCTestCase {
     // MARK: - HTTP failure
 
     func testFlushDoesNotRemoveOnHttpFailure() async {
-        storage.nonActiveRecords = [makeRecord(sessionId: "s1")]
+        storage.allRecords = [makeRecord(sessionId: "s1")]
         httpClient.errorToThrow = NSError(domain: "test", code: 500)
 
         await sut.flush(count: nil)
@@ -66,7 +63,7 @@ final class TelemetrySubmitterTests: XCTestCase {
 
     func testFlushSerializesMetricsArray() async {
         let record = makeRecord(sessionId: "s1")
-        storage.nonActiveRecords = [record]
+        storage.allRecords = [record]
 
         await sut.flush(count: nil)
 

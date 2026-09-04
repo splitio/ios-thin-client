@@ -37,13 +37,10 @@ final class DefaultSplitClient: SplitClient, @unchecked Sendable {
     private let telemetrySubmitter: TelemetrySubmitter
     private let fetchCoordinator: EvaluationFetchCoordinator
     private let evaluationRepository: EvaluationRepository
-    // Invoked once this client finishes destroying, so the factory can drop this client's
-    // telemetry session from the active set (making its final metrics eligible to submit).
-    private let onDestroyed: (@Sendable () -> Void)?
     private var clientListeners = [SplitEventListener]()
     private var isDestroyed = false
 
-    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, authProvider: AuthProvider, observer: Observer, syncManager: SyncManager, tracker: Tracker, eventsTracker: EventsTracker, telemetryObserver: TelemetryObserver, telemetrySubmitter: TelemetrySubmitter, fetchCoordinator: EvaluationFetchCoordinator, evaluationRepository: EvaluationRepository, onDestroyed: (@Sendable () -> Void)? = nil) {
+    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, authProvider: AuthProvider, observer: Observer, syncManager: SyncManager, tracker: Tracker, eventsTracker: EventsTracker, telemetryObserver: TelemetryObserver, telemetrySubmitter: TelemetrySubmitter, fetchCoordinator: EvaluationFetchCoordinator, evaluationRepository: EvaluationRepository) {
         self._target = target
         self.treatmentsManager = treatmentsManager
         self.eventsManager = eventsManager
@@ -56,7 +53,6 @@ final class DefaultSplitClient: SplitClient, @unchecked Sendable {
         self.telemetrySubmitter = telemetrySubmitter
         self.fetchCoordinator = fetchCoordinator
         self.evaluationRepository = evaluationRepository
-        self.onDestroyed = onDestroyed
 
         registerUpdateAction(for: target)
     }
@@ -174,8 +170,6 @@ final class DefaultSplitClient: SplitClient, @unchecked Sendable {
         await eventsTracker.flush()
 
         await telemetryObserver.persistNow()
-        // Drop this session from the active set before flushing so its final metrics get submitted.
-        onDestroyed?()
         await telemetrySubmitter.flush(count: nil)
 
         let listeners = withLock(lock) { () -> [SplitEventListener] in
@@ -198,6 +192,7 @@ final class DefaultSplitClient: SplitClient, @unchecked Sendable {
         observer.notify(event: .flushCompleted(.events))
 
         observer.notify(event: .flushStarted(.telemetry))
+        await telemetryObserver.persistNow()
         await telemetrySubmitter.flush(count: nil)
         observer.notify(event: .flushCompleted(.telemetry))
     }
