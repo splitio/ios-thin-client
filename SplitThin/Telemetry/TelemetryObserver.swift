@@ -39,12 +39,16 @@ final class TelemetryObserver: Observer, @unchecked Sendable {
         let snapshot: SessionMetricsDTO = withLock(lock) {
             debounceTask?.cancel()
             debounceTask = nil
-            let snapshot = metrics
-            metrics.runtime.successfulJwtFetches = 0
-            metrics.runtime.evaluationCount = 0
-            return snapshot
+            return metrics
         }
         await storage.save(sessionId: sessionId, metrics: snapshot)
+    }
+
+    func subtractSubmitted(_ submitted: SessionMetricsDTO) {
+        withLock(lock) {
+            metrics.runtime.successfulJwtFetches = max(0, metrics.runtime.successfulJwtFetches - submitted.runtime.successfulJwtFetches)
+            metrics.runtime.evaluationCount = max(0, metrics.runtime.evaluationCount - submitted.runtime.evaluationCount)
+        }
     }
 
     // MARK: - Private

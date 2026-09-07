@@ -74,6 +74,38 @@ final class TelemetryObserverTests: XCTestCase {
         XCTAssertEqual(storage.savedSessions.first?.metrics.runtime.evaluationCount, 0)
     }
 
+    func testPersistNowKeepsCountersUntilSubmissionIsAcknowledged() async {
+        let target = Target(matchingKey: "user1", trafficType: "user")
+        sut.notify(event: .evaluationRequested(flagName: "flag1", target: target))
+        sut.notify(event: .evaluationRequested(flagName: "flag2", target: target))
+        sut.notify(event: .evaluationRequested(flagName: "flag3", target: target))
+        await sut.persistNow()
+
+        sut.notify(event: .evaluationRequested(flagName: "flag4", target: target))
+        sut.notify(event: .evaluationRequested(flagName: "flag5", target: target))
+        await sut.persistNow()
+
+        XCTAssertEqual(storage.savedSessions.last?.metrics.runtime.evaluationCount, 5)
+    }
+
+    func testSubtractSubmittedKeepsCountersRecordedAfterTheSnapshot() async {
+        let target = Target(matchingKey: "user1", trafficType: "user")
+        sut.notify(event: .evaluationRequested(flagName: "flag1", target: target))
+        sut.notify(event: .evaluationRequested(flagName: "flag2", target: target))
+        sut.notify(event: .evaluationRequested(flagName: "flag3", target: target))
+        await sut.persistNow()
+        let posted = storage.savedSessions.last!.metrics
+
+        // These land while the POST is still in flight, so the acknowledgement must not discard them.
+        sut.notify(event: .evaluationRequested(flagName: "flag4", target: target))
+        sut.notify(event: .evaluationRequested(flagName: "flag5", target: target))
+
+        sut.subtractSubmitted(posted)
+        await sut.persistNow()
+
+        XCTAssertEqual(storage.savedSessions.last?.metrics.runtime.evaluationCount, 2)
+    }
+
     // MARK: - Session ID
 
     func testSessionIdIsPreserved() {

@@ -32,6 +32,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     // Factory-wide submission pipeline
     private let eventsTracker: EventsTracker
     private let eventsScheduler: EventsPeriodicScheduler
+    private let telemetryObserver: TelemetryObserver
     private let telemetrySubmitter: TelemetrySubmitter
 
     private var splitManager: DefaultSplitManager?
@@ -79,8 +80,8 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         let submissionCoordinator = DefaultEventSubmissionCoordinator(eventTask: eventTask, observer: factoryObserver)
         self.eventsTracker = DefaultEventsTracker(storage: eventsStorage, coordinator: submissionCoordinator, observer: factoryObserver)
         self.eventsScheduler = DefaultEventsPeriodicScheduler(coordinator: submissionCoordinator, intervalSeconds: config.pushRate)
-
-        self.telemetrySubmitter = DefaultTelemetrySubmitter(storage: telemetryStorage, secureHttpClient: secureHttpClient)
+        self.telemetryObserver = TelemetryObserver(storage: telemetryStorage, sessionId: UUID().uuidString, config: config)
+        self.telemetrySubmitter = DefaultTelemetrySubmitter(storage: telemetryStorage, secureHttpClient: secureHttpClient, observer: telemetryObserver)
 
         splitManager.activeTargetsProvider = { [weak self] in
             guard let self else { return [] }
@@ -162,7 +163,6 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
             eventDispatcher.register(LoggingObserver())
 
             // Telemetry
-            let telemetryObserver = TelemetryObserver(storage: telemetryStorage, sessionId: UUID().uuidString, config: config)
             eventDispatcher.register(telemetryObserver)
 
             // Sync
