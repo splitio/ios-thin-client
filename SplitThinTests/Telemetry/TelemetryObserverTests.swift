@@ -67,11 +67,21 @@ final class TelemetryObserverTests: XCTestCase {
         XCTAssertEqual(storage.savedSessions.first?.sessionId, "test-session")
     }
 
-    func testPersistNowWithNoUpdatesStillSaves() async {
+    func testPersistNowWithNoUpdatesDoesNotSave() async {
         await sut.persistNow()
 
-        XCTAssertEqual(storage.savedSessions.count, 1)
-        XCTAssertEqual(storage.savedSessions.first?.metrics.runtime.evaluationCount, 0)
+        XCTAssertTrue(storage.savedSessions.isEmpty, "Nothing changed, so there is nothing worth persisting or POSTing")
+    }
+
+    func testPersistNowSkipsWhenAllChangesWereAlreadyAcknowledged() async {
+        let target = Target(matchingKey: "user1", trafficType: "user")
+        sut.notify(event: .evaluationRequested(flagName: "flag1", target: target))
+        await sut.persistNow()
+        sut.subtractSubmitted(storage.savedSessions.last!.metrics)
+
+        await sut.persistNow()
+
+        XCTAssertEqual(storage.savedSessions.count, 1, "A second persist with no new events must not write another snapshot")
     }
 
     func testPersistNowKeepsCountersUntilSubmissionIsAcknowledged() async {
