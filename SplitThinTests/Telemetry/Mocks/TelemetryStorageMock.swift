@@ -6,8 +6,6 @@ final class TelemetryStorageMock: TelemetryReadStorage, TelemetryWriteStorage, @
     var savedSessions = [(sessionId: String, metrics: SessionMetricsDTO)]()
     var removedSessionIds = [[String]]()
     var allRecords = [TelemetrySessionRecord]()
-    var nonActiveRecords = [TelemetrySessionRecord]()
-    var getNonActiveCalledWith: String?
 
     private let lock = NSLock()
 
@@ -25,12 +23,5 @@ final class TelemetryStorageMock: TelemetryReadStorage, TelemetryWriteStorage, @
 
     func getAll() async -> [TelemetrySessionRecord] {
         withLock(lock) { allRecords }
-    }
-
-    func getNonActive(activeSessionId: String) async -> [TelemetrySessionRecord] {
-        withLock(lock) {
-            getNonActiveCalledWith = activeSessionId
-            return nonActiveRecords
-        }
     }
 }

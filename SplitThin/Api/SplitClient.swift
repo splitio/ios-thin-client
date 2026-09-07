@@ -33,7 +33,6 @@ final class DefaultSplitClient: SplitClient, @unchecked Sendable {
     private let syncManager: SyncManager
     private let tracker: Tracker
     private let eventsTracker: EventsTracker
-    private let eventsScheduler: EventsPeriodicScheduler
     private let telemetryObserver: TelemetryObserver
     private let telemetrySubmitter: TelemetrySubmitter
     private let fetchCoordinator: EvaluationFetchCoordinator
@@ -41,7 +40,7 @@ final class DefaultSplitClient: SplitClient, @unchecked Sendable {
     private var clientListeners = [SplitEventListener]()
     private var isDestroyed = false
 
-    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, authProvider: AuthProvider, observer: Observer, syncManager: SyncManager, tracker: Tracker, eventsTracker: EventsTracker, eventsScheduler: EventsPeriodicScheduler, telemetryObserver: TelemetryObserver, telemetrySubmitter: TelemetrySubmitter, fetchCoordinator: EvaluationFetchCoordinator, evaluationRepository: EvaluationRepository) {
+    init(target: Target, treatmentsManager: TreatmentsManager, eventsManager: SplitEventsManager, authProvider: AuthProvider, observer: Observer, syncManager: SyncManager, tracker: Tracker, eventsTracker: EventsTracker, telemetryObserver: TelemetryObserver, telemetrySubmitter: TelemetrySubmitter, fetchCoordinator: EvaluationFetchCoordinator, evaluationRepository: EvaluationRepository) {
         self._target = target
         self.treatmentsManager = treatmentsManager
         self.eventsManager = eventsManager
@@ -50,7 +49,6 @@ final class DefaultSplitClient: SplitClient, @unchecked Sendable {
         self.syncManager = syncManager
         self.tracker = tracker
         self.eventsTracker = eventsTracker
-        self.eventsScheduler = eventsScheduler
         self.telemetryObserver = telemetryObserver
         self.telemetrySubmitter = telemetrySubmitter
         self.fetchCoordinator = fetchCoordinator
@@ -169,7 +167,6 @@ final class DefaultSplitClient: SplitClient, @unchecked Sendable {
         fetchCoordinator.unregister(target: currentTarget)
         fetchCoordinator.unregisterOnUpdateAction(for: currentTarget.key)
 
-        eventsScheduler.stop()
         await eventsTracker.flush()
 
         await telemetryObserver.persistNow()
@@ -195,6 +192,7 @@ final class DefaultSplitClient: SplitClient, @unchecked Sendable {
         observer.notify(event: .flushCompleted(.events))
 
         observer.notify(event: .flushStarted(.telemetry))
+        await telemetryObserver.persistNow()
         await telemetrySubmitter.flush(count: nil)
         observer.notify(event: .flushCompleted(.telemetry))
     }

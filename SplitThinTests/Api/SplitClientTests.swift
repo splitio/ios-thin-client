@@ -11,7 +11,6 @@ final class DefaultSplitClientTest: XCTestCase {
     private var syncManagerMock: SyncManagerMock!
     private var trackerMock: TrackerMock!
     private var eventsTrackerMock: EventsTrackerMock!
-    private var eventsSchedulerMock: EventsPeriodicSchedulerMock!
     private var fetchCoordinatorMock: EvaluationFetchCoordinatorMock!
 
     override func setUp() {
@@ -22,9 +21,8 @@ final class DefaultSplitClientTest: XCTestCase {
         syncManagerMock = SyncManagerMock()
         trackerMock = TrackerMock()
         eventsTrackerMock = EventsTrackerMock()
-        eventsSchedulerMock = EventsPeriodicSchedulerMock()
         fetchCoordinatorMock = EvaluationFetchCoordinatorMock()
-        client = buildClient(target: "user1", treatmentsManager: treatmentsManagerMock, eventsManager: eventsManagerMock, authProvider: authProviderMock, syncManager: syncManagerMock, tracker: trackerMock, eventsTracker: eventsTrackerMock, eventsScheduler: eventsSchedulerMock, fetchCoordinator: fetchCoordinatorMock)
+        client = buildClient(target: "user1", treatmentsManager: treatmentsManagerMock, eventsManager: eventsManagerMock, authProvider: authProviderMock, syncManager: syncManagerMock, tracker: trackerMock, eventsTracker: eventsTrackerMock, fetchCoordinator: fetchCoordinatorMock)
     }
 
     override func tearDown() {
@@ -33,7 +31,6 @@ final class DefaultSplitClientTest: XCTestCase {
         eventsManagerMock = nil
         syncManagerMock = nil
         eventsTrackerMock = nil
-        eventsSchedulerMock = nil
         super.tearDown()
     }
 
@@ -222,10 +219,9 @@ final class DefaultSplitClientTest: XCTestCase {
         XCTAssertEqual(eventsTrackerMock.flushCallCount, 1)
     }
 
-    func testDestroyStopsSchedulerAndFlushes() async {
+    func testDestroyFlushesEvents() async {
         await client.destroy()
 
-        XCTAssertEqual(eventsSchedulerMock.stopCallCount, 1)
         XCTAssertEqual(eventsTrackerMock.flushCallCount, 1)
     }
 }

@@ -9,15 +9,13 @@ final class DefaultEventTaskTest: XCTestCase {
     private var observer: ObserverSpy!
     private var task: DefaultEventTask!
 
-    private let target = Target(matchingKey: "user1", trafficType: "user")
-
     override func setUp() {
         super.setUp()
         storage = EventsStorageMock()
         serializer = EventSerializerMock()
         submitter = HttpEventsSubmitterMock()
         observer = ObserverSpy()
-        task = DefaultEventTask(storage: storage, serializer: serializer, submitter: submitter, observer: observer, target: target)
+        task = DefaultEventTask(storage: storage, serializer: serializer, submitter: submitter, observer: observer)
     }
 
     func testRunWithEmptyStorageReturnsTrue() async {

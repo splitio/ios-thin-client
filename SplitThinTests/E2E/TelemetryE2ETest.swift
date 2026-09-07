@@ -26,7 +26,7 @@ final class TelemetryE2ETest: XCTestCase {
 
     // MARK: - Flush
 
-    func testFlushDoesNotPostActiveSessionWhenItsTheOnlyOne() async throws {
+    func testFlushPostsCurrentSessionWhenItsTheOnlyOne() async throws {
         // Fresh factory with a unique prefix so no residual sessions from other tests
         let isolatedConfig = SplitClientConfig.builder()
                                               .setMinEvaluationRefreshRate(1)
@@ -53,47 +53,224 @@ final class TelemetryE2ETest: XCTestCase {
 
         await freshFactory.client.flush()
 
-        XCTAssertTrue(httpMock.postTelemetryCalls.isEmpty, "Active session should not be sent on flush")
+        XCTAssertEqual(httpMock.postTelemetryCalls.count, 1, "The current telemetry snapshot should be sent on flush")
 
         await freshFactory.destroy()
     }
 
-    func testDestroyPersistsSessionAndNextFactoryFlushesIt() async throws {
-        waitUntilReady()
+    func testConsecutiveFlushesPostOnlyNewTelemetry() async throws {
+        let isolatedConfig = SplitClientConfig.builder()
+                                              .setMinEvaluationRefreshRate(1)
+                                              .set(prefix: "telemetry_\(UUID().uuidString.prefix(8))")
+                                              .build()
 
-        factory.client.getTreatment("flag1")
+        let builder = DefaultSplitFactoryBuilder()
+        builder.setSecureHttpClient(httpMock)
+        guard let freshFactory = builder.setSdkKey("test-sdk-key")
+                                        .setTarget("user-isolated")
+                                        .setConfig(isolatedConfig)
+                                        .build() else {
+            XCTFail("Failed to build isolated factory")
+            return
+        }
 
-        // Destroy persists session A but does NOT post it (it's still the active session).
-        await factory.destroy()
-        factory = nil
+        let sdkReady = expectation("SDK ready")
+        freshFactory.client.addEventListener(TestEventListener(readyExpectation: sdkReady))
+        waitFor(sdkReady)
+
+        freshFactory.client.getTreatment("flag1")
+        await freshFactory.client.flush()
+
         httpMock.postTelemetryCalls.removeAll()
+        freshFactory.client.getTreatment("flag1")
+        await freshFactory.client.flush()
 
-        // Second factory creates session B. Session A is now non-active in CoreData.
-        let factory2 = try buildFactory(httpClient: httpMock)
-        waitUntilReady(factory2)
-
-        await factory2.client.flush()
-
-        // The flush should have posted session A (from factory1).
-        XCTAssertEqual(httpMock.postTelemetryCalls.count, 1)
-        let flushedPayload = try JSONSerialization.jsonObject(with: httpMock.postTelemetryCalls[0]) as! [[String: Any]]
-        let flushedSessionId = flushedPayload[0]["sessionId"] as? String
-        XCTAssertNotNil(flushedSessionId)
-
-        // Destroy factory2 -- persists session B, flushes non-active (nothing left since A was already sent).
-        httpMock.postTelemetryCalls.removeAll()
-        await factory2.destroy()
-
-        // factory2's destroy persisted session B but couldn't flush it (it's active).
-        // So either nothing was posted, or if there were other residual sessions they got posted.
-        // But session B should NOT appear in any post (it was active during destroy).
-        let postDestroyPayloads = httpMock.postTelemetryCalls.flatMap { data in
+        let payloads = httpMock.postTelemetryCalls.flatMap { data in
             (try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]) ?? []
         }
-        let postDestroySessionIds = postDestroyPayloads.compactMap { $0["sessionId"] as? String }
-        for id in postDestroySessionIds {
-            XCTAssertNotEqual(id, flushedSessionId, "Factory2 session should differ from factory1 session")
+        let runtime = payloads.first?["runtime"] as? [String: Any]
+
+        XCTAssertEqual(payloads.count, 1)
+        XCTAssertEqual(runtime?["evaluationCount"] as? Int, 1, "Each flush should post only telemetry recorded since the previous flush")
+
+        await freshFactory.destroy()
+    }
+
+    func testAllClientsShareASingleTelemetrySession() async throws {
+        let isolatedConfig = SplitClientConfig.builder()
+                                              .setMinEvaluationRefreshRate(1)
+                                              .set(prefix: "telemetry_\(UUID().uuidString.prefix(8))")
+                                              .build()
+
+        let builder = DefaultSplitFactoryBuilder()
+        builder.setSecureHttpClient(httpMock)
+        guard let freshFactory = builder.setSdkKey("test-sdk-key")
+                                        .setTarget("user-a")
+                                        .setConfig(isolatedConfig)
+                                        .build() else {
+            XCTFail("Failed to build isolated factory")
+            return
         }
+
+        let sdkReady = expectation("SDK ready")
+        freshFactory.client.addEventListener(TestEventListener(readyExpectation: sdkReady))
+        waitFor(sdkReady)
+
+        let secondClient = freshFactory.getClient(Target(matchingKey: "user-b", trafficType: "user"))
+        freshFactory.client.getTreatment("flag1")
+        secondClient.getTreatment("flag1")
+
+        httpMock.postTelemetryCalls.removeAll()
+        await freshFactory.client.flush()
+
+        let payloads = httpMock.postTelemetryCalls.flatMap { data in
+            (try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]) ?? []
+        }
+        let runtime = payloads.first?["runtime"] as? [String: Any]
+
+        XCTAssertEqual(payloads.count, 1, "A factory must report a single telemetry session")
+        XCTAssertEqual(runtime?["evaluationCount"] as? Int, 2, "Evaluations from every client must land in the shared session")
+
+        await freshFactory.destroy()
+    }
+
+    func testFailedTelemetryPostDoesNotDropUnsubmittedCounters() async throws {
+        let isolatedConfig = SplitClientConfig.builder()
+                                              .setMinEvaluationRefreshRate(1)
+                                              .set(prefix: "telemetry_\(UUID().uuidString.prefix(8))")
+                                              .build()
+
+        let builder = DefaultSplitFactoryBuilder()
+        builder.setSecureHttpClient(httpMock)
+        guard let freshFactory = builder.setSdkKey("test-sdk-key")
+                                        .setTarget("user-isolated")
+                                        .setConfig(isolatedConfig)
+                                        .build() else {
+            XCTFail("Failed to build isolated factory")
+            return
+        }
+
+        let sdkReady = expectation("SDK ready")
+        freshFactory.client.addEventListener(TestEventListener(readyExpectation: sdkReady))
+        waitFor(sdkReady)
+
+        freshFactory.client.getTreatment("flag1")
+        httpMock.postTelemetryCalls.removeAll()
+        httpMock.errorToThrow = NSError(domain: "test", code: 500)
+        await freshFactory.client.flush()
+
+        httpMock.errorToThrow = nil
+        httpMock.postTelemetryCalls.removeAll()
+        freshFactory.client.getTreatment("flag1")
+        await freshFactory.client.flush()
+
+        let payloads = httpMock.postTelemetryCalls.flatMap { data in
+            (try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]) ?? []
+        }
+        let runtime = payloads.first?["runtime"] as? [String: Any]
+
+        XCTAssertEqual(payloads.count, 1)
+        XCTAssertEqual(runtime?["evaluationCount"] as? Int, 2, "Counters persisted before a failed POST must still be submitted on the next successful flush")
+
+        await freshFactory.destroy()
+    }
+
+    func testDestroySubmitsCompletedSession() async throws {
+        // Isolated DB so residual sessions from other tests don't leak into the assertions.
+        let isolatedConfig = SplitClientConfig.builder()
+                                              .setMinEvaluationRefreshRate(1)
+                                              .set(prefix: "telemetry_\(UUID().uuidString.prefix(8))")
+                                              .build()
+
+        let builder = DefaultSplitFactoryBuilder()
+        builder.setSecureHttpClient(httpMock)
+        guard let freshFactory = builder.setSdkKey("test-sdk-key")
+                                        .setTarget("user-isolated")
+                                        .setConfig(isolatedConfig)
+                                        .build() else {
+            XCTFail("Failed to build isolated factory")
+            return
+        }
+
+        let sdkReady = expectation("SDK ready")
+        freshFactory.client.addEventListener(TestEventListener(readyExpectation: sdkReady))
+        waitFor(sdkReady)
+
+        freshFactory.client.getTreatment("flag1")
+        httpMock.postTelemetryCalls.removeAll()
+
+        await freshFactory.destroy()
+
+        let payloads = httpMock.postTelemetryCalls.flatMap { data in
+            (try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]) ?? []
+        }
+        XCTAssertEqual(payloads.count, 1, "the completed session should be submitted exactly once on destroy")
+        XCTAssertNotNil(payloads.first?["sessionId"] as? String)
+    }
+
+    func testClientDestroySubmitsTelemetry() async throws {
+        // Customers who never call factory.destroy() still get their telemetry on client.destroy().
+        let isolatedConfig = SplitClientConfig.builder()
+                                              .setMinEvaluationRefreshRate(1)
+                                              .set(prefix: "telemetry_\(UUID().uuidString.prefix(8))")
+                                              .build()
+
+        let builder = DefaultSplitFactoryBuilder()
+        builder.setSecureHttpClient(httpMock)
+        guard let freshFactory = builder.setSdkKey("test-sdk-key")
+                                        .setTarget("user-isolated")
+                                        .setConfig(isolatedConfig)
+                                        .build() else {
+            XCTFail("Failed to build isolated factory")
+            return
+        }
+
+        let sdkReady = expectation("SDK ready")
+        freshFactory.client.addEventListener(TestEventListener(readyExpectation: sdkReady))
+        waitFor(sdkReady)
+
+        freshFactory.client.getTreatment("flag1")
+        httpMock.postTelemetryCalls.removeAll()
+
+        await freshFactory.client.destroy()
+
+        let payloads = httpMock.postTelemetryCalls.flatMap { data in
+            (try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]) ?? []
+        }
+        XCTAssertEqual(payloads.count, 1, "client.destroy() must submit pending telemetry")
+        XCTAssertEqual((payloads.first?["runtime"] as? [String: Any])?["evaluationCount"] as? Int, 1)
+
+        await freshFactory.destroy()
+    }
+
+    func testMultiClientDestroySubmitsTheSharedSessionOnce() async throws {
+        let isolatedConfig = SplitClientConfig.builder()
+                                              .setMinEvaluationRefreshRate(1)
+                                              .set(prefix: "telemetry_\(UUID().uuidString.prefix(8))")
+                                              .build()
+
+        let builder = DefaultSplitFactoryBuilder()
+        builder.setSecureHttpClient(httpMock)
+        guard let freshFactory = builder.setSdkKey("test-sdk-key")
+                                        .setTarget("user-a")
+                                        .setConfig(isolatedConfig)
+                                        .build() else {
+            XCTFail("Failed to build isolated factory")
+            return
+        }
+
+        let sdkReady = expectation("SDK ready")
+        freshFactory.client.addEventListener(TestEventListener(readyExpectation: sdkReady))
+        waitFor(sdkReady)
+
+        let secondClient = freshFactory.getClient(Target(matchingKey: "user-b", trafficType: "user"))
+        freshFactory.client.getTreatment("flag1")
+        secondClient.getTreatment("flag1")
+
+        httpMock.postTelemetryCalls.removeAll()
+        await freshFactory.destroy()
+
+        XCTAssertEqual(httpMock.postTelemetryCalls.count, 1, "The shared session must be POSTed once, not once per client")
     }
 
     // MARK: - Helpers
