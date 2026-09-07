@@ -115,6 +115,41 @@ final class TrackingE2ETest: XCTestCase {
         )
     }
 
+    func testConcurrentFlushesAcrossClientsDoNotDuplicateSubmissions() async throws {
+        let client1 = factory.client // user-123
+        let client2 = factory.getClient("user-B")
+
+        let ready1 = expectation("Client 1 ready")
+        let ready2 = expectation("Client 2 ready")
+        client1.addEventListener(TestEventListener(readyExpectation: ready1))
+        client2.addEventListener(TestEventListener(readyExpectation: ready2))
+        waitFor(ready1, ready2)
+
+        let perClient = 50
+        for i in 0..<perClient {
+            client1.track(eventType: "a-\(i)", value: nil, properties: nil)
+            client2.track(eventType: "b-\(i)", value: nil, properties: nil)
+        }
+
+        try await Task.sleep(nanoseconds: 300_000_000) // let the batched writes commit
+
+        // Flush both clients concurrently. Every event is submitted exactly once.
+        async let f1: Void = client1.flush()
+        async let f2: Void = client2.flush()
+        _ = await (f1, f2)
+
+        await client1.flush()
+
+        let posted = httpMock.postEventsCalls.flatMap { data in
+            (try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]) ?? []
+        }
+        let eventTypeIds = posted.compactMap { $0["eventTypeId"] as? String }
+        let expected = Set((0..<perClient).map { "a-\($0)" } + (0..<perClient).map { "b-\($0)" })
+
+        XCTAssertEqual(Set(eventTypeIds), expected, "every tracked event must be submitted")
+        XCTAssertEqual(eventTypeIds.count, expected.count, "no event may be submitted more than once")
+    }
+
     func testTrackAfterDestroyDoesNotSubmit() async throws {
         waitUntilReady()
 
