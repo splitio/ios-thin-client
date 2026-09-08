@@ -144,6 +144,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     }
 
     public func setUserConsent(enabled: Bool) {
+        guard !isDestroyed else { return }
         let status: UserConsent = enabled ? .granted : .declined
         withLock(consentLock) { currentConsent = status }
         Task { [consentManager] in await consentManager.set(status) }

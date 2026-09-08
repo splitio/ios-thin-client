@@ -49,6 +49,19 @@ final class UserConsentTemporaryStorageTest: XCTestCase {
         XCTAssertTrue(persistent.addedEvents.isEmpty, "Discarded events must not be flushed")
     }
 
+    func testBufferDropsOldestEventsWhenOverLimit() async {
+        let storage = UserConsentTemporaryStorage(persistentStorage: persistent, persistenceEnabled: false)
+        let overBy = 50
+        let total = 10_000 + overBy
+        await storage.add((0..<total).map { event("e-\($0)") })
+
+        await storage.enablePersistence(true)
+
+        XCTAssertEqual(persistent.addedEvents.count, 10_000, "Buffer must be capped at the limit")
+        XCTAssertEqual(persistent.addedEvents.first?.eventType, "e-\(overBy)", "Oldest events must be the ones dropped")
+        XCTAssertEqual(persistent.addedEvents.last?.eventType, "e-\(total - 1)")
+    }
+
     // MARK: - Persistence enabled (granted)
 
     func testAddGoesStraightToPersistentWhenEnabled() async {

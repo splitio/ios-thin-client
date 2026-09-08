@@ -16,6 +16,8 @@ protocol EventsConsentControllable: Sendable {
 /// Wraps a persistent events storage and adds an in-memory buffer
 final class UserConsentTemporaryStorage: EventsReadStorage, EventsWriteStorage, EventsConsentControllable, @unchecked Sendable {
 
+    private static let maxInMemoryEvents = 10_000
+
     private let persistentStorage: EventsReadStorage & EventsWriteStorage
     private let lock = NSLock()
     private var persistenceEnabled: Bool
@@ -57,17 +59,18 @@ final class UserConsentTemporaryStorage: EventsReadStorage, EventsWriteStorage, 
 
     // persist ? saveToDisk : saveInMemory
     func add(_ events: [EventEntity]) async {
-        let shouldPersist = withLock(lock) { () -> Bool in
-            if persistenceEnabled {
-                return true
-            } else {
-                buffer.append(contentsOf: events)
-                return false
-            }
+        let (shouldPersist, dropped) = withLock(lock) { () -> (Bool, Int) in
+            if persistenceEnabled { return (true, 0) }
+            buffer.append(contentsOf: events)
+            let overflow = max(0, buffer.count - Self.maxInMemoryEvents)
+            if overflow > 0 { buffer.removeFirst(overflow) }
+            return (false, overflow)
         }
 
         if shouldPersist {
             await persistentStorage.add(events)
+        } else if dropped > 0 {
+            Logger.w("UserConsentTemporaryStorage: in-memory buffer full (\(Self.maxInMemoryEvents)); dropped \(dropped) oldest tracked event(s) that will not be submitted")
         }
     }
 
