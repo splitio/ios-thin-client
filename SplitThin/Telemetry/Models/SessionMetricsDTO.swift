@@ -47,8 +47,6 @@ extension SessionMetricsDTO {
         let syncMode: String
         let pushRate: Int
         let evaluationRefreshRate: Int
-        // Initial user consent status (raw value). Records the value at init time,
-        // not runtime transitions.
         let userConsent: Int
 
         init(syncMode: String, pushRate: Int, evaluationRefreshRate: Int, userConsent: Int = UserConsent.granted.rawValue) {
