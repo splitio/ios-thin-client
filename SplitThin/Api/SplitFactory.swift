@@ -9,11 +9,7 @@ public protocol SplitFactory {
     var client: SplitClient { get }
     func getClient(_ target: Target?) -> SplitClient
     func manager() -> SplitManager
-    /// Sets factory-wide user consent. `true` grants (events are persisted and submitted),
-    /// `false` declines (events are not tracked). `UNKNOWN` is only available as the initial
-    /// value via `SplitClientConfig`.
     func setUserConsent(enabled: Bool)
-    /// Current factory-wide user consent status.
     var userConsent: UserConsent { get }
     func destroy() async
 }
