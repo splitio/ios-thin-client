@@ -44,7 +44,7 @@ func buildFactory(httpClient: SecureHttpClient? = nil, retryableHttpClient: Retr
     return factory
 }
 
-func buildClient(target: String = "user-123", treatmentsManager: TreatmentsManager? = nil, eventsManager: SplitEventsManager? = nil, authProvider: AuthProvider? = nil, observer: Observer? = nil, syncManager: SyncManager? = nil, tracker: Tracker? = nil, eventsTracker: EventsTracker? = nil, eventsScheduler: EventsPeriodicScheduler? = nil, telemetryObserver: TelemetryObserver? = nil, telemetrySubmitter: TelemetrySubmitter? = nil, fetchCoordinator: EvaluationFetchCoordinator? = nil, evaluationRepository: EvaluationRepository? = nil) -> DefaultSplitClient {
+func buildClient(target: String = "user-123", treatmentsManager: TreatmentsManager? = nil, eventsManager: SplitEventsManager? = nil, authProvider: AuthProvider? = nil, observer: Observer? = nil, syncManager: SyncManager? = nil, tracker: Tracker? = nil, eventsTracker: EventsTracker? = nil, telemetryObserver: TelemetryObserver? = nil, telemetrySubmitter: TelemetrySubmitter? = nil, fetchCoordinator: EvaluationFetchCoordinator? = nil, evaluationRepository: EvaluationRepository? = nil) -> DefaultSplitClient {
     DefaultSplitClient(target: Target(matchingKey: target, trafficType: "user"),
                        treatmentsManager: treatmentsManager ?? TreatmentsManagerMock(),
                        eventsManager: eventsManager ?? SplitEventsManagerMock(),
@@ -53,7 +53,6 @@ func buildClient(target: String = "user-123", treatmentsManager: TreatmentsManag
                        syncManager: syncManager ?? SyncManagerMock(),
                        tracker: tracker ?? TrackerMock(),
                        eventsTracker: eventsTracker ?? EventsTrackerMock(),
-                       eventsScheduler: eventsScheduler ?? EventsPeriodicSchedulerMock(),
                        telemetryObserver: telemetryObserver ?? TelemetryObserver(storage: TelemetryStorageMock(), sessionId: "test", config: SplitClientConfig.builder().build()),
                        telemetrySubmitter: telemetrySubmitter ?? TelemetrySubmitterMock(),
                        fetchCoordinator: fetchCoordinator ?? EvaluationFetchCoordinatorMock(),

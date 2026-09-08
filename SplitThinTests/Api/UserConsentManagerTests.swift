@@ -20,34 +20,30 @@ final class DefaultUserConsentManagerTest: XCTestCase {
     }
 
     private func makeManager(initial: UserConsent) -> DefaultUserConsentManager {
-        DefaultUserConsentManager(initialStatus: initial)
+        DefaultUserConsentManager(initialStatus: initial, storage: storage, tracker: tracker, scheduler: scheduler, coordinator: coordinator)
     }
 
-    private func bundle() -> ConsentControllableBundle {
-        ConsentControllableBundle(storage: storage, tracker: tracker, scheduler: scheduler, coordinator: coordinator)
-    }
+    // MARK: - start applies the initial status
 
-    // MARK: - register applies the initial status
-
-    func testRegisterWithUnknownTracksInMemoryOnly() async {
+    func testStartWithUnknownTracksInMemoryOnly() async {
         let manager = makeManager(initial: .unknown)
 
-        await manager.register(bundle())
+        await manager.start()
 
-        XCTAssertTrue(tracker.trackingEnabled, "Unknown must keep tracking on")
+        XCTAssertEqual(tracker.trackingEnabled, true, "Unknown must keep tracking on")
         XCTAssertEqual(storage.lastPersistenceValue, false, "Unknown must not persist")
-        XCTAssertFalse(coordinator.submissionEnabled, "Unknown must not submit")
+        XCTAssertEqual(coordinator.submissionEnabled, false, "Unknown must not submit")
         XCTAssertEqual(scheduler.startCallCount, 0, "Unknown must not start the recorder")
     }
 
-    func testRegisterWithGrantedStartsRecording() async {
+    func testStartWithGrantedStartsRecording() async {
         let manager = makeManager(initial: .granted)
 
-        await manager.register(bundle())
+        await manager.start()
 
-        XCTAssertTrue(tracker.trackingEnabled)
+        XCTAssertEqual(tracker.trackingEnabled, true)
         XCTAssertEqual(storage.lastPersistenceValue, true)
-        XCTAssertTrue(coordinator.submissionEnabled)
+        XCTAssertEqual(coordinator.submissionEnabled, true)
         XCTAssertEqual(scheduler.startCallCount, 1)
     }
 
@@ -55,72 +51,95 @@ final class DefaultUserConsentManagerTest: XCTestCase {
 
     func testSetGrantedEnablesPersistenceAndRecording() async {
         let manager = makeManager(initial: .unknown)
-        await manager.register(bundle())
+        await manager.start()
 
         await manager.set(.granted)
 
-        let status = await manager.getStatus()
-        XCTAssertEqual(status, .granted)
-        XCTAssertTrue(tracker.trackingEnabled)
+        XCTAssertEqual(tracker.trackingEnabled, true)
         XCTAssertEqual(storage.lastPersistenceValue, true, "Granting must flush/enable persistence")
-        XCTAssertTrue(coordinator.submissionEnabled)
+        XCTAssertEqual(coordinator.submissionEnabled, true)
         XCTAssertEqual(scheduler.startCallCount, 1)
     }
 
     func testSetDeclinedStopsTrackingAndDiscards() async {
         let manager = makeManager(initial: .granted)
-        await manager.register(bundle())
+        await manager.start()
 
         await manager.set(.declined)
 
-        let status = await manager.getStatus()
-        XCTAssertEqual(status, .declined)
-        XCTAssertFalse(tracker.trackingEnabled, "Declined must stop tracking")
+        XCTAssertEqual(tracker.trackingEnabled, false, "Declined must stop tracking")
         XCTAssertEqual(storage.lastPersistenceValue, false)
-        XCTAssertFalse(coordinator.submissionEnabled)
+        XCTAssertEqual(coordinator.submissionEnabled, false)
         XCTAssertEqual(scheduler.stopCallCount, 1)
         XCTAssertEqual(storage.clearInMemoryCallCount, 1, "Declined must discard buffered events")
     }
 
     func testSetSameStatusIsNoOp() async {
         let manager = makeManager(initial: .granted)
-        await manager.register(bundle()) // applies granted once
+        await manager.start() // applies granted once
 
-        let startsAfterRegister = scheduler.startCallCount
-        let persistenceCallsAfterRegister = storage.enablePersistenceCalls.count
+        let startsAfterStart = scheduler.startCallCount
+        let persistenceCallsAfterStart = storage.enablePersistenceCalls.count
 
         await manager.set(.granted) // same status
 
-        XCTAssertEqual(scheduler.startCallCount, startsAfterRegister, "Repeated status must not re-apply")
-        XCTAssertEqual(storage.enablePersistenceCalls.count, persistenceCallsAfterRegister)
+        XCTAssertEqual(scheduler.startCallCount, startsAfterStart, "Repeated status must not re-apply")
+        XCTAssertEqual(storage.enablePersistenceCalls.count, persistenceCallsAfterStart)
     }
 
-    // MARK: - Fan-out and destroy
+    // MARK: - Reentrancy
 
-    func testSetFansOutToAllBundles() async {
-        let storage2 = EventsConsentControllableMock()
-        let tracker2 = EventsTrackerMock()
-        let scheduler2 = EventsPeriodicSchedulerMock()
-        let coordinator2 = EventSubmissionCoordinatorMock()
-
+    func testGrantSupersededByDeclineDoesNotEnableSubmission() async {
         let manager = makeManager(initial: .unknown)
-        await manager.register(bundle())
-        await manager.register(ConsentControllableBundle(storage: storage2, tracker: tracker2, scheduler: scheduler2, coordinator: coordinator2))
+        await manager.start()
 
-        await manager.set(.granted)
+        // Hold the grant inside the persistence flush so the decline lands while it is suspended.
+        let flushStarted = expectation("grant reached the persistence flush")
+        let flushGate = Gate()
+        storage.onEnablePersistence = { enable in
+            guard enable else { return }
+            flushStarted.fulfill()
+            await flushGate.wait()
+        }
 
-        XCTAssertEqual(scheduler.startCallCount, 1)
-        XCTAssertEqual(scheduler2.startCallCount, 1)
-        XCTAssertEqual(storage.lastPersistenceValue, true)
-        XCTAssertEqual(storage2.lastPersistenceValue, true)
+        let grant = Task { await manager.set(.granted) }
+        await fulfillment(of: [flushStarted], timeout: 3)
+
+        await manager.set(.declined)
+        await flushGate.open()
+        await grant.value
+
+        XCTAssertEqual(coordinator.submissionEnabled, false, "A superseded grant must not enable submission")
+        XCTAssertEqual(scheduler.startCallCount, 0, "A superseded grant must not start the recorder")
+        XCTAssertEqual(tracker.trackingEnabled, false, "Declined must win")
     }
 
-    func testClearPendingDiscardsAllBuffers() async {
+    // MARK: - Destroy
+
+    func testClearPendingDiscardsBuffer() async {
         let manager = makeManager(initial: .unknown)
-        await manager.register(bundle())
+        await manager.start()
 
         await manager.clearPending()
 
         XCTAssertEqual(storage.clearInMemoryCallCount, 1)
+    }
+}
+
+/// One-shot async gate so a test can park a suspension point and release it on demand.
+private actor Gate {
+
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var isOpen = false
+
+    func wait() async {
+        guard !isOpen else { return }
+        await withCheckedContinuation { continuation = $0 }
+    }
+
+    func open() {
+        isOpen = true
+        continuation?.resume()
+        continuation = nil
     }
 }

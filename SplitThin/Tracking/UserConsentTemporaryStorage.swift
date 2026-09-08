@@ -6,23 +6,14 @@ import Logging
 
 /// Consent axis controlling whether tracked events are persisted.
 protocol EventsConsentControllable: Sendable {
-    /// Enables/disables persistence. When enabling, buffered in-memory events are
-    /// flushed to the persistent storage. When disabling, new events accumulate in memory.
+    /// When enabling, buffered in-memory events are flushed to the persistent storage. 
+    /// When disabling, new events accumulate in memory.
     func enablePersistence(_ enable: Bool) async
-    /// Discards the in-memory buffer (used on decline/destroy while not granted).
+
     func clearInMemory() async
 }
 
-/// Wraps a persistent events storage and adds an in-memory buffer whose target is
-/// decided per write by the `persistenceEnabled` flag. Mirrors `MainEventsStorage`
-/// from the full SDK (`ios-client`): while consent is not granted, events are held in
-/// memory (not persisted, not submitted); on grant, the buffer is flushed to the
-/// persistent store.
-///
-/// The `persistenceEnabled` flag and the buffer share a single lock so that a
-/// transition (flush + flag flip) is atomic with respect to concurrent `add` calls:
-/// an event either lands in the buffer that is about to be drained, or goes straight
-/// to the persistent store. There is no third place for it to get lost.
+/// Wraps a persistent events storage and adds an in-memory buffer
 final class UserConsentTemporaryStorage: EventsReadStorage, EventsWriteStorage, EventsConsentControllable, @unchecked Sendable {
 
     private let persistentStorage: EventsReadStorage & EventsWriteStorage
@@ -38,8 +29,6 @@ final class UserConsentTemporaryStorage: EventsReadStorage, EventsWriteStorage, 
     // MARK: - EventsConsentControllable
 
     func enablePersistence(_ enable: Bool) async {
-        // Flip the flag and drain the buffer under the same lock so no concurrent
-        // `add` can slip an event into a buffer that will no longer be drained.
         let pending: [EventEntity] = withLock(lock) {
             persistenceEnabled = enable
             guard enable else { return [] }
@@ -66,14 +55,18 @@ final class UserConsentTemporaryStorage: EventsReadStorage, EventsWriteStorage, 
         await add([event])
     }
 
+    // persist ? saveToDisk : saveInMemory
     func add(_ events: [EventEntity]) async {
-        let persist = withLock(lock) {
-            if persistenceEnabled { return true }
-            buffer.append(contentsOf: events)
-            return false
+        let shouldPersist = withLock(lock) { () -> Bool in
+            if persistenceEnabled {
+                return true
+            } else {
+                buffer.append(contentsOf: events)
+                return false
+            }
         }
 
-        if persist {
+        if shouldPersist {
             await persistentStorage.add(events)
         }
     }
@@ -89,8 +82,6 @@ final class UserConsentTemporaryStorage: EventsReadStorage, EventsWriteStorage, 
 
     // MARK: - EventsReadStorage
 
-    // Reads only reflect the persistent store. While consent is not granted, submission
-    // is stopped, so these are not consulted for the in-memory buffer.
     func getBatch(size: Int) async -> [EventEntity] {
         await persistentStorage.getBatch(size: size)
     }

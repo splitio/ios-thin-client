@@ -12,15 +12,15 @@ final class DefaultTelemetrySubmitter: TelemetrySubmitter, @unchecked Sendable {
 
     private let storage: TelemetryReadStorage & TelemetryWriteStorage
     private let secureHttpClient: SecureHttpClient
-    private let activeSessionId: String
+    private let observer: TelemetryObserver
 
     private var isSubmitting = false
     private let lock = NSLock()
 
-    init(storage: TelemetryReadStorage & TelemetryWriteStorage, secureHttpClient: SecureHttpClient, activeSessionId: String) {
+    init(storage: TelemetryReadStorage & TelemetryWriteStorage, secureHttpClient: SecureHttpClient, observer: TelemetryObserver) {
         self.storage = storage
         self.secureHttpClient = secureHttpClient
-        self.activeSessionId = activeSessionId
+        self.observer = observer
     }
 
     func flush(count: Int?) async {
@@ -39,7 +39,7 @@ final class DefaultTelemetrySubmitter: TelemetrySubmitter, @unchecked Sendable {
             withLock(lock) { isSubmitting = false }
         }
 
-        let records = await storage.getNonActive(activeSessionId: activeSessionId)
+        let records = await storage.getAll()
         guard !records.isEmpty else { return }
 
         let toSend = count.map { Array(records.prefix($0)) } ?? records
@@ -49,6 +49,11 @@ final class DefaultTelemetrySubmitter: TelemetrySubmitter, @unchecked Sendable {
             let payload = try JSONSerialization.data(withJSONObject: metricsArray)
             _ = try await secureHttpClient.postTelemetry(payload: payload)
             await storage.remove(sessionIds: toSend.map { $0.sessionId })
+
+            // Rows from previous app runs carry no live accumulator to reconcile.
+            if let current = toSend.first(where: { $0.sessionId == observer.sessionId }) {
+                observer.subtractSubmitted(current.metrics)
+            }
         } catch {
             Logger.e("DefaultTelemetrySubmitter: Failed to submit telemetry: \(error)")
         }

@@ -22,14 +22,12 @@ final class DefaultEventTask: EventTask {
     private let serializer: EventSerializer
     private let submitter: HttpEventsSubmitter
     private let observer: Observer
-    private let target: Target
 
-    init(storage: EventsReadStorage & EventsWriteStorage, serializer: EventSerializer, submitter: HttpEventsSubmitter, observer: Observer, target: Target) {
+    init(storage: EventsReadStorage & EventsWriteStorage, serializer: EventSerializer, submitter: HttpEventsSubmitter, observer: Observer) {
         self.storage = storage
         self.serializer = serializer
         self.submitter = submitter
         self.observer = observer
-        self.target = target
     }
 
     func run() async -> EventTaskResult {
@@ -41,7 +39,7 @@ final class DefaultEventTask: EventTask {
 
             do {
                 let payload = try serializer.serialize(batch)
-                try await submitter.submit(payload: payload, target: target)
+                try await submitter.submit(payload: payload)
                 await storage.remove(batch)
                 totalSent += batch.count
             } catch CredentialFetcherError.unauthorized {
