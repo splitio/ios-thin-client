@@ -3,7 +3,7 @@
 ## Overview
 This SDK is designed to work with Harness FME, the platform for controlled rollouts, which serves features to your users via feature flags to manage your complete customer experience.
 
-The thin client delegates all flag evaluation to the Remote Evaluator service, keeping the client footprint small.
+The thin client delegates flag evaluation to the Remote Evaluator service.
 
 ## Compatibility
 This SDK is compatible with iOS 13 and later, and macOS 10.15 and later. It requires Swift 5.5 or later.
