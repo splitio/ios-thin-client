@@ -27,8 +27,9 @@ public struct SplitClientConfig: Sendable {
     let pushRate: Int
     let fallbackTreatments: FallbackTreatmentsConfig
     let evaluationFilters: EvaluationFilters?
+    let certificatePinning: CertificatePinningConfig?
 
-    fileprivate init(syncMode: SyncMode, serviceEndpoints: ServiceEndpoints?, configsEnabled: Bool, logLevel: LogLevel, pollingRate: Int, readyTimeout: Int, prefix: String?, pushRate: Int, fallbackTreatments: FallbackTreatmentsConfig, evaluationFilters: EvaluationFilters?) {
+    fileprivate init(syncMode: SyncMode, serviceEndpoints: ServiceEndpoints?, configsEnabled: Bool, logLevel: LogLevel, pollingRate: Int, readyTimeout: Int, prefix: String?, pushRate: Int, fallbackTreatments: FallbackTreatmentsConfig, evaluationFilters: EvaluationFilters?, certificatePinning: CertificatePinningConfig?) {
         self.syncMode = syncMode
         self.serviceEndpoints = serviceEndpoints
         self.configsEnabled = configsEnabled
@@ -39,6 +40,7 @@ public struct SplitClientConfig: Sendable {
         self.pushRate = pushRate
         self.fallbackTreatments = fallbackTreatments
         self.evaluationFilters = evaluationFilters
+        self.certificatePinning = certificatePinning
     }
 
     /// Creates a new builder for `SplitClientConfig`.
@@ -60,6 +62,7 @@ public final class SplitConfigBuilder {
     private var pushRate: Int = 1800
     private var fallbackTreatments: FallbackTreatmentsConfig = FallbackTreatmentsConfig.builder().build()
     private var evaluationFilters: EvaluationFilters?
+    private var certificatePinning: CertificatePinningConfig?
 
     // Internal for testing
     var minEvaluationRefreshRateOverride: Int?
@@ -184,6 +187,14 @@ public final class SplitConfigBuilder {
         return self
     }
 
+    /// Sets the certificate pinning configuration used to validate the public keys of
+    /// the SDK backend hosts during the TLS handshake. When unset, default TLS behavior applies.
+    @discardableResult
+    public func set(certificatePinning: CertificatePinningConfig) -> Self {
+        self.certificatePinning = certificatePinning
+        return self
+    }
+
     /// Builds the `SplitClientConfig` with the configured values.
     public func build() -> SplitClientConfig {
         SplitClientConfig(
@@ -196,7 +207,8 @@ public final class SplitConfigBuilder {
             prefix: prefix,
             pushRate: pushRate,
             fallbackTreatments: fallbackTreatments,
-            evaluationFilters: evaluationFilters
+            evaluationFilters: evaluationFilters,
+            certificatePinning: certificatePinning
         )
     }
 }
