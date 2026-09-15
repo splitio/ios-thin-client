@@ -22,14 +22,16 @@ final class CertificatePinningE2ETest: XCTestCase {
             HttpResponse(code: 200, data: mockEvaluationsData(flags: []))
         ]
         prefix = "pin_e2e_\(UUID().uuidString.prefix(8))"
+        HttpSessionConfig.default.pinChecker = nil
+        HttpSessionConfig.default.notificationHandler = nil
     }
 
     override func tearDown() async throws {
+        HttpSessionConfig.default.pinChecker = nil
+        HttpSessionConfig.default.notificationHandler = nil
         await factory?.destroy()
         factory = nil
         httpMock = nil
-        HttpSessionConfig.default.pinChecker = nil
-        HttpSessionConfig.default.notificationHandler = nil
         try await super.tearDown()
     }
 
@@ -55,18 +57,14 @@ final class CertificatePinningE2ETest: XCTestCase {
     func testFactoryWithPinningDeliversFailureAndStatusToUserHandlers() throws {
         let failureReceived = LockedBox<(String, String)?>(nil)
         let statusReceived = LockedBox<(String, CertificatePinningStatus, String)?>(nil)
-        let failureExpectation = expectation(description: "pinning failure handler")
-        let statusExpectation = expectation(description: "pinning status handler")
 
         let pinning = try CertificatePinningConfig.builder()
             .addPin(host: appleHost, keyHash: validSha256Pin)
             .set(failureHandler: { host, reason in
                 failureReceived.value = (host, reason)
-                failureExpectation.fulfill()
             })
             .set(statusHandler: { host, status, reason in
                 statusReceived.value = (host, status, reason)
-                statusExpectation.fulfill()
             })
             .build()
 
@@ -80,7 +78,6 @@ final class CertificatePinningE2ETest: XCTestCase {
         notificationHandler.notifyPinningStatus(
             CertificatePinningCompleteStatus(host: appleHost, status: .failed, reason: CredentialValidationResult.credentialNotPinned.description))
 
-        wait(for: [failureExpectation, statusExpectation], timeout: 1.0)
         XCTAssertEqual(failureReceived.value?.0, appleHost)
         XCTAssertEqual(failureReceived.value?.1, CredentialValidationResult.credentialNotPinned.description)
         XCTAssertEqual(statusReceived.value?.0, appleHost)
@@ -90,7 +87,6 @@ final class CertificatePinningE2ETest: XCTestCase {
 
     func testSimulatedChallengeCancelsAndNotifiesAfterFactoryBuild() throws {
         let failureReceived = LockedBox<(String, String)?>(nil)
-        let failureExpectation = expectation(description: "pinning failure handler on challenge")
         let expectedHash = secHelper.hashedKey(keyName: "apple_ec_pub", algo: .sha256)
         let keyHash = "sha256/\(expectedHash.base64EncodedString())"
 
@@ -98,7 +94,6 @@ final class CertificatePinningE2ETest: XCTestCase {
             .addPin(host: appleHost, keyHash: keyHash)
             .set(failureHandler: { host, reason in
                 failureReceived.value = (host, reason)
-                failureExpectation.fulfill()
             })
             .build()
 
@@ -107,7 +102,7 @@ final class CertificatePinningE2ETest: XCTestCase {
         let challenge = try XCTUnwrap(secHelper.createAuthChallenge(host: appleHost, certName: "apple_ec_cert"))
         let manager = requestManagerFromSessionConfig()
         let disposition = LockedBox<URLSession.AuthChallengeDisposition?>(nil)
-        let challengeDone = expectation(description: "challenge completed")
+        let challengeDone = expectation(description: "pinning challenge completed")
 
         let task = PinningChallengeURLTaskMock(taskIdentifier: 1)
 
@@ -116,7 +111,7 @@ final class CertificatePinningE2ETest: XCTestCase {
             challengeDone.fulfill()
         }
 
-        wait(for: [challengeDone, failureExpectation], timeout: 2.0)
+        wait(for: [challengeDone], timeout: 2.0)
         XCTAssertEqual(disposition.value, .cancelAuthenticationChallenge)
         XCTAssertEqual(failureReceived.value?.0, appleHost)
         XCTAssertEqual(failureReceived.value?.1, CredentialValidationResult.invalidChain.description)
