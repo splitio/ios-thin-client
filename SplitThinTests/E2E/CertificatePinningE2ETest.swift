@@ -10,24 +10,31 @@ final class CertificatePinningE2ETest: XCTestCase {
     private let secHelper = SecurityHelper()
     private let appleHost = "developer.apple.com"
     private let validSha256Pin = "sha256/47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU="
+    private var httpMock: RetryableHttpClientMock!
     private var factory: SplitFactory?
     private var prefix: String!
 
     override func setUp() {
         super.setUp()
+        httpMock = RetryableHttpClientMock()
+        httpMock.responses = [
+            HttpResponse(code: 200, data: AuthE2ETest.mockAuthResponse()),
+            HttpResponse(code: 200, data: mockEvaluationsData(flags: []))
+        ]
         prefix = "pin_e2e_\(UUID().uuidString.prefix(8))"
     }
 
     override func tearDown() async throws {
         await factory?.destroy()
         factory = nil
+        httpMock = nil
         HttpSessionConfig.default.pinChecker = nil
         HttpSessionConfig.default.notificationHandler = nil
         try await super.tearDown()
     }
 
     func testFactoryBuildWithPinningWiresHttpSession() throws {
-        factory = try buildFactory(prefix: prefix, certificatePinning: try makePinningConfig())
+        factory = try buildFactory(retryableHttpClient: httpMock, prefix: prefix, certificatePinning: try makePinningConfig())
 
         XCTAssertNotNil(factory)
         XCTAssertNotNil(HttpSessionConfig.default.pinChecker)
@@ -38,7 +45,7 @@ final class CertificatePinningE2ETest: XCTestCase {
         HttpSessionConfig.default.pinChecker = nil
         HttpSessionConfig.default.notificationHandler = nil
 
-        factory = try buildFactory(prefix: prefix)
+        factory = try buildFactory(retryableHttpClient: httpMock, prefix: prefix)
 
         XCTAssertNotNil(factory)
         XCTAssertNil(HttpSessionConfig.default.pinChecker)
@@ -48,8 +55,8 @@ final class CertificatePinningE2ETest: XCTestCase {
     func testFactoryWithPinningDeliversFailureAndStatusToUserHandlers() throws {
         let failureReceived = LockedBox<(String, String)?>(nil)
         let statusReceived = LockedBox<(String, CertificatePinningStatus, String)?>(nil)
-        let failureExpectation = expectation(description: "failure handler")
-        let statusExpectation = expectation(description: "status handler")
+        let failureExpectation = expectation(description: "pinning failure handler")
+        let statusExpectation = expectation(description: "pinning status handler")
 
         let pinning = try CertificatePinningConfig.builder()
             .addPin(host: appleHost, keyHash: validSha256Pin)
@@ -63,7 +70,7 @@ final class CertificatePinningE2ETest: XCTestCase {
             })
             .build()
 
-        factory = try buildFactory(prefix: prefix, certificatePinning: pinning)
+        factory = try buildFactory(retryableHttpClient: httpMock, prefix: prefix, certificatePinning: pinning)
 
         guard let notificationHandler = HttpSessionConfig.default.notificationHandler else {
             XCTFail("Expected notification handler after factory build")
@@ -83,7 +90,7 @@ final class CertificatePinningE2ETest: XCTestCase {
 
     func testSimulatedChallengeCancelsAndNotifiesAfterFactoryBuild() throws {
         let failureReceived = LockedBox<(String, String)?>(nil)
-        let failureExpectation = expectation(description: "failure handler on challenge")
+        let failureExpectation = expectation(description: "pinning failure handler on challenge")
         let expectedHash = secHelper.hashedKey(keyName: "apple_ec_pub", algo: .sha256)
         let keyHash = "sha256/\(expectedHash.base64EncodedString())"
 
@@ -95,15 +102,14 @@ final class CertificatePinningE2ETest: XCTestCase {
             })
             .build()
 
-        factory = try buildFactory(prefix: prefix, certificatePinning: pinning)
+        factory = try buildFactory(retryableHttpClient: httpMock, prefix: prefix, certificatePinning: pinning)
 
         let challenge = try XCTUnwrap(secHelper.createAuthChallenge(host: appleHost, certName: "apple_ec_cert"))
         let manager = requestManagerFromSessionConfig()
         let disposition = LockedBox<URLSession.AuthChallengeDisposition?>(nil)
         let challengeDone = expectation(description: "challenge completed")
 
-        let request = URLRequest(url: URL(string: "https://\(appleHost)/")!)
-        let task = URLSession.shared.dataTask(with: request)
+        let task = PinningChallengeURLTaskMock(taskIdentifier: 1)
 
         manager.urlSession(URLSession.shared, task: task, didReceive: challenge) { dispositionValue, _ in
             disposition.value = dispositionValue
@@ -125,4 +131,17 @@ final class CertificatePinningE2ETest: XCTestCase {
     private func requestManagerFromSessionConfig() -> DefaultHttpRequestManager {
         DefaultHttpRequestManager(authenticator: HttpSessionConfig.default.authenticator, pinChecker: HttpSessionConfig.default.pinChecker, notificationHandler: HttpSessionConfig.default.notificationHandler)
     }
+}
+
+private final class PinningChallengeURLTaskMock: URLSessionDataTask, @unchecked Sendable {
+    private let id: Int
+
+    init(taskIdentifier: Int) {
+        self.id = taskIdentifier
+        super.init()
+    }
+
+    override var taskIdentifier: Int { id }
+
+    override func resume() {}
 }
