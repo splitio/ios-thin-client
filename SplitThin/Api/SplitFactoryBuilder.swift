@@ -89,6 +89,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         let databaseName = Self.databaseName(prefix: config.prefix, apiKey: sdkKey.sdkKey)
         let coreDataStorage = CoreDataStorage(databaseName: databaseName)
         let evaluationStorage = PersistentStorage(storage: coreDataStorage, cacheValidator: DefaultCacheValidator(configsEnabled: config.configsEnabled))
+        setupCertificatePinning()
         let (secureHttp, resolvedAuth) = buildSecureHttpClientAndAuth(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey, observer: resolvedObserver, evaluationStorage: evaluationStorage)
         let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttp)
 
@@ -124,7 +125,13 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
 
     private func buildSecureHttpClientAndAuth(serviceEndpoints: ServiceEndpoints, sdkKey: String, observer: Observer, evaluationStorage: EvaluationReadStorage) -> (SecureHttpClient, AuthProvider) {
         let http = httpClient ?? DefaultHttpClient.shared
-        let retryable = retryableHttpClient ?? DefaultRetryableHttpClient(httpClient: http, observer: observer)
+        let retryable: RetryableHttpClient
+        if let injected = retryableHttpClient {
+            retryable = injected
+        } else {
+            let urlRequestSender = config.certificatePinning != nil ? Self.makePinnedAuthUrlRequestSender() : nil
+            retryable = DefaultRetryableHttpClient(httpClient: http, observer: observer, urlRequestSender: urlRequestSender)
+        }
         let credStorage = credentialStorage ?? KeychainCredentialStorage(keychainKey: "\(Self.databaseName(prefix: config.prefix, apiKey: sdkKey))_jwt")
         let fetcher = DefaultCredentialFetcher(retryableHttpClient: retryable, observer: observer, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey, configsEnabled: config.configsEnabled, evaluationFilters: config.evaluationFilters)
         let auth = authProvider ?? DefaultAuthProvider(credentialStorage: credStorage, credentialFetcher: fetcher, observer: observer)
@@ -157,5 +164,35 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
             return "split_\(prefix)_\(keyFragment)"
         }
         return "split_\(keyFragment)"
+    }
+}
+
+// MARK: Certificate Pinning
+extension DefaultSplitFactoryBuilder {
+
+    private func setupCertificatePinning() {
+        guard let pinningConfig = config.certificatePinning else { return }
+
+        HttpSessionConfig.default.pinChecker = DefaultTlsPinChecker(pins: pinningConfig.pins)
+        HttpSessionConfig.default.notificationHandler = ThinPinningNotificationHandler(failureHandler: pinningConfig.failureHandler, statusHandler: pinningConfig.statusHandler)
+    }
+
+    /// Auth builds its own `URLRequest`; route it through a delegate session so pinning matches `DefaultHttpClient.shared`.
+    private static func makePinnedAuthUrlRequestSender() -> DefaultRetryableHttpClient.UrlRequestSender {
+        let requestManager = DefaultHttpRequestManager(authenticator: HttpSessionConfig.default.authenticator, pinChecker: HttpSessionConfig.default.pinChecker, notificationHandler: HttpSessionConfig.default.notificationHandler)
+        let session = URLSession(configuration: .default, delegate: requestManager, delegateQueue: nil)
+        return { request in
+            try await withCheckedThrowingContinuation { continuation in
+                let task = session.dataTask(with: request) { data, response, error in
+                    if let error = error {
+                        continuation.resume(throwing: RetryableHttpError.networkError(error))
+                        return
+                    }
+                    let code = (response as? HTTPURLResponse)?.statusCode ?? HttpCode.internalServerError
+                    continuation.resume(returning: HttpResponse(code: code, data: data))
+                }
+                task.resume()
+            }
+        }
     }
 }
