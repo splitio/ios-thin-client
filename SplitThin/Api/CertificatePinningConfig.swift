@@ -27,7 +27,7 @@ public enum CertificatePinningError: Error, CustomStringConvertible, Equatable {
         case .unsupportedAlgorithm(let algorithm):
             return "Key hash algorithm not supported: \(algorithm)"
         case .invalidKeyHashEncoding(let host, let algorithm):
-            return "Key hash is not valid base64 for host \(host) and algorithm \(algorithm)"
+            return "Key hash is not valid for host \(host) and algorithm \(algorithm) (expected base64-encoded digest: 32 bytes for sha256, 20 for sha1)"
         case .emptyKeyHash(let host, let algorithm):
             return "Key hash is empty for host \(host) and algorithm \(algorithm)"
         case .certificateParsingFailed(let name):
@@ -148,6 +148,10 @@ public struct CertificatePinningConfig: Sendable {
             }
             if dataHash.isEmpty {
                 throw CertificatePinningError.emptyKeyHash(host: host, algorithm: algoName)
+            }
+            let expectedLength = algo == .sha256 ? 32 : 20
+            if dataHash.count != expectedLength {
+                throw CertificatePinningError.invalidKeyHashEncoding(host: host, algorithm: algoName)
             }
             return CredentialPin(host: host, hash: dataHash, algo: algo)
         }
