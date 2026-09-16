@@ -58,6 +58,18 @@ final class CertificatePinningConfigTests: XCTestCase {
             expected: .emptyKeyHash(host: "api.split.io", algorithm: "sha256"))
     }
 
+    func testKeyHashWrongLengthForSha256Throws() {
+        assertBuildThrows(
+            CertificatePinningConfig.builder().addPin(host: "api.split.io", keyHash: "sha256/AAAA"),
+            expected: .invalidKeyHashEncoding(host: "api.split.io", algorithm: "sha256"))
+    }
+
+    func testKeyHashWrongLengthForSha1Throws() {
+        assertBuildThrows(
+            CertificatePinningConfig.builder().addPin(host: "api.split.io", keyHash: "sha1/AAAA"),
+            expected: .invalidKeyHashEncoding(host: "api.split.io", algorithm: "sha1"))
+    }
+
     // MARK: - certificate pins
 
     func testAddPinWithCertificateMatchesPublicKeyHash() throws {
