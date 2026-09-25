@@ -46,6 +46,9 @@ final class PersistentStorage: EvaluationReadStorage, EvaluationWriteStorage, Se
             (flagName: eval.flag, treatment: eval.treatment, config: eval.config, sets: eval.flagSets, changeNumber: eval.changeNumber)
         }
         try await storage.upsertEvaluations(matchingKey: matchingKey, bucketingKey: bucketingKey, evaluations: evaluations)
+
+        // Timestamp the rollout cache
+        await storage.setUpdateTimestamp(Int64(Date().timeIntervalSince1970))
     }
 
     func clear(target: Target) async {

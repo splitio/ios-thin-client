@@ -4,7 +4,7 @@ import XCTest
 final class CoreDataStorageTests: XCTestCase {
 
     private func makeStorage() -> CoreDataStorage {
-        CoreDataStorage(databaseName: "test_\(UUID().uuidString)")
+        CoreDataStorage(databaseName: "test_\(UUID().uuidString)", inMemory: true)
     }
 
     // MARK: - Bucketing key isolation

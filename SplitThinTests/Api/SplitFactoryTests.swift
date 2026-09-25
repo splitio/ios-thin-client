@@ -21,7 +21,7 @@ final class DefaultSplitFactoryTest: XCTestCase {
         connectionManagerMock = StreamingMock()
         evaluationStorageMock = EvaluationStorageMock()
         let splitManager = DefaultSplitManager(evaluationRepository: evaluationRepositoryMock)
-        let coreDataStorage = CoreDataStorage(databaseName: "test_factory_\(UUID().uuidString.prefix(8))")
+        let coreDataStorage = CoreDataStorage(databaseName: "test_factory_\(UUID().uuidString.prefix(8))", inMemory: true)
         factory = DefaultSplitFactory(sdkKey: SdkKey("api-key"), target: Target(matchingKey: "user1", trafficType: "user"), config: SplitClientConfig.builder().build(), evaluationFilters: nil, secureHttpClient: secureHttpClientMock, authProvider: authProviderMock, evaluationRepository: evaluationRepositoryMock, fetchCoordinator: fetchCoordinatorMock, streaming: connectionManagerMock, evaluationStorage: evaluationStorageMock, coreDataStorage: coreDataStorage, splitManager: splitManager, factoryObserver: ObserverSpy(), telemetryStorage: DefaultTelemetryStorage(storage: coreDataStorage))
     }
 
@@ -110,7 +110,7 @@ final class DefaultSplitFactoryTest: XCTestCase {
         let fetchCoordinator = EvaluationFetchCoordinatorMock()
         let streamingMock = StreamingMock()
         let evalRepo = EvaluationRepositoryMock()
-        let coreData = CoreDataStorage(databaseName: "test_latefallback_\(UUID().uuidString.prefix(8))")
+        let coreData = CoreDataStorage(databaseName: "test_latefallback_\(UUID().uuidString.prefix(8))", inMemory: true)
         let config = SplitClientConfig.builder().set(syncMode: .streaming).setMinEvaluationRefreshRate(1).set(pollingRate: 1).build()
         let localFactory = DefaultSplitFactory(sdkKey: SdkKey("api-key"), target: Target(matchingKey: "user1", trafficType: "user"), config: config, evaluationFilters: nil, secureHttpClient: SecureHttpClientMock(), authProvider: AuthProviderMock(), evaluationRepository: evalRepo, fetchCoordinator: fetchCoordinator, streaming: streamingMock, evaluationStorage: EvaluationStorageMock(), coreDataStorage: coreData, splitManager: DefaultSplitManager(evaluationRepository: evalRepo), factoryObserver: ObserverSpy(), telemetryStorage: DefaultTelemetryStorage(storage: coreData))
 

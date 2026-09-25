@@ -8,7 +8,7 @@ final class TelemetryStorageTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        coreDataStorage = CoreDataStorage(databaseName: "test_telemetry_\(UUID().uuidString)")
+        coreDataStorage = CoreDataStorage(databaseName: "test_telemetry_\(UUID().uuidString)", inMemory: true)
         sut = DefaultTelemetryStorage(storage: coreDataStorage)
     }
 

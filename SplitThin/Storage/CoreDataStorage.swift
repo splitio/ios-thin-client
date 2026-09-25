@@ -15,16 +15,21 @@ final class CoreDataStorage: @unchecked Sendable {
     private static let evaluationEntity = "Evaluation"
     private static let eventEntity = "Event"
     private static let telemetrySessionEntity = "TelemetrySession"
+    private static let generalInfoEntity = "GeneralInfo"
 
     private let container: NSPersistentContainer
 
-    init(databaseName: String) {
+    init(databaseName: String, inMemory: Bool = false) {
         container = NSPersistentContainer(name: databaseName, managedObjectModel: Self.createModel())
 
         let description = NSPersistentStoreDescription()
-        description.url = Self.storeURL(for: databaseName)
-        description.shouldMigrateStoreAutomatically = true
-        description.shouldInferMappingModelAutomatically = true
+        if inMemory {
+            description.type = NSInMemoryStoreType
+        } else {
+            description.url = Self.storeURL(for: databaseName)
+            description.shouldMigrateStoreAutomatically = true
+            description.shouldInferMappingModelAutomatically = true
+        }
         container.persistentStoreDescriptions = [description]
 
         container.loadPersistentStores { _, error in
@@ -350,7 +355,63 @@ final class CoreDataStorage: @unchecked Sendable {
         }
     }
 
+    // MARK: - GeneralInfo (cache metadata)
+
+    // Keys for the GeneralInfo key/value table. Raw values are the persisted column
+    // names, so they must stay stable across releases.
+    private enum GeneralInfoKey: String {
+        case updateTimestamp = "splitsUpdateTimestamp"
+        case rolloutCacheLastClearTimestamp = "rolloutCacheLastClearTimestamp"
+    }
+
+    func getUpdateTimestamp() async -> Int64 {
+        await getGeneralInfoLong(.updateTimestamp) ?? 0
+    }
+
+    func setUpdateTimestamp(_ timestamp: Int64) async {
+        await setGeneralInfoLong(.updateTimestamp, value: timestamp)
+    }
+
+    func getRolloutCacheLastClearTimestamp() async -> Int64 {
+        await getGeneralInfoLong(.rolloutCacheLastClearTimestamp) ?? 0
+    }
+
+    func setRolloutCacheLastClearTimestamp(_ timestamp: Int64) async {
+        await setGeneralInfoLong(.rolloutCacheLastClearTimestamp, value: timestamp)
+    }
+
     // MARK: - Private Helpers
+
+    private func setGeneralInfoLong(_ key: GeneralInfoKey, value: Int64) async {
+        try? await withContext { context in
+            let request = NSFetchRequest<NSManagedObject>(entityName: Self.generalInfoEntity)
+            request.predicate = NSPredicate(format: "name == %@", key.rawValue)
+            request.fetchLimit = 1
+
+            if let existing = try context.fetch(request).first {
+                existing.setValue(value, forKey: "longValue")
+            } else {
+                guard let entity = NSEntityDescription.entity(forEntityName: Self.generalInfoEntity, in: context) else {
+                    throw StorageError.entityNotFound
+                }
+                let record = NSManagedObject(entity: entity, insertInto: context)
+                record.setValue(key.rawValue, forKey: "name")
+                record.setValue(value, forKey: "longValue")
+            }
+
+            try context.save()
+        }
+    }
+
+    private func getGeneralInfoLong(_ key: GeneralInfoKey) async -> Int64? {
+        try? await withContext { context in
+            let request = NSFetchRequest<NSManagedObject>(entityName: Self.generalInfoEntity)
+            request.predicate = NSPredicate(format: "name == %@", key.rawValue)
+            request.fetchLimit = 1
+            return try context.fetch(request).first?.value(forKey: "longValue") as? Int64
+        }
+    }
+
 
     private func sessionPredicate(matchingKey: String, bucketingKey: String?) -> NSPredicate {
         if let bucketingKey {
@@ -548,7 +609,27 @@ final class CoreDataStorage: @unchecked Sendable {
 
         telemetrySessionEntity.properties = [telemetrySessionIdAttr, telemetryMetricsJsonAttr, telemetryTimestampAttr]
 
-        model.entities = [clientSessionEntity, evaluationEntity, eventEntity, telemetrySessionEntity]
+        // GeneralInfo entity (key/value metadata: cache timestamps, etc.)
+        let generalInfoEntity = NSEntityDescription()
+        generalInfoEntity.name = Self.generalInfoEntity
+        generalInfoEntity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+
+        let generalInfoNameAttr = NSAttributeDescription()
+        generalInfoNameAttr.name = "name"
+        generalInfoNameAttr.attributeType = .stringAttributeType
+
+        let generalInfoLongAttr = NSAttributeDescription()
+        generalInfoLongAttr.name = "longValue"
+        generalInfoLongAttr.attributeType = .integer64AttributeType
+
+        generalInfoEntity.properties = [generalInfoNameAttr, generalInfoLongAttr]
+
+        let generalInfoNameIndex = NSFetchIndexDescription(name: "byName", elements: [
+            NSFetchIndexElementDescription(property: generalInfoNameAttr, collationType: .binary)
+        ])
+        generalInfoEntity.indexes = [generalInfoNameIndex]
+
+        model.entities = [clientSessionEntity, evaluationEntity, eventEntity, telemetrySessionEntity, generalInfoEntity]
         return model
     }
 
