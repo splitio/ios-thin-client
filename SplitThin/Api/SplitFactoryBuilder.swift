@@ -90,7 +90,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         let coreDataStorage = CoreDataStorage(databaseName: databaseName)
         let evaluationStorage = PersistentStorage(storage: coreDataStorage, cacheValidator: DefaultCacheValidator(configsEnabled: config.configsEnabled))
         setupCertificatePinning()
-        let (secureHttp, resolvedAuth) = buildSecureHttpClientAndAuth(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey, observer: resolvedObserver, evaluationStorage: evaluationStorage)
+        let (secureHttp, resolvedAuth, pinnedAuthSession) = buildSecureHttpClientAndAuth(serviceEndpoints: serviceEndpoints, sdkKey: sdkKey.sdkKey, observer: resolvedObserver, evaluationStorage: evaluationStorage)
         let evaluationProvider = DefaultEvaluationProvider(secureHttpClient: secureHttp)
 
         let fetchCoordinator = DefaultEvaluationFetchCoordinator(provider: evaluationProvider, observer: resolvedObserver, storage: evaluationStorage, readStorage: evaluationStorage)
@@ -114,7 +114,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
 
         let telemetryStorage = DefaultTelemetryStorage(storage: coreDataStorage)
 
-        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: config.evaluationFilters, secureHttpClient: secureHttp, authProvider: resolvedAuth, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, streaming: streaming, evaluationStorage: evaluationStorage, coreDataStorage: coreDataStorage, splitManager: splitManager, factoryObserver: resolvedObserver, telemetryStorage: telemetryStorage)
+        return DefaultSplitFactory(sdkKey: sdkKey, target: target, config: config, evaluationFilters: config.evaluationFilters, secureHttpClient: secureHttp, authProvider: resolvedAuth, evaluationRepository: evaluationRepository, fetchCoordinator: fetchCoordinator, streaming: streaming, evaluationStorage: evaluationStorage, coreDataStorage: coreDataStorage, splitManager: splitManager, factoryObserver: resolvedObserver, telemetryStorage: telemetryStorage, pinnedAuthSession: pinnedAuthSession)
     }
 
     private func configureLogger() {
@@ -123,20 +123,26 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
         }
     }
 
-    private func buildSecureHttpClientAndAuth(serviceEndpoints: ServiceEndpoints, sdkKey: String, observer: Observer, evaluationStorage: EvaluationReadStorage) -> (SecureHttpClient, AuthProvider) {
+    private func buildSecureHttpClientAndAuth(serviceEndpoints: ServiceEndpoints, sdkKey: String, observer: Observer, evaluationStorage: EvaluationReadStorage) -> (SecureHttpClient, AuthProvider, URLSession?) {
         let http = httpClient ?? DefaultHttpClient.shared
         let retryable: RetryableHttpClient
+        var pinnedAuthSession: URLSession?
+
         if let injected = retryableHttpClient {
             retryable = injected
+        } else if config.certificatePinning != nil {
+            let pinned = Self.makePinnedAuthUrlRequestSender()
+            pinnedAuthSession = pinned.session
+            retryable = DefaultRetryableHttpClient(httpClient: http, observer: observer, urlRequestSender: pinned.sender)
         } else {
-            let urlRequestSender = config.certificatePinning != nil ? Self.makePinnedAuthUrlRequestSender() : nil
-            retryable = DefaultRetryableHttpClient(httpClient: http, observer: observer, urlRequestSender: urlRequestSender)
+            retryable = DefaultRetryableHttpClient(httpClient: http, observer: observer)
         }
+
         let credStorage = credentialStorage ?? KeychainCredentialStorage(keychainKey: "\(Self.databaseName(prefix: config.prefix, apiKey: sdkKey))_jwt")
         let fetcher = DefaultCredentialFetcher(retryableHttpClient: retryable, observer: observer, authEndpoint: serviceEndpoints.authServiceEndpoint, sdkKey: sdkKey, configsEnabled: config.configsEnabled, evaluationFilters: config.evaluationFilters)
         let auth = authProvider ?? DefaultAuthProvider(credentialStorage: credStorage, credentialFetcher: fetcher, observer: observer)
         let client = secureHttpClient ?? DefaultSecureHttpClient(retryableHttpClient: retryable, authProvider: auth, serviceEndpoints: serviceEndpoints, configsEnabled: config.configsEnabled, apiKey: sdkKey, evaluationStorage: evaluationStorage)
-        return (client, auth)
+        return (client, auth, pinnedAuthSession)
     }
 
     // Observer override access point. JUST for testing
@@ -173,15 +179,17 @@ extension DefaultSplitFactoryBuilder {
     private func setupCertificatePinning() {
         guard let pinningConfig = config.certificatePinning else { return }
 
+        // Pinning on HttpSessionConfig.default is process-wide and sticky: a later factory that omits certificatePinning does not clear pins (use a single factory).
         HttpSessionConfig.default.pinChecker = DefaultTlsPinChecker(pins: pinningConfig.pins)
         HttpSessionConfig.default.notificationHandler = ThinPinningNotificationHandler(failureHandler: pinningConfig.failureHandler, statusHandler: pinningConfig.statusHandler)
     }
 
     /// Auth builds its own `URLRequest`; route it through a delegate session so pinning matches `DefaultHttpClient.shared`.
-    private static func makePinnedAuthUrlRequestSender() -> DefaultRetryableHttpClient.UrlRequestSender {
+    /// Caller must `invalidateAndCancel()` the session (factory `destroy()`) so URLSession can release its delegate.
+    static func makePinnedAuthUrlRequestSender(sessionConfiguration: URLSessionConfiguration = .default) -> (sender: DefaultRetryableHttpClient.UrlRequestSender, session: URLSession) {
         let requestManager = DefaultHttpRequestManager(authenticator: HttpSessionConfig.default.authenticator, pinChecker: HttpSessionConfig.default.pinChecker, notificationHandler: HttpSessionConfig.default.notificationHandler)
-        let session = URLSession(configuration: .default, delegate: requestManager, delegateQueue: nil)
-        return { request in
+        let session = URLSession(configuration: sessionConfiguration, delegate: requestManager, delegateQueue: nil)
+        let sender: DefaultRetryableHttpClient.UrlRequestSender = { request in
             try await withCheckedThrowingContinuation { continuation in
                 let task = session.dataTask(with: request) { data, response, error in
                     if let error = error {
@@ -194,5 +202,6 @@ extension DefaultSplitFactoryBuilder {
                 task.resume()
             }
         }
+        return (sender, session)
     }
 }

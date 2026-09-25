@@ -42,6 +42,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
 
     private var pushDisabled = false
     private let fallbackLock = NSLock()
+    private var pinnedAuthSession: URLSession?
 
     private static let initErrorMessage = "Something happened on Split init and the client couldn't be created"
 
@@ -57,7 +58,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         syncManagers[defaultKey]
     }
 
-    init(sdkKey: SdkKey, target: Target, config: SplitClientConfig, evaluationFilters: EvaluationFilters?, secureHttpClient: SecureHttpClient, authProvider: AuthProvider, evaluationRepository: EvaluationRepository, fetchCoordinator: EvaluationFetchCoordinator, streaming: Streaming, evaluationStorage: EvaluationReadStorage, coreDataStorage: CoreDataStorage, splitManager: DefaultSplitManager, factoryObserver: Observer, telemetryStorage: TelemetryReadStorage & TelemetryWriteStorage) {
+    init(sdkKey: SdkKey, target: Target, config: SplitClientConfig, evaluationFilters: EvaluationFilters?, secureHttpClient: SecureHttpClient, authProvider: AuthProvider, evaluationRepository: EvaluationRepository, fetchCoordinator: EvaluationFetchCoordinator, streaming: Streaming, evaluationStorage: EvaluationReadStorage, coreDataStorage: CoreDataStorage, splitManager: DefaultSplitManager, factoryObserver: Observer, telemetryStorage: TelemetryReadStorage & TelemetryWriteStorage, pinnedAuthSession: URLSession? = nil) {
         self.sdkKey = sdkKey
         self.defaultTarget = target
         self.defaultKey = target.key
@@ -73,6 +74,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         self.splitManager = splitManager
         self.observer = factoryObserver
         self.telemetryStorage = telemetryStorage
+        self.pinnedAuthSession = pinnedAuthSession
 
         let eventsStorage = DefaultEventsStorage(storage: coreDataStorage)
         let eventsSubmitter = DefaultHttpEventsSubmitter(secureHttpClient: secureHttpClient)
@@ -144,6 +146,8 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
 
         splitManager = nil
         (evaluationRepository as? DefaultEvaluationRepository)?.clear() // clear in-memory flags
+        pinnedAuthSession?.invalidateAndCancel()
+        pinnedAuthSession = nil
         observer.notify(event: .destroyCompleted)
     }
 
