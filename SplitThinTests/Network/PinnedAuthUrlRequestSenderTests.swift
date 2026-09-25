@@ -66,12 +66,13 @@ final class PinnedAuthUrlRequestSenderTests: XCTestCase {
 }
 
 private final class StubURLProtocol: URLProtocol, @unchecked Sendable {
-    static var statusCode = 200
-    static var statusCodes: [Int]?
-    static var body = Data()
-    static var error: Error?
-    static var lastRequest: URLRequest?
-    static var handledCount = 0
+    // Shared stub state; guarded by `lock` when read from URLSession callbacks.
+    nonisolated(unsafe) static var statusCode = 200
+    nonisolated(unsafe) static var statusCodes: [Int]?
+    nonisolated(unsafe) static var body = Data()
+    nonisolated(unsafe) static var error: Error?
+    nonisolated(unsafe) static var lastRequest: URLRequest?
+    nonisolated(unsafe) static var handledCount = 0
 
     private static let lock = NSLock()
 
