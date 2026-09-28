@@ -27,8 +27,9 @@ public struct SplitClientConfig: Sendable {
     let pushRate: Int
     let fallbackTreatments: FallbackTreatmentsConfig
     let evaluationFilters: EvaluationFilters?
+    let rolloutCacheConfiguration: RolloutCacheConfiguration
 
-    fileprivate init(syncMode: SyncMode, serviceEndpoints: ServiceEndpoints?, configsEnabled: Bool, logLevel: LogLevel, pollingRate: Int, readyTimeout: Int, prefix: String?, pushRate: Int, fallbackTreatments: FallbackTreatmentsConfig, evaluationFilters: EvaluationFilters?) {
+    fileprivate init(syncMode: SyncMode, serviceEndpoints: ServiceEndpoints?, configsEnabled: Bool, logLevel: LogLevel, pollingRate: Int, readyTimeout: Int, prefix: String?, pushRate: Int, fallbackTreatments: FallbackTreatmentsConfig, evaluationFilters: EvaluationFilters?, rolloutCacheConfiguration: RolloutCacheConfiguration) {
         self.syncMode = syncMode
         self.serviceEndpoints = serviceEndpoints
         self.configsEnabled = configsEnabled
@@ -39,6 +40,7 @@ public struct SplitClientConfig: Sendable {
         self.pushRate = pushRate
         self.fallbackTreatments = fallbackTreatments
         self.evaluationFilters = evaluationFilters
+        self.rolloutCacheConfiguration = rolloutCacheConfiguration
     }
 
     /// Creates a new builder for `SplitClientConfig`.
@@ -60,6 +62,7 @@ public final class SplitConfigBuilder {
     private var pushRate: Int = 1800
     private var fallbackTreatments: FallbackTreatmentsConfig = FallbackTreatmentsConfig.builder().build()
     private var evaluationFilters: EvaluationFilters?
+    private var rolloutCacheConfiguration: RolloutCacheConfiguration = RolloutCacheConfiguration.builder().build()
 
     // Internal for testing
     var minEvaluationRefreshRateOverride: Int?
@@ -184,6 +187,25 @@ public final class SplitConfigBuilder {
         return self
     }
 
+    /// Sets the rollout cache configuration (expiration and clear-on-init).
+    ///
+    /// ### Usage Example:
+    /// ```swift
+    /// let cacheConfig = RolloutCacheConfiguration.builder()
+    ///     .set(expirationDays: 5)
+    ///     .set(clearOnInit: true)
+    ///     .build()
+    ///
+    /// let config = SplitClientConfig.builder()
+    ///     .set(rolloutCacheConfiguration: cacheConfig)
+    ///     .build()
+    /// ```
+    @discardableResult
+    public func set(rolloutCacheConfiguration: RolloutCacheConfiguration) -> Self {
+        self.rolloutCacheConfiguration = rolloutCacheConfiguration
+        return self
+    }
+
     /// Builds the `SplitClientConfig` with the configured values.
     public func build() -> SplitClientConfig {
         SplitClientConfig(
@@ -196,7 +218,8 @@ public final class SplitConfigBuilder {
             prefix: prefix,
             pushRate: pushRate,
             fallbackTreatments: fallbackTreatments,
-            evaluationFilters: evaluationFilters
+            evaluationFilters: evaluationFilters,
+            rolloutCacheConfiguration: rolloutCacheConfiguration
         )
     }
 }

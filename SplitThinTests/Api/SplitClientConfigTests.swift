@@ -16,6 +16,24 @@ final class SplitClientConfigTest: XCTestCase {
         XCTAssertFalse(config.configsEnabled)
         XCTAssertNil(config.prefix)
         XCTAssertEqual(config.pushRate, 1800)
+        XCTAssertEqual(config.rolloutCacheConfiguration.expirationDays, 10)
+        XCTAssertEqual(config.rolloutCacheConfiguration.clearOnInit, false)
+    }
+
+    // MARK: - rolloutCacheConfiguration
+
+    func testRolloutCacheConfigurationIsStored() {
+        let cacheConfig = RolloutCacheConfiguration.builder()
+            .set(expirationDays: 5)
+            .set(clearOnInit: true)
+            .build()
+
+        let config = SplitClientConfig.builder()
+            .set(rolloutCacheConfiguration: cacheConfig)
+            .build()
+
+        XCTAssertEqual(config.rolloutCacheConfiguration.expirationDays, 5)
+        XCTAssertEqual(config.rolloutCacheConfiguration.clearOnInit, true)
     }
 
     // MARK: - evaluationRefreshRate
