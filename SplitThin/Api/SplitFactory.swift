@@ -43,6 +43,9 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
     private var pushDisabled = false
     private let fallbackLock = NSLock()
 
+    /// Completes once, factory-wide, before any client's sync starts.
+    private let cacheValidation: Task<Void, Never>
+
     private static let initErrorMessage = "Something happened on Split init and the client couldn't be created"
 
     public var client: SplitClient {
@@ -73,6 +76,11 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         self.splitManager = splitManager
         self.observer = factoryObserver
         self.telemetryStorage = telemetryStorage
+
+        let rolloutCacheManager = DefaultRolloutCacheManager(storage: coreDataStorage, configuration: config.rolloutCacheConfiguration, evaluationRepository: evaluationRepository)
+        self.cacheValidation = Task {
+            await rolloutCacheManager.validateCache()
+        }
 
         let eventsStorage = DefaultEventsStorage(storage: coreDataStorage)
         let eventsSubmitter = DefaultHttpEventsSubmitter(secureHttpClient: secureHttpClient)
@@ -143,7 +151,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         await telemetrySubmitter.flush(count: nil)
 
         splitManager = nil
-        (evaluationRepository as? DefaultEvaluationRepository)?.clear() // clear in-memory flags
+        evaluationRepository.clear()
         observer.notify(event: .destroyCompleted)
     }
 
@@ -191,14 +199,18 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         clients[target.key] = client
         withLock(fallbackLock) { syncManagers[target.key] = syncManager }
 
-        // 4. Start
+        // 4. Start — wait for factory-wide cache validation before sync (and cache load).
         eventsManager.start()
-        syncManager.start()
+        Task { [weak self, cacheValidation] in
+            await cacheValidation.value
+            guard let self, !self.isDestroyed else { return }
 
-        // If push was already disabled by the server, this client must poll instead of stream.
-        let alreadyPushDisabled = withLock(fallbackLock) { pushDisabled }
-        if alreadyPushDisabled {
-            syncManager.fallbackToPolling()
+            syncManager.start()
+
+            let alreadyPushDisabled = withLock(self.fallbackLock) { self.pushDisabled }
+            if alreadyPushDisabled {
+                syncManager.fallbackToPolling()
+            }
         }
 
         observer.notify(event: .clientCreated)

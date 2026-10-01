@@ -355,6 +355,21 @@ final class CoreDataStorage: @unchecked Sendable {
         }
     }
 
+    // MARK: - Rollout cache clear (all sessions + evaluations)
+
+    /// Wipes every ClientSession and Evaluation. Does not touch events, telemetry, or GeneralInfo.
+    func clearAllRolloutData() async {
+        try? await withContext { context in
+            for entityName in [Self.clientSessionEntity, Self.evaluationEntity] {
+                let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
+                for object in try context.fetch(request) {
+                    context.delete(object)
+                }
+            }
+            try context.save()
+        }
+    }
+
     // MARK: - GeneralInfo (cache metadata)
 
     // Keys for the GeneralInfo key/value table. Raw values are the persisted column
