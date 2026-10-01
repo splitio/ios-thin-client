@@ -140,6 +140,7 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         // Stop the shared periodic flusher before tearing clients down so no new
         // submission is triggered mid-destroy.
         eventsScheduler.stop()
+        cacheValidation.cancel()
 
         for client in clients.values {
             await client.destroy()
