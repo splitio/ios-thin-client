@@ -137,8 +137,6 @@ public final class DefaultSplitFactory: SplitFactory, @unchecked Sendable {
         observer.notify(event: .destroyStarted)
         isDestroyed = true
 
-        // Stop the shared periodic flusher before tearing clients down so no new
-        // submission is triggered mid-destroy.
         eventsScheduler.stop()
         cacheValidation.cancel()
 
