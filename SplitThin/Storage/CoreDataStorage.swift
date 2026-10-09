@@ -9,6 +9,39 @@ enum StorageError: Error {
     case entityNotFound
 }
 
+final class CoreDataContextExecutor: @unchecked Sendable {
+
+    private let container: NSPersistentContainer
+    private let writerContext: NSManagedObjectContext
+
+    init(container: NSPersistentContainer) {
+        self.container = container
+        self.writerContext = container.newBackgroundContext()
+    }
+
+    func read<T>(_ block: @escaping (NSManagedObjectContext) throws -> T) async throws -> T {
+        try await perform(on: container.newBackgroundContext(), block)
+    }
+
+    func write<T>(_ block: @escaping (NSManagedObjectContext) throws -> T) async throws -> T {
+        try await perform(on: writerContext, block)
+    }
+
+    private func perform<T>(on context: NSManagedObjectContext, _ block: @escaping (NSManagedObjectContext) throws -> T) async throws -> T {
+        let boxedBlock = UncheckedSendableBox(value: block)
+        let boxedResult: UncheckedSendableBox<T> = try await withCheckedThrowingContinuation { continuation in
+            context.perform {
+                do {
+                    continuation.resume(returning: UncheckedSendableBox(value: try boxedBlock.value(context)))
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+        return boxedResult.value
+    }
+}
+
 final class CoreDataStorage: @unchecked Sendable {
 
     private static let clientSessionEntity = "ClientSession"
@@ -18,7 +51,7 @@ final class CoreDataStorage: @unchecked Sendable {
     private static let generalInfoEntity = "GeneralInfo"
 
     private let container: NSPersistentContainer
-    private let writerContext: NSManagedObjectContext
+    private let contextExecutor: CoreDataContextExecutor
 
     init(databaseName: String, inMemory: Bool = false) {
         container = NSPersistentContainer(name: databaseName, managedObjectModel: Self.createModel())
@@ -39,13 +72,13 @@ final class CoreDataStorage: @unchecked Sendable {
             }
         }
 
-        writerContext = container.newBackgroundContext()
+        contextExecutor = CoreDataContextExecutor(container: container)
     }
 
     // MARK: - ClientSession Operations
 
     func upsertClientSession(matchingKey: String, bucketingKey: String?, attributesHash: String, attributes: [String: Any]?, changeNumber: Int64) async throws {
-        try await withContext { context in
+        try await contextExecutor.write { context in
             let deleteRequest = NSFetchRequest<NSManagedObject>(entityName: Self.clientSessionEntity)
             deleteRequest.predicate = self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey)
             for object in try context.fetch(deleteRequest) {
@@ -67,7 +100,7 @@ final class CoreDataStorage: @unchecked Sendable {
     }
 
     func getAttributesHash(matchingKey: String, bucketingKey: String?) async -> String? {
-        try? await withContext { context in
+        try? await contextExecutor.read { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.clientSessionEntity)
             request.predicate = self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey)
             request.fetchLimit = 1
@@ -76,7 +109,7 @@ final class CoreDataStorage: @unchecked Sendable {
     }
 
     func getChangeNumber(matchingKey: String, bucketingKey: String?) async -> Int64? {
-        try? await withContext { context in
+        try? await contextExecutor.read { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.clientSessionEntity)
             request.predicate = self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey)
             request.fetchLimit = 1
@@ -85,7 +118,7 @@ final class CoreDataStorage: @unchecked Sendable {
     }
 
     func deleteClientSession(matchingKey: String, bucketingKey: String?) async throws {
-        try await withContext { context in
+        try await contextExecutor.write { context in
             let sessionRequest = NSFetchRequest<NSManagedObject>(entityName: Self.clientSessionEntity)
             sessionRequest.predicate = self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey)
             for object in try context.fetch(sessionRequest) {
@@ -105,7 +138,7 @@ final class CoreDataStorage: @unchecked Sendable {
     // MARK: - Evaluation Operations
 
     func upsertEvaluations(matchingKey: String, bucketingKey: String?, evaluations: [(flagName: String, treatment: String, config: String?, sets: [String]?, changeNumber: Int64?)]) async throws {
-        try await withContext { context in
+        try await contextExecutor.write { context in
             let deleteRequest = NSFetchRequest<NSManagedObject>(entityName: Self.evaluationEntity)
             deleteRequest.predicate = self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey)
             for object in try context.fetch(deleteRequest) {
@@ -131,7 +164,7 @@ final class CoreDataStorage: @unchecked Sendable {
     }
 
     func getEvaluation(matchingKey: String, bucketingKey: String?, flagName: String) async -> (treatment: String, config: String?, sets: [String]?, changeNumber: Int64?)? {
-        try? await withContext { context in
+        try? await contextExecutor.read { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.evaluationEntity)
             request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
                 self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey),
@@ -156,7 +189,7 @@ final class CoreDataStorage: @unchecked Sendable {
     func getEvaluations(matchingKey: String, bucketingKey: String?, flagNames: [String]) async -> [(flagName: String, treatment: String, config: String?, sets: [String]?, changeNumber: Int64?)] {
         guard !flagNames.isEmpty else { return [] }
 
-        return (try? await withContext { context in
+        return (try? await contextExecutor.read { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.evaluationEntity)
             request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
                 self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey),
@@ -176,7 +209,7 @@ final class CoreDataStorage: @unchecked Sendable {
     }
 
     func getAllEvaluations(matchingKey: String, bucketingKey: String?) async -> [(flagName: String, treatment: String, config: String?, sets: [String]?, changeNumber: Int64?)] {
-        (try? await withContext { context in
+        (try? await contextExecutor.read { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.evaluationEntity)
             request.predicate = self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey)
 
@@ -193,7 +226,7 @@ final class CoreDataStorage: @unchecked Sendable {
     }
 
     func getFlagNames(matchingKey: String, bucketingKey: String?) async -> [String] {
-        (try? await withContext { context in
+        (try? await contextExecutor.read { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.evaluationEntity)
             request.predicate = self.sessionPredicate(matchingKey: matchingKey, bucketingKey: bucketingKey)
             request.propertiesToFetch = ["flagName"]
@@ -211,7 +244,7 @@ final class CoreDataStorage: @unchecked Sendable {
     func addEvents(_ dtos: [EventDTO]) async throws {
         guard !dtos.isEmpty else { return }
 
-        try await withContext { context in
+        try await contextExecutor.write { context in
             guard let entity = NSEntityDescription.entity(forEntityName: Self.eventEntity, in: context) else {
                 throw StorageError.entityNotFound
             }
@@ -233,7 +266,7 @@ final class CoreDataStorage: @unchecked Sendable {
     }
 
     func getEventBatch(size: Int) async -> [EventDTO] {
-        (try? await withContext { context in
+        (try? await contextExecutor.read { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.eventEntity)
             request.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
             request.fetchLimit = size
@@ -250,7 +283,7 @@ final class CoreDataStorage: @unchecked Sendable {
     }
 
     func countEvents() async -> Int {
-        (try? await withContext { context in
+        (try? await contextExecutor.read { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.eventEntity)
             return try context.count(for: request)
         }) ?? 0
@@ -259,7 +292,7 @@ final class CoreDataStorage: @unchecked Sendable {
     func removeEvents(ids: [String]) async {
         guard !ids.isEmpty else { return }
 
-        try? await withContext { context in
+        try? await contextExecutor.write { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.eventEntity)
             request.predicate = NSPredicate(format: "id IN %@", ids)
             for object in try context.fetch(request) {
@@ -270,7 +303,7 @@ final class CoreDataStorage: @unchecked Sendable {
     }
 
     func clearEvents() async {
-        try? await withContext { context in
+        try? await contextExecutor.write { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.eventEntity)
             for object in try context.fetch(request) {
                 context.delete(object)
@@ -282,7 +315,7 @@ final class CoreDataStorage: @unchecked Sendable {
     // MARK: - TelemetrySession Operations
 
     func upsertTelemetrySession(sessionId: String, metricsJson: String, timestamp: Double) async throws {
-        try await withContext { context in
+        try await contextExecutor.write { context in
             let fetchRequest = NSFetchRequest<NSManagedObject>(entityName: Self.telemetrySessionEntity)
             fetchRequest.predicate = NSPredicate(format: "sessionId == %@", sessionId)
             fetchRequest.fetchLimit = 1
@@ -307,7 +340,7 @@ final class CoreDataStorage: @unchecked Sendable {
     }
 
     func getAllTelemetrySessions() async -> [(sessionId: String, metricsJson: String, lastUpdateTimestamp: Double)] {
-        (try? await withContext { context in
+        (try? await contextExecutor.read { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.telemetrySessionEntity)
             request.sortDescriptors = [NSSortDescriptor(key: "lastUpdateTimestamp", ascending: true)]
 
@@ -321,7 +354,7 @@ final class CoreDataStorage: @unchecked Sendable {
     }
 
     func countTelemetrySessions() async -> Int {
-        (try? await withContext { context in
+        (try? await contextExecutor.read { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.telemetrySessionEntity)
             return try context.count(for: request)
         }) ?? 0
@@ -330,7 +363,7 @@ final class CoreDataStorage: @unchecked Sendable {
     func removeTelemetrySessions(sessionIds: [String]) async {
         guard !sessionIds.isEmpty else { return }
 
-        try? await withContext { context in
+        try? await contextExecutor.write { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.telemetrySessionEntity)
             request.predicate = NSPredicate(format: "sessionId IN %@", sessionIds)
             for object in try context.fetch(request) {
@@ -341,7 +374,7 @@ final class CoreDataStorage: @unchecked Sendable {
     }
 
     func removeOldestTelemetrySessions(keepCount: Int) async {
-        try? await withContext { context in
+        try? await contextExecutor.write { context in
             let countRequest = NSFetchRequest<NSManagedObject>(entityName: Self.telemetrySessionEntity)
             let total = try context.count(for: countRequest)
 
@@ -387,7 +420,7 @@ final class CoreDataStorage: @unchecked Sendable {
 
     private func setGeneralInfoLong(_ key: GeneralInfoKey, value: Int64) async {
         do {
-            try await withContext { context in
+            try await contextExecutor.write { context in
                 let request = NSFetchRequest<NSManagedObject>(entityName: Self.generalInfoEntity)
                 request.predicate = NSPredicate(format: "name == %@", key.rawValue)
                 request.fetchLimit = 1
@@ -412,7 +445,7 @@ final class CoreDataStorage: @unchecked Sendable {
 
     private func getGeneralInfoLong(_ key: GeneralInfoKey) async -> Int64? {
         do {
-            return try await withContext { context in
+            return try await contextExecutor.read { context in
                 let request = NSFetchRequest<NSManagedObject>(entityName: Self.generalInfoEntity)
                 request.predicate = NSPredicate(format: "name == %@", key.rawValue)
                 request.fetchLimit = 1
@@ -457,19 +490,6 @@ final class CoreDataStorage: @unchecked Sendable {
             return nil
         }
         return array
-    }
-
-    private func withContext<T>(_ block: @escaping (NSManagedObjectContext) throws -> T) async throws -> T {
-        let boxed: UncheckedSendableBox<T> = try await withCheckedThrowingContinuation { continuation in
-            writerContext.perform {
-                do {
-                    continuation.resume(returning: UncheckedSendableBox(value: try block(self.writerContext)))
-                } catch {
-                    continuation.resume(throwing: error)
-                }
-            }
-        }
-        return boxed.value
     }
 
     // MARK: - Model Definition
