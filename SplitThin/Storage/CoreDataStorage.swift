@@ -18,6 +18,7 @@ final class CoreDataStorage: @unchecked Sendable {
     private static let generalInfoEntity = "GeneralInfo"
 
     private let container: NSPersistentContainer
+    private let writerContext: NSManagedObjectContext
 
     init(databaseName: String, inMemory: Bool = false) {
         container = NSPersistentContainer(name: databaseName, managedObjectModel: Self.createModel())
@@ -37,6 +38,8 @@ final class CoreDataStorage: @unchecked Sendable {
                 Logger.e("CoreDataStorage: Failed to load store '\(databaseName)': \(error)")
             }
         }
+
+        writerContext = container.newBackgroundContext()
     }
 
     // MARK: - ClientSession Operations
@@ -448,12 +451,10 @@ final class CoreDataStorage: @unchecked Sendable {
     }
 
     private func withContext<T>(_ block: @escaping (NSManagedObjectContext) throws -> T) async throws -> T {
-        let context = container.newBackgroundContext()
-
         let boxed: UncheckedSendableBox<T> = try await withCheckedThrowingContinuation { continuation in
-            context.perform {
+            writerContext.perform {
                 do {
-                    continuation.resume(returning: UncheckedSendableBox(value: try block(context)))
+                    continuation.resume(returning: UncheckedSendableBox(value: try block(self.writerContext)))
                 } catch {
                     continuation.resume(throwing: error)
                 }

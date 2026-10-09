@@ -72,4 +72,26 @@ final class GeneralInfoTests: XCTestCase {
         let stamped = await storage.getUpdateTimestamp()
         XCTAssertGreaterThanOrEqual(stamped, before, "upsert should stamp a fresh update timestamp")
     }
+
+    func testConcurrentWritesLastOneWins() async {
+        let storage = makeStorage()
+
+        for iteration in 0..<100 {
+            let base = Int64(iteration * 10)
+            let winner = await withTaskGroup(of: Int64.self) { group in
+                for offset in 0..<10 {
+                    let value = base + Int64(offset)
+                    group.addTask {
+                        await storage.setUpdateTimestamp(value)
+                        return value
+                    }
+                }
+                var last: Int64 = 0
+                for await written in group { last = written }
+                return last
+            }
+            let value = await storage.getUpdateTimestamp()
+            XCTAssertEqual(value, winner)
+        }
+    }
 }
