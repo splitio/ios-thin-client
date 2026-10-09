@@ -386,32 +386,41 @@ final class CoreDataStorage: @unchecked Sendable {
     // MARK: - Private Helpers
 
     private func setGeneralInfoLong(_ key: GeneralInfoKey, value: Int64) async {
-        try? await withContext { context in
-            let request = NSFetchRequest<NSManagedObject>(entityName: Self.generalInfoEntity)
-            request.predicate = NSPredicate(format: "name == %@", key.rawValue)
-            request.fetchLimit = 1
+        do {
+            try await withContext { context in
+                let request = NSFetchRequest<NSManagedObject>(entityName: Self.generalInfoEntity)
+                request.predicate = NSPredicate(format: "name == %@", key.rawValue)
+                request.fetchLimit = 1
 
-            if let existing = try context.fetch(request).first {
-                existing.setValue(value, forKey: "longValue")
-            } else {
-                guard let entity = NSEntityDescription.entity(forEntityName: Self.generalInfoEntity, in: context) else {
-                    throw StorageError.entityNotFound
+                if let existing = try context.fetch(request).first {
+                    existing.setValue(value, forKey: "longValue")
+                } else {
+                    guard let entity = NSEntityDescription.entity(forEntityName: Self.generalInfoEntity, in: context) else {
+                        throw StorageError.entityNotFound
+                    }
+                    let record = NSManagedObject(entity: entity, insertInto: context)
+                    record.setValue(key.rawValue, forKey: "name")
+                    record.setValue(value, forKey: "longValue")
                 }
-                let record = NSManagedObject(entity: entity, insertInto: context)
-                record.setValue(key.rawValue, forKey: "name")
-                record.setValue(value, forKey: "longValue")
-            }
 
-            try context.save()
+                try context.save()
+            }
+        } catch {
+            Logger.e("CoreDataStorage: Failed to set GeneralInfo '\(key.rawValue)': \(error)")
         }
     }
 
     private func getGeneralInfoLong(_ key: GeneralInfoKey) async -> Int64? {
-        try? await withContext { context in
-            let request = NSFetchRequest<NSManagedObject>(entityName: Self.generalInfoEntity)
-            request.predicate = NSPredicate(format: "name == %@", key.rawValue)
-            request.fetchLimit = 1
-            return try context.fetch(request).first?.value(forKey: "longValue") as? Int64
+        do {
+            return try await withContext { context in
+                let request = NSFetchRequest<NSManagedObject>(entityName: Self.generalInfoEntity)
+                request.predicate = NSPredicate(format: "name == %@", key.rawValue)
+                request.fetchLimit = 1
+                return try context.fetch(request).first?.value(forKey: "longValue") as? Int64
+            }
+        } catch {
+            Logger.e("CoreDataStorage: Failed to get GeneralInfo '\(key.rawValue)': \(error)")
+            return nil
         }
     }
 
