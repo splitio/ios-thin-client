@@ -34,6 +34,7 @@ final class CoreDataContextExecutor: @unchecked Sendable {
                 do {
                     continuation.resume(returning: UncheckedSendableBox(value: try boxedBlock.value(context)))
                 } catch {
+                    context.rollback()
                     continuation.resume(throwing: error)
                 }
             }
