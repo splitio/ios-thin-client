@@ -54,8 +54,6 @@ final class CoreDataContextExecutorTests: XCTestCase {
         try await read.value
     }
 
-    // A failed write must not leave pending deletes/inserts on the shared writer
-    // context — otherwise the next successful save would flush them.
     func testFailedWriteDoesNotLeakPendingChangesIntoNextSave() async throws {
         let executor = makeExecutor()
 
