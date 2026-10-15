@@ -74,4 +74,12 @@ final class EvaluationRepositoryMock: EvaluationRepository, @unchecked Sendable 
         }
         return fetchResultToReturn
     }
+
+    var clearCalled = false
+    var clearCalledTimes = 0
+
+    func clear() {
+        clearCalled = true
+        clearCalledTimes += 1
+    }
 }

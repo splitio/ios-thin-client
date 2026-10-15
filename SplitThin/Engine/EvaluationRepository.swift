@@ -18,6 +18,7 @@ protocol EvaluationRepository: Sendable {
     func loadFromCache(_ evaluations: [EvaluationResult], for target: Target) -> [String]
     @discardableResult
     func initialize(target: Target) async throws -> FetchResult
+    func clear()
 }
 
 final class DefaultEvaluationRepository: EvaluationRepository, @unchecked Sendable {
