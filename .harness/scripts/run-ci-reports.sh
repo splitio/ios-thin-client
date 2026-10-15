@@ -118,6 +118,9 @@ run_for_package() {
   [[ -n "$test_bin" && -f "$test_bin" ]] || die "Package test binary not found for package: $package_dir"
 
   xcrun llvm-cov export "$test_bin" -instr-profile "$profdata" >"$llvm_cov_json"
+  xcrun llvm-cov export "$test_bin" -instr-profile "$profdata" -format=lcov >"$out_dir/lcov.info"
+  mkdir -p "$ROOT_DIR/coverage"
+  cat "$out_dir/lcov.info" >>"$ROOT_DIR/coverage/lcov.info"
 
   python3 "$TOOLS_DIR/swift_coverage_to_sonar_generic.py" \
     --input "$llvm_cov_json" \
@@ -142,6 +145,8 @@ main() {
   [[ "${#packages[@]}" -gt 0 ]] || die "No Package.swift files found under repository root."
 
   mkdir -p "$REPORTS_ROOT"
+  mkdir -p "$ROOT_DIR/coverage"
+  : >"$ROOT_DIR/coverage/lcov.info"
   mkdir -p "$CI_HOME" "$MODULE_CACHE_DIR"
   log "Reports root: $REPORTS_ROOT"
 
