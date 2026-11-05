@@ -1,3 +1,6 @@
+1.0.1 (Nov 5, 2026)
+- Fixed internal dependency tag to stable.
+
 1.0.0 (Jul 16, 2026)
 - Initial stable release.
 
