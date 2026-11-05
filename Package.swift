@@ -3,15 +3,12 @@ import PackageDescription
 
 let package = Package(
     name: "SplitThin",
-    platforms: [.iOS(.v13), .macOS(.v10_15)],
+    platforms: [.iOS(.v15), .macOS(.v12)],
     products: [
         .library(name: "SplitThin", targets: ["SplitThin"]),
     ],
     dependencies: [
-        .package(
-            url: "https://github.com/splitio/ios-client.git",
-            revision: "e256f22a7c98af2643ffd03cc60a2b24cf90524f"
-        )
+        .package(url: "https://github.com/splitio/ios-client.git", from: "3.8.0")
     ],
     targets: [
         .target(
