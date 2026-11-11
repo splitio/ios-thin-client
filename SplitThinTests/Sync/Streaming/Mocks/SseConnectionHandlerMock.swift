@@ -1,5 +1,5 @@
 import Foundation
-import Streaming
+import SplitStreaming
 @testable import SplitThin
 
 final class SseConnectionHandlerMock: @unchecked Sendable {

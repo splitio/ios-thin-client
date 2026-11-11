@@ -2,7 +2,7 @@
 //  Copyright © 2026 Harness. All rights reserved
 
 import XCTest
-import Http
+import SplitHttp
 @testable import SplitThin
 
 final class TrackingE2ETest: XCTestCase {

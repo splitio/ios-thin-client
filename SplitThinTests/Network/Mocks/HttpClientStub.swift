@@ -1,6 +1,6 @@
 import Foundation
-import Http
-import BackoffCounter
+import SplitHttp
+import SplitBackoffCounter
 @testable import SplitThin
 
 final class HttpClientStub: HttpClient, @unchecked Sendable {

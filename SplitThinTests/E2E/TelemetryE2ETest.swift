@@ -2,7 +2,7 @@
 //  Copyright © 2026 Harness. All rights reserved
 
 import XCTest
-import Http
+import SplitHttp
 @testable import SplitThin
 
 final class TelemetryE2ETest: XCTestCase {
@@ -33,7 +33,7 @@ final class TelemetryE2ETest: XCTestCase {
                                               .set(prefix: "telemetry_\(UUID().uuidString.prefix(8))")
                                               .build()
 
-        let builder = DefaultSplitFactoryBuilder()
+        let builder = DefaultSplitFactoryBuilder().setCredentialStorage(DefaultCredentialStorage())
         builder.setSecureHttpClient(httpMock)
         guard let freshFactory = builder.setSdkKey("test-sdk-key")
                                         .setTarget("user-isolated")
@@ -64,7 +64,7 @@ final class TelemetryE2ETest: XCTestCase {
                                               .set(prefix: "telemetry_\(UUID().uuidString.prefix(8))")
                                               .build()
 
-        let builder = DefaultSplitFactoryBuilder()
+        let builder = DefaultSplitFactoryBuilder().setCredentialStorage(DefaultCredentialStorage())
         builder.setSecureHttpClient(httpMock)
         guard let freshFactory = builder.setSdkKey("test-sdk-key")
                                         .setTarget("user-isolated")
@@ -102,7 +102,7 @@ final class TelemetryE2ETest: XCTestCase {
                                               .set(prefix: "telemetry_\(UUID().uuidString.prefix(8))")
                                               .build()
 
-        let builder = DefaultSplitFactoryBuilder()
+        let builder = DefaultSplitFactoryBuilder().setCredentialStorage(DefaultCredentialStorage())
         builder.setSecureHttpClient(httpMock)
         guard let freshFactory = builder.setSdkKey("test-sdk-key")
                                         .setTarget("user-a")
@@ -140,7 +140,7 @@ final class TelemetryE2ETest: XCTestCase {
                                               .set(prefix: "telemetry_\(UUID().uuidString.prefix(8))")
                                               .build()
 
-        let builder = DefaultSplitFactoryBuilder()
+        let builder = DefaultSplitFactoryBuilder().setCredentialStorage(DefaultCredentialStorage())
         builder.setSecureHttpClient(httpMock)
         guard let freshFactory = builder.setSdkKey("test-sdk-key")
                                         .setTarget("user-isolated")
@@ -182,7 +182,7 @@ final class TelemetryE2ETest: XCTestCase {
                                               .set(prefix: "telemetry_\(UUID().uuidString.prefix(8))")
                                               .build()
 
-        let builder = DefaultSplitFactoryBuilder()
+        let builder = DefaultSplitFactoryBuilder().setCredentialStorage(DefaultCredentialStorage())
         builder.setSecureHttpClient(httpMock)
         guard let freshFactory = builder.setSdkKey("test-sdk-key")
                                         .setTarget("user-isolated")
@@ -215,7 +215,7 @@ final class TelemetryE2ETest: XCTestCase {
                                               .set(prefix: "telemetry_\(UUID().uuidString.prefix(8))")
                                               .build()
 
-        let builder = DefaultSplitFactoryBuilder()
+        let builder = DefaultSplitFactoryBuilder().setCredentialStorage(DefaultCredentialStorage())
         builder.setSecureHttpClient(httpMock)
         guard let freshFactory = builder.setSdkKey("test-sdk-key")
                                         .setTarget("user-isolated")
@@ -249,7 +249,7 @@ final class TelemetryE2ETest: XCTestCase {
                                               .set(prefix: "telemetry_\(UUID().uuidString.prefix(8))")
                                               .build()
 
-        let builder = DefaultSplitFactoryBuilder()
+        let builder = DefaultSplitFactoryBuilder().setCredentialStorage(DefaultCredentialStorage())
         builder.setSecureHttpClient(httpMock)
         guard let freshFactory = builder.setSdkKey("test-sdk-key")
                                         .setTarget("user-a")

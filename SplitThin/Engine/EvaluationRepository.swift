@@ -2,7 +2,7 @@
 //  Copyright © 2026 Harness. All rights reserved
 
 import Foundation
-import Logging
+import SplitLogging
 
 protocol EvaluationRepository: Sendable {
     func getEvaluation(flag: String, target: Target) -> StoredEvaluation?

@@ -2,7 +2,7 @@
 //  Copyright © 2026 Harness. All rights reserved
 
 import Foundation
-import Logging
+import SplitLogging
 
 protocol EvaluationReadStorage: Sendable {
     func get(target: Target, flag: String) async -> EvaluationResult?

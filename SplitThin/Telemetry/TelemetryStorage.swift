@@ -2,7 +2,7 @@
 //  Copyright © 2026 Harness. All rights reserved
 
 import Foundation
-import Logging
+import SplitLogging
 
 struct TelemetrySessionRecord: Sendable {
     let sessionId: String

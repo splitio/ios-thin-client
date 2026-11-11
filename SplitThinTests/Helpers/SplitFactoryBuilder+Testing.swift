@@ -1,5 +1,5 @@
 import Foundation
-import Http
+import SplitHttp
 @testable import SplitThin
 
 // This file centralizes all internal methods used to inject components in the 

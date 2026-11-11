@@ -2,9 +2,9 @@
 //  Copyright © 2026 Harness. All rights reserved
 
 import Foundation
-import Logging
-import Http
-import BackoffCounter
+import SplitLogging
+import SplitHttp
+import SplitBackoffCounter
 
 public protocol SplitFactoryBuilder {
     @discardableResult
@@ -117,7 +117,7 @@ public final class DefaultSplitFactoryBuilder: NSObject, SplitFactoryBuilder {
     }
 
     private func configureLogger() {
-        if let loggerLevel = Logging.LogLevel(rawValue: config.logLevel.rawValue) {
+        if let loggerLevel = SplitLogging.LogLevel(rawValue: config.logLevel.rawValue) {
             Logger.shared.level = loggerLevel
         }
     }

@@ -1,17 +1,17 @@
 import XCTest
-import Http
+import SplitHttp
 @testable import SplitThin
 
 final class DefaultSplitFactoryBuilderTest: XCTestCase {
 
     func testBuildWithNoParams() {
-        let factory = DefaultSplitFactoryBuilder().build()
+        let factory = DefaultSplitFactoryBuilder().setCredentialStorage(DefaultCredentialStorage()).build()
 
         XCTAssertNil(factory, "Factory should be nil when no params are set")
     }
 
     func testBuildWithEmptySdkKey() {
-        let factory = DefaultSplitFactoryBuilder().setSdkKey("")
+        let factory = DefaultSplitFactoryBuilder().setCredentialStorage(DefaultCredentialStorage()).setSdkKey("")
                                                   .setTarget("user1")
                                                   .build()
 
@@ -19,14 +19,14 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
     }
 
     func testBuildWithNoTarget() {
-        let factory = DefaultSplitFactoryBuilder().setSdkKey("api-key-123")
+        let factory = DefaultSplitFactoryBuilder().setCredentialStorage(DefaultCredentialStorage()).setSdkKey("api-key-123")
                                                   .build()
 
         XCTAssertNil(factory, "Factory should be nil when target is missing")
     }
 
     func testBuildWithEmptyMatchingKey() {
-        let factory = DefaultSplitFactoryBuilder().setSdkKey("api-key-123")
+        let factory = DefaultSplitFactoryBuilder().setCredentialStorage(DefaultCredentialStorage()).setSdkKey("api-key-123")
                                                   .setTarget("")
                                                   .build()
 
@@ -34,7 +34,7 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
     }
 
     func testBuildSuccess() {
-        let factory = DefaultSplitFactoryBuilder().setSdkKey("api-key-123")
+        let factory = DefaultSplitFactoryBuilder().setCredentialStorage(DefaultCredentialStorage()).setSdkKey("api-key-123")
                                                   .setTarget("user1")
                                                   .build()
 
@@ -52,7 +52,7 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
         let target = Target(matchingKey: "user1", bucketingKey: "bk1",
                             attributes: ["env": "prod"], trafficType: "user")
 
-        let factory = DefaultSplitFactoryBuilder().setSdkKey("api-key-123")
+        let factory = DefaultSplitFactoryBuilder().setCredentialStorage(DefaultCredentialStorage()).setSdkKey("api-key-123")
                                                   .setTarget(target)
                                                   .setConfig(config)
                                                   .build()
@@ -67,7 +67,7 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
                                                                              .build())
                                       .build()
 
-        let factory = DefaultSplitFactoryBuilder().setSdkKey("api-key-123")
+        let factory = DefaultSplitFactoryBuilder().setCredentialStorage(DefaultCredentialStorage()).setSdkKey("api-key-123")
                                                   .setTarget("user1")
                                                   .setConfig(config)
                                                   .build()
@@ -88,7 +88,7 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
                                       .set(syncMode: .streaming)
                                       .build()
 
-        let builder = DefaultSplitFactoryBuilder()
+        let builder = DefaultSplitFactoryBuilder().setCredentialStorage(DefaultCredentialStorage())
         builder.setSecureHttpClient(httpMock)
         builder.setStreamingConnectionManagerFactory { _ in connectionManagerMock }
 
@@ -107,7 +107,7 @@ final class DefaultSplitFactoryBuilderTest: XCTestCase {
     }
 
     func testFluentApiReturnsSelf() {
-        let builder = DefaultSplitFactoryBuilder()
+        let builder = DefaultSplitFactoryBuilder().setCredentialStorage(DefaultCredentialStorage())
 
         let b1 = builder.setSdkKey("key")
         let b2 = b1.setTarget("user1")

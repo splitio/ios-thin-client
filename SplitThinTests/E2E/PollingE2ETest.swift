@@ -1,5 +1,5 @@
 import XCTest
-import Http
+import SplitHttp
 @testable import SplitThin
 
 final class PollingE2ETest: XCTestCase {

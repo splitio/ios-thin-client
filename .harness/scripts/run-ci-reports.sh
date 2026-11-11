@@ -31,6 +31,81 @@ swift_local() {
   HOME="$CI_HOME" CLANG_MODULE_CACHE_PATH="$MODULE_CACHE_DIR" swift "$@"
 }
 
+TEST_TIMEOUT_SECS="${TEST_TIMEOUT_SECS:-900}"
+CI_KEYCHAIN=""
+
+# Send a signal to a process and all its descendants (children first, so they cannot be re-parented away).
+kill_tree() {
+  local sig="$1" pid="$2" child
+  for child in $(pgrep -P "$pid" 2>/dev/null || true); do
+    kill_tree "$sig" "$child"
+  done
+  kill "-$sig" "$pid" 2>/dev/null || true
+}
+
+# Run a command with a time limit (macOS has no GNU timeout by default).
+# Output of the command must already be redirected by the caller. Returns 124 on timeout.
+run_with_timeout() {
+  local secs="$1"
+  shift
+  local flag cmd_pid wd_pid rc
+  flag="$(mktemp)"
+  "$@" &
+  cmd_pid=$!
+  (
+    sleep "$secs"
+    echo timeout >"$flag"
+    kill_tree TERM "$cmd_pid"
+    sleep 5
+    kill_tree KILL "$cmd_pid"
+  ) &
+  wd_pid=$!
+  rc=0
+  wait "$cmd_pid" || rc=$?
+  kill_tree TERM "$wd_pid"
+  wait "$wd_pid" 2>/dev/null || true
+  if [[ -s "$flag" ]]; then
+    rc=124
+  fi
+  rm -f "$flag"
+  return "$rc"
+}
+
+# CI only: give HOME="$CI_HOME" a default unlocked keychain so keychain tests do not raise a modal dialog.
+# Every `security` call uses HOME="$CI_HOME"; never touches the real HOME (guarded below).
+setup_ci_keychain() {
+  local ci_flag
+  ci_flag="$(printf '%s' "${CI:-}" | tr '[:upper:]' '[:lower:]')"
+  if [[ -z "${HARNESS_BUILD_ID:-}" && "$ci_flag" != "true" && "$ci_flag" != "1" ]]; then
+    log "Not in CI (no HARNESS_BUILD_ID/CI): skipping temporary keychain"
+    return 0
+  fi
+  if [[ "$CI_HOME" == "${HOME:-}" ]]; then
+    log "CI_HOME equals the real HOME: skipping temporary keychain"
+    return 0
+  fi
+  command -v security >/dev/null 2>&1 || { log "security not found: skipping temporary keychain"; return 0; }
+
+  CI_KEYCHAIN="$CI_HOME/Library/Keychains/ci-temp.keychain-db"
+  mkdir -p "$CI_HOME/Library/Keychains"
+  # Remove a stale keychain (and its list entry) left by an earlier killed run.
+  HOME="$CI_HOME" security delete-keychain "$CI_KEYCHAIN" >/dev/null 2>&1 || true
+  rm -f "$CI_KEYCHAIN"
+  HOME="$CI_HOME" security create-keychain -p "ci-temp" "$CI_KEYCHAIN"
+  HOME="$CI_HOME" security set-keychain-settings -lut 3600 "$CI_KEYCHAIN"
+  HOME="$CI_HOME" security unlock-keychain -p "ci-temp" "$CI_KEYCHAIN"
+  HOME="$CI_HOME" security default-keychain -s "$CI_KEYCHAIN"
+  HOME="$CI_HOME" security list-keychains -d user -s "$CI_KEYCHAIN"
+  log "Temporary keychain ready: $CI_KEYCHAIN"
+}
+
+cleanup_ci_keychain() {
+  if [[ -n "$CI_KEYCHAIN" ]]; then
+    HOME="$CI_HOME" security delete-keychain "$CI_KEYCHAIN" >/dev/null 2>&1 || true
+    rm -f "$CI_KEYCHAIN"
+  fi
+}
+
 discover_packages() {
   local submodules=()
 
@@ -97,19 +172,26 @@ run_for_package() {
   mkdir -p "$out_dir"
   log "Running package: $package_dir"
 
+  # One test run with coverage; log goes to the file and is streamed to the Harness log.
+  local test_rc=0 tail_pid
+  : >"$test_log"
+  tail -n +1 -f "$test_log" &
+  tail_pid=$!
   (
-    cd "$package_dir"
-    swift_local test >"$test_log" 2>&1
-  )
+    cd "$package_dir" || exit 1
+    run_with_timeout "$TEST_TIMEOUT_SECS" swift_local test --enable-code-coverage >"$test_log" 2>&1
+  ) || test_rc=$?
+  sleep 1
+  kill "$tail_pid" 2>/dev/null || true
+  wait "$tail_pid" 2>/dev/null || true
+  if [[ "$test_rc" -eq 124 ]]; then
+    log "swift test timed out after ${TEST_TIMEOUT_SECS}s (log above)"
+  fi
 
   python3 "$TOOLS_DIR/swift_test_to_junit.py" \
     --input "$test_log" \
-    --output "$junit_xml"
-
-  (
-    cd "$package_dir"
-    swift_local test --enable-code-coverage >/dev/null
-  )
+    --output "$junit_xml" || [[ "$test_rc" -ne 0 ]]
+  [[ "$test_rc" -eq 0 ]] || die "swift test failed (exit $test_rc) for package: $package_dir"
 
   profdata="$(find_profdata "$package_dir")"
   [[ -n "$profdata" && -f "$profdata" ]] || die "Coverage profile not found for package: $package_dir"
@@ -148,6 +230,10 @@ main() {
   mkdir -p "$ROOT_DIR/coverage"
   : >"$ROOT_DIR/coverage/lcov.info"
   mkdir -p "$CI_HOME" "$MODULE_CACHE_DIR"
+  trap cleanup_ci_keychain EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  setup_ci_keychain
   log "Reports root: $REPORTS_ROOT"
 
   for package_dir in "${packages[@]}"; do

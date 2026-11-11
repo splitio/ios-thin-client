@@ -2,8 +2,8 @@
 //  Copyright © 2026 Harness. All rights reserved
 
 import Foundation
-import Tracker
-import Logging
+import SplitTracker
+import SplitLogging
 
 final class ThinTrackerLogger: TrackerLogger {
 

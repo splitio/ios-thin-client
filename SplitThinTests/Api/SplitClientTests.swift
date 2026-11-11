@@ -1,5 +1,5 @@
 import XCTest
-import Tracker
+import SplitTracker
 @testable import SplitThin
 
 final class DefaultSplitClientTest: XCTestCase {

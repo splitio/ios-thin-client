@@ -1,6 +1,6 @@
 import XCTest
-import Http
-import BackoffCounter
+import SplitHttp
+import SplitBackoffCounter
 @testable import SplitThin
 
 #if canImport(UIKit)
@@ -325,7 +325,7 @@ final class StreamingE2ETest: XCTestCase {
                                       .set(syncMode: .streaming)
                                       .build()
 
-        let builder = DefaultSplitFactoryBuilder()
+        let builder = DefaultSplitFactoryBuilder().setCredentialStorage(DefaultCredentialStorage())
         builder.setSecureHttpClient(httpMock)
         builder.setStreamingConnectionManagerFactory(connectionManagerFactory)
 

@@ -2,7 +2,7 @@
 //  Copyright © 2026 Harness. All rights reserved
 
 import Foundation
-import Logging
+import SplitLogging
 
 /// Configuration options for the Split SDK client.
 public struct SplitClientConfig: Sendable {

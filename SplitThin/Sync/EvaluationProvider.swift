@@ -2,7 +2,7 @@
 //  Copyright © 2026 Harness. All rights reserved
 
 import Foundation
-import Logging
+import SplitLogging
 
 protocol EvaluationProvider: Sendable {
     func fetch(target: Target, filters: EvaluationFilters?) async throws -> EvaluationsResult?

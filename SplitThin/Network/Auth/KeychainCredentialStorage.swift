@@ -1,5 +1,5 @@
 import Foundation
-import Logging
+import SplitLogging
 
 final class KeychainCredentialStorage: CredentialStorage, @unchecked Sendable {
 
@@ -8,11 +8,13 @@ final class KeychainCredentialStorage: CredentialStorage, @unchecked Sendable {
     // target registration changes); the map shape is kept for future extensibility.
     private var cache = [String: JwtCredential]()
     private let keychainKey: String
+    private let store: KeychainStore
     private let lock = NSLock()
     private var keychainAvailable = true
 
-    init(keychainKey: String) {
+    init(keychainKey: String, store: KeychainStore = SystemKeychainStore()) {
         self.keychainKey = keychainKey
+        self.store = store
         loadFromKeychain()
     }
 
@@ -52,37 +54,16 @@ final class KeychainCredentialStorage: CredentialStorage, @unchecked Sendable {
 
         guard let data = try? JSONSerialization.data(withJSONObject: entries) else { return }
 
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: keychainKey,
-            kSecAttrAccount as String: "credentials"
-        ]
-
-        SecItemDelete(query as CFDictionary)
-
-        var addQuery = query
-        addQuery[kSecValueData as String] = data
-        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-
-        let status = SecItemAdd(addQuery as CFDictionary, nil)
+        let status = store.save(data, service: keychainKey)
         if status != errSecSuccess && status != errSecDuplicateItem {
             handleKeychainFailure("persist", status: status)
         }
     }
 
     private func loadFromKeychain() {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: keychainKey,
-            kSecAttrAccount as String: "credentials",
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
+        let (status, loaded) = store.load(service: keychainKey)
 
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-
-        guard status == errSecSuccess, let data = item as? Data else {
+        guard status == errSecSuccess, let data = loaded else {
             if status != errSecItemNotFound {
                 handleKeychainFailure("load", status: status)
             }

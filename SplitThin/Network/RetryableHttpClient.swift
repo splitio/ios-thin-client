@@ -2,8 +2,8 @@
 //  Copyright © 2026 Harness. All rights reserved
 
 import Foundation
-import Http
-import BackoffCounter
+import SplitHttp
+import SplitBackoffCounter
 
 protocol RetryableHttpClient: Sendable {
     func execute(_ endpoint: Endpoint, category: RequestCategory, body: Data?) async throws -> HttpResponse

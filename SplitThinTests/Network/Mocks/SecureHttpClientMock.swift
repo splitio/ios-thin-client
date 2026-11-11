@@ -1,5 +1,5 @@
 import Foundation
-import Http
+import SplitHttp
 @testable import SplitThin
 
 final class SecureHttpClientMock: SecureHttpClient, @unchecked Sendable {

@@ -2,8 +2,8 @@
 //  Copyright © 2026 Harness. All rights reserved
 
 import Foundation
-import Logging
-import Tracker
+import SplitLogging
+import SplitTracker
 
 public protocol SplitClient: AnyObject, Sendable {
     var target: Target { get }

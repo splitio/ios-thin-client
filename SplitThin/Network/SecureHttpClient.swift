@@ -3,8 +3,8 @@
 
 import CryptoKit
 import Foundation
-import Http
-import Logging
+import SplitHttp
+import SplitLogging
 
 enum SecureHttpError: Error {
     case invalidResponse

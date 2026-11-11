@@ -1,6 +1,6 @@
 import Foundation
-import Http
-import Tracker
+import SplitHttp
+import SplitTracker
 @testable import SplitThin
 
 func buildFactory(httpClient: SecureHttpClient? = nil, retryableHttpClient: RetryableHttpClient? = nil, syncMode: SyncMode = .singleSync, refreshRate: Int = 1, readyTimeout: Int = -1, target: Target = Target(matchingKey: "user-123", trafficType: "user"), configsEnabled: Bool = false, prefix: String? = nil, fallbackTreatments: FallbackTreatmentsConfig? = nil, observer: Observer? = nil) throws -> SplitFactory {

@@ -3,7 +3,7 @@
 
 import Foundation
 import CoreData
-import Logging
+import SplitLogging
 
 enum StorageError: Error {
     case entityNotFound

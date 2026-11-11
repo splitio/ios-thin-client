@@ -2,7 +2,7 @@
 //  Copyright © 2026 Harness. All rights reserved
 
 import Foundation
-import Tracker
+import SplitTracker
 
 final class ThinEventValidator: TrackerEventValidator {
 

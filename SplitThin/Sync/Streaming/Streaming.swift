@@ -2,10 +2,10 @@
 //  Copyright © 2026 Harness. All rights reserved
 
 import Foundation
-import Logging
-import Http
-import Streaming
-import BackoffCounter
+import SplitLogging
+import SplitHttp
+import SplitStreaming
+import SplitBackoffCounter
 
 protocol Streaming {
     func start()

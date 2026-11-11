@@ -2,7 +2,7 @@
 //  Copyright © 2026 Harness. All rights reserved
 
 import Foundation
-import Http
+import SplitHttp
 
 enum CredentialFetcherError: Error {
     case unauthorized

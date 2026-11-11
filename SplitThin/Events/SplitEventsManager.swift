@@ -2,7 +2,7 @@
 //  Copyright © 2026 Harness. All rights reserved
 
 import Foundation
-import Logging
+import SplitLogging
 
 protocol SplitEventsManager: AnyObject, Sendable {
     func addListener(_ listener: SplitEventListener)
