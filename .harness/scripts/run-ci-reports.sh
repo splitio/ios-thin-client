@@ -155,8 +155,13 @@ find_profdata() {
 }
 
 find_test_binary() {
-  local package_dir="$1"
-  find "$package_dir/.build" -type f -name '*PackageTests' -perm -111 | head -n 1
+  local package_dir="$1" bin
+  # Older SwiftPM layouts: <name>PackageTests executable. Current layouts: executable inside <Target>.xctest bundle.
+  bin="$(find "$package_dir/.build" -type f -name '*PackageTests' -perm -111 | head -n 1)"
+  if [[ -z "$bin" ]]; then
+    bin="$(find "$package_dir/.build" -type f -path '*.xctest/Contents/MacOS/*' -perm -111 | head -n 1)"
+  fi
+  printf '%s\n' "$bin"
 }
 
 run_for_package() {
@@ -199,8 +204,11 @@ run_for_package() {
   test_bin="$(find_test_binary "$package_dir")"
   [[ -n "$test_bin" && -f "$test_bin" ]] || die "Package test binary not found for package: $package_dir"
 
-  xcrun llvm-cov export "$test_bin" -instr-profile "$profdata" >"$llvm_cov_json"
-  xcrun llvm-cov export "$test_bin" -instr-profile "$profdata" -format=lcov >"$out_dir/lcov.info"
+  # Keep only this repo's sources: drop SwiftPM dependency checkouts (.build/checkouts/ios-client, not tracked
+  # in the repo) and test files, otherwise the lcov has SF: entries the Harness coverage template cannot map.
+  local ignore_re='(\.build/|Tests/|Tests\.swift$)'
+  xcrun llvm-cov export "$test_bin" -instr-profile "$profdata" -ignore-filename-regex="$ignore_re" >"$llvm_cov_json"
+  xcrun llvm-cov export "$test_bin" -instr-profile "$profdata" -ignore-filename-regex="$ignore_re" -format=lcov >"$out_dir/lcov.info"
   mkdir -p "$ROOT_DIR/coverage"
   cat "$out_dir/lcov.info" >>"$ROOT_DIR/coverage/lcov.info"
 

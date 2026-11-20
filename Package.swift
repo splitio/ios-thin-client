@@ -8,7 +8,7 @@ let package = Package(
         .library(name: "SplitThin", targets: ["SplitThin"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/splitio/ios-client.git", .exact("3.8.1-rc1"))
+        .package(url: "https://github.com/splitio/ios-client.git", .exact("3.8.2"))
     ],
     targets: [
         .target(
